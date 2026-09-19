@@ -24,3 +24,11 @@ W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 | strategist-refactor-regression | 264423f+ | easy | 12 | 0-1-11 | INVALID: bot never started (socket path too long) | harness bug, fixed; see pitfalls.md |
 | refactor-regression | 264423f+ | easy | 12 | 3-4-5 | economy rule refactor for directives, no strategist | no gross regression |
 | opus-first | 6b115b5 | easy | 1 | 0-0-1 | first Opus strategist game, 2x, 20-min cap | mechanics work (33 turns, median 5.3 s, $1.27); economy frozen by raids; see transcript digest |
+| v6-station-armada | 76a0e83 | easy, as Armada | 24 | 4-14-6 | forward station + outpost defence + constructor floor | looked harmful, but see the next rows |
+| v5-baseline-armada (+rerun) | old binary | easy, as Armada | 24+24 | 13-6-5, 10-9-5 | same binary twice | 24-match batches swing by several wins |
+| v6-minus-* (3 batches), v6-outpost-defence-only, v6-control-all-off | 71bbfd3..bc4a161 | easy, as Armada | 24 each | 8-7-9, 3-15-6, 7-12-5, 5-12-7, 6-10-8 | one-rule ablations and an all-off control | control is behaviourally identical to the baseline yet scored 6-10-8: the ablations were noise. Stopped measuring rules; went looking for gross mistakes |
+| dropped-orders / dropped-orders-2 | 5052826+ / 85b593d | easy, as Armada | 4+4, 20 min | (diagnostic) | log orders whose builder is idle again within two ticks | 560-890 dropped orders per match, mostly the commander told to build advanced solars; after the guard 7-38, minute-20 income +38-44 |
+| v7-no-dropped-orders | 85b593d | easy | 24 | 7-8-9 | economy fix alone | more games reach 40 min: the army was not attacking the enemy base |
+| v8-targets-wind | bb5e674 | easy | 24 | 12-6-6 | waves target remembered enemy buildings; wind generators; lab cap 8 | wins in 11-22 min; in losses H-ARMY-TARGET fired ~1,390 times per match (orders not executing) |
+| move-failures 1-4 | bb5e674+..6416ca3 | easy, as Armada | 6 each, 25 min | (diagnostic) | log UnitMoveFailed | 1,300-6,800 move failures per match: unreachable stations (units piled at the factory), unreachable build sites (constructors), unreachable attack targets (whole army) |
+| v9-reachability | 6416ca3 | easy | 24 | 10-5-9 | remember unreachable sites, stations and targets; enemy base from seen buildings | SE start 8-0-4, NW start 2-5-5; win minutes 13-38 |

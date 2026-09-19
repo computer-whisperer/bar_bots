@@ -52,3 +52,15 @@ to build `armadvsol` (constructor-only, see `units/ArmBots/armck.lua` vs `units/
 placed at (5664,5264) and all dropped. Extractor site search radius is now the build-grid snap (16).
 **Would be wrong if.** A shifted extractor order ever produced an extractor.
 **Used by.** `EXTRACTOR_SNAP` in `economy.rs`.
+
+### K-rules-unreachable-orders-loop
+**Claim.** A move, fight or build order to a place the unit cannot path to makes it walk to the nearest reachable point, raise
+`UnitMoveFailed`, and go idle. A brain that re-issues the same order to idle units loops forever. Large crowds also raise
+move failures by jostling, so failures alone do not prove unreachability.
+**Status.** supported (2026-09-19)
+**Evidence.** move-failures batches: 1,300-6,800 `UnitMoveFailed` per match. Units stuck at the factory exit (2224,1188) when the
+station was 250 ahead of an outpost extractor; constructors re-sent to extractor spots such as (3224,520), (6184,520);
+25-57 attackers hovering mid-map for 20 minutes with no enemy in sight.
+**Would be wrong if.** (mechanical)
+**Used by.** `economy.rs` `note_unreachable_sites`; `army.rs` `note_station_failures`, `note_unreachable_targets` (gives up a
+target only after 90 s of failures with no attacker within 600 of it).
