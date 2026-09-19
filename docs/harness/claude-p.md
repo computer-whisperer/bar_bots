@@ -13,6 +13,7 @@ claude -p --model claude-opus-5 \
   --system-prompt "<strategist prompt>" \   # replaces the default prompt
   --input-format stream-json --output-format stream-json --verbose
 ```
+(The probe used a toy server named `bar`; the bot's real server is named `wreason`, so its tools are `mcp__wreason__*`.)
 Run it from an empty directory. The init message confirmed: `tools = [mcp__bar__observe, mcp__bar__set_directive]` and nothing else.
 - **Do NOT use `--bare`.** Its help text: auth is strictly `ANTHROPIC_API_KEY`; OAuth and keychain are never read — so it
   cannot run on the subscription. (A documentation agent recommended it; wrong for us.)

@@ -11,11 +11,11 @@ pub use messages::*;
 
 use std::path::PathBuf;
 
-/// Socket the bot listens on: `$BAR_BOTS_SOCKET`, else `$XDG_RUNTIME_DIR/bar_bots.sock`.
+/// Socket the bot listens on: `$WITHIN_REASON_SOCKET`, else `$XDG_RUNTIME_DIR/within-reason.sock`.
 pub fn socket_path() -> PathBuf {
-    if let Some(path) = std::env::var_os("BAR_BOTS_SOCKET") {
+    if let Some(path) = std::env::var_os("WITHIN_REASON_SOCKET") {
         return PathBuf::from(path);
     }
     let dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, PathBuf::from);
-    dir.join("bar_bots.sock")
+    dir.join("within-reason.sock")
 }

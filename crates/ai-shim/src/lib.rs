@@ -47,7 +47,7 @@ fn instances() -> std::sync::MutexGuard<'static, BTreeMap<c_int, Instance>> {
 
 impl Instance {
     fn log(&self, text: impl std::fmt::Display) {
-        eprintln!("[bar_bots ai={}] {text}", self.ai_id);
+        eprintln!("[wreason ai={}] {text}", self.ai_id);
     }
 
     fn update(&mut self, frame: i32) {
@@ -162,7 +162,7 @@ impl Instance {
 /// Runs `body` so that a panic cannot unwind into the engine.
 fn guarded(ai_id: c_int, body: impl FnOnce() -> c_int) -> c_int {
     catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|_| {
-        eprintln!("[bar_bots ai={ai_id}] panic in AI library");
+        eprintln!("[wreason ai={ai_id}] panic in AI library");
         -1
     })
 }

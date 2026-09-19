@@ -1,4 +1,4 @@
-# bar_bots documentation
+# Within Reason documentation
 
 Four kinds of knowledge with different lifetimes. Put a fact where its lifetime says it belongs.
 

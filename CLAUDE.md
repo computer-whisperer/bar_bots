@@ -1,4 +1,4 @@
-# bar_bots
+# Within Reason (repo formerly `bar_bots`; the local checkout directory may still carry that name)
 
 AI players for Beyond All Reason (Recoil engine): a Rust AI shim loaded by the engine, a Rust bot process that decides,
 and an arena that runs headless batches against the stock BARb AI.

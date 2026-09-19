@@ -1,7 +1,7 @@
 # Jev experiments
 
 First contact with TypeSafe's Jev (`docs/harness/jev.md`). `probe.py` sends scenario files and prints answers, latency and token
-usage; the API key comes from `TYPESAFE_API_KEY` or `~/.config/bar_bots/jev.env`, never from this repository.
+usage; the API key comes from `TYPESAFE_API_KEY` or `~/.config/within-reason/jev.env`, never from this repository.
 
 Scenarios 01-03 are real decision points from the first Opus strategist game (`docs/transcripts/2026-09-19-opus-first.md`),
 with the state rewritten as qualitative statements: Jev's documented weaknesses are arithmetic, counting, comparing quantities

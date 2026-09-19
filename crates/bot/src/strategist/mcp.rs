@@ -64,7 +64,7 @@ fn handle(call: &Value, shared: &Shared, transcript: &Transcript) -> Option<Valu
         "initialize" => Ok(json!({
             "protocolVersion": call["params"]["protocolVersion"].as_str().unwrap_or("2025-06-18"),
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "bar_bots", "version": env!("CARGO_PKG_VERSION") },
+            "serverInfo": { "name": "within-reason", "version": env!("CARGO_PKG_VERSION") },
         })),
         "tools/list" => Ok(json!({ "tools": tool_list() })),
         "tools/call" => {

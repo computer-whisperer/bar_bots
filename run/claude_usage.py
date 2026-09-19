@@ -27,7 +27,7 @@ def fetch(config_dir):
         return {"error": "not logged in"}
     request = urllib.request.Request(URL, headers={
         "Authorization": f"Bearer {token}", "anthropic-beta": "oauth-2025-04-20",
-        "Content-Type": "application/json", "User-Agent": "bar_bots-claude-usage"})
+        "Content-Type": "application/json", "User-Agent": "within-reason-claude-usage"})
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             body = json.load(response)

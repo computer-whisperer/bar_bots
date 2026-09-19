@@ -1,4 +1,6 @@
-# bar_bots
+# Within Reason
+
+*An AI opponent for Beyond All Reason that plays within reason. Lobby name: `WReason`. (Formerly `bar_bots`.)*
 
 AI players for [Beyond All Reason](https://www.beyondallreason.info/), the open-source RTS on the Recoil engine.
 The aim is a better sparring partner than the stock BARb AI: heuristic bots first, with slower model-driven strategy
@@ -64,7 +66,7 @@ target/release/arena --matches 24 --parallel 8 --speed 50 --profile easy --label
 ```
 
 To play against it in the BAR client: `run/install_to_bar.sh` copies the AI into a local BAR install, then start
-`target/release/bot` and add `BarBots` to a skirmish. The lobby only lists unknown AIs with "Simplified AI list" turned off
+`target/release/bot` and add `WReason` to a skirmish. The lobby only lists unknown AIs with "Simplified AI list" turned off
 (Developer settings tab; see [`docs/harness/lobby.md`](docs/harness/lobby.md)). Please ask the people you are playing with
 before bringing an experimental AI into a shared lobby.
 

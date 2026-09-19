@@ -37,12 +37,12 @@ impl Strategist {
         // An empty working directory: nothing for the session to discover.
         let cwd = dir.join(format!("strategist-{ai_id}-cwd"));
         std::fs::create_dir_all(&cwd)?;
-        let mcp_config = json!({ "mcpServers": { "bar": { "type": "http", "url": format!("http://127.0.0.1:{}/mcp", server.port) } } });
+        let mcp_config = json!({ "mcpServers": { "wreason": { "type": "http", "url": format!("http://127.0.0.1:{}/mcp", server.port) } } });
         let mut child = Command::new("claude")
             .current_dir(&cwd)
             .args(["-p", "--model", MODEL, "--tools", "", "--strict-mcp-config", "--mcp-config"])
             .arg(mcp_config.to_string())
-            .args(["--allowedTools", "mcp__bar__*", "--permission-mode", "dontAsk", "--setting-sources", ""])
+            .args(["--allowedTools", "mcp__wreason__*", "--permission-mode", "dontAsk", "--setting-sources", ""])
             .args(["--system-prompt", include_str!("prompt.md")])
             .args(["--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
             .stdin(Stdio::piped())

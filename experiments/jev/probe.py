@@ -3,7 +3,7 @@
 
 usage: probe.py [--repeat N] SCENARIO.json [...]
 
-The API key is read from the TYPESAFE_API_KEY environment variable, else from ~/.config/bar_bots/jev.env
+The API key is read from the TYPESAFE_API_KEY environment variable, else from ~/.config/within-reason/jev.env
 (never from this repository, which is public). A scenario file is a request body without the model:
 {"about": "...", "opus_decided": "...", "state": {...}, "questions": {...}}; "about" and "opus_decided" are for us and
 are not sent. API reference: https://docs.typesafe.ai/api.md
@@ -11,7 +11,7 @@ are not sent. API reference: https://docs.typesafe.ai/api.md
 import json, os, statistics, sys, time, urllib.request, urllib.error
 
 URL = "https://api.typesafe.ai/v1/systemone"
-KEY_FILE = os.path.expanduser("~/.config/bar_bots/jev.env")
+KEY_FILE = os.path.expanduser("~/.config/within-reason/jev.env")
 
 def api_key():
     key = os.environ.get("TYPESAFE_API_KEY")
@@ -27,7 +27,7 @@ def ask(key, scenario):
     body = {"model": os.environ.get("TYPESAFE_DEFAULT_MODEL", "jev-latest"),
             "state": scenario["state"], "questions": scenario["questions"]}
     request = urllib.request.Request(URL, data=json.dumps(body).encode(), method="POST", headers={
-        "Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "bar_bots-jev-probe"})
+        "Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "within-reason-jev-probe"})
     started = time.time()
     try:
         with urllib.request.urlopen(request, timeout=30) as response:

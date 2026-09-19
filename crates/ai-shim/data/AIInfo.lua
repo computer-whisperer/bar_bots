@@ -16,7 +16,7 @@
 local infos = {
 	{
 		key    = 'shortName',
-		value  = 'BarBots',
+		value  = 'WReason',
 		desc   = 'machine conform name.',
 	},
 	{
@@ -25,7 +25,7 @@ local infos = {
 	},
 	{
 		key    = 'name',
-		value  = 'bar_bots shim',
+		value  = 'Within Reason',
 		desc   = 'human readable name.',
 	},
 	{

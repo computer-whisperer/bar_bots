@@ -182,12 +182,12 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     let mut autohost = Autohost::bind(setup.autohost_port)?;
     // Unix socket paths are limited to ~108 bytes, so the socket cannot live in the match directory.
     let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, Into::into);
-    let socket = runtime_dir.join(format!("bar_bots-arena-{}-{index}.sock", std::process::id()));
+    let socket = runtime_dir.join(format!("wreason-arena-{}-{index}.sock", std::process::id()));
     let mut bot = Command::new(options.bot.clone().unwrap_or_else(|| repo.join("target/release/bot")))
         .args(options.strategist.then_some("--strategist"))
-        .env("BAR_BOTS_SOCKET", &socket)
-        .env("BAR_BOTS_LOG_DIR", &dir)
-        .env("BAR_BOTS_DISABLE", &options.disable)
+        .env("WITHIN_REASON_SOCKET", &socket)
+        .env("WITHIN_REASON_LOG_DIR", &dir)
+        .env("WITHIN_REASON_DISABLE", &options.disable)
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
     let log = File::create(dir.join("engine.log"))?;
@@ -196,7 +196,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .arg(&dir)
         .arg(&script_path)
         .env("SPRING_DATADIR", repo.join("run/data"))
-        .env("BAR_BOTS_SOCKET", &socket)
+        .env("WITHIN_REASON_SOCKET", &socket)
         .stdout(log.try_clone()?)
         .stderr(log)
         .spawn()?;

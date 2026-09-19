@@ -15,7 +15,7 @@ use world::World;
 
 /// usage: bot [--strategist]
 /// `--strategist` gives every AI session a Claude Code strategist (see `DESIGN.md`); transcripts go to
-/// `$BAR_BOTS_LOG_DIR`, else the current directory.
+/// `$WITHIN_REASON_LOG_DIR`, else the current directory.
 fn main() -> io::Result<()> {
     let with_strategist = match std::env::args().nth(1).as_deref() {
         None => false,
@@ -41,7 +41,7 @@ fn main() -> io::Result<()> {
 }
 
 fn log_dir() -> std::path::PathBuf {
-    std::env::var_os("BAR_BOTS_LOG_DIR").map_or_else(|| ".".into(), Into::into)
+    std::env::var_os("WITHIN_REASON_LOG_DIR").map_or_else(|| ".".into(), Into::into)
 }
 
 fn session(mut stream: UnixStream, with_strategist: bool) -> io::Result<()> {

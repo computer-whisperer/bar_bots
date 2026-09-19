@@ -6,6 +6,6 @@
 set -eu
 run=$(cd "$(dirname "$0")" && pwd)
 bar=${1:-"$HOME/.local/state/Beyond All Reason"}
-# Replace the symlink older versions of this script created.
-[ -L "$bar/AI/Skirmish/BarBots" ] && rm "$bar/AI/Skirmish/BarBots"
+# The AI was called BarBots until 2026-09-19; remove that install (a symlink in its earliest form).
+rm -rf "$bar/AI/Skirmish/BarBots"
 "$run/install_ai.sh" "$bar"

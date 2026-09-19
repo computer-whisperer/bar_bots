@@ -1,4 +1,4 @@
-# bar_bots — target design (MVP)
+# Within Reason — target design (MVP)
 
 Ratified 2026-09-19. Findings live under `docs/` (start at `docs/README.md`).
 
@@ -33,7 +33,7 @@ The bot process never calls into the engine; everything it knows arrives in `Hel
 4. Shim reads the socket non-blocking at each UPDATE and applies any `Commands` on the engine thread.
 
 If the bot is absent or dies, the shim keeps the game running and retries the connection about once a second, re-sending `Hello`.
-Socket path: `$BAR_BOTS_SOCKET`, else `$XDG_RUNTIME_DIR/bar_bots.sock`.
+Socket path: `$WITHIN_REASON_SOCKET`, else `$XDG_RUNTIME_DIR/within-reason.sock`.
 
 ## MVP brain (deliberately weak; exists to exercise the loop end to end)
 The game places AI teams itself (`game_initial_spawn.lua` guesses a spot in the start box), so no start position is sent.

@@ -19,7 +19,7 @@ impl MatchSetup<'_> {
     }
 
     pub fn render(&self) -> String {
-        let ours = "ShortName=BarBots; Version=0.1;".to_string();
+        let ours = "ShortName=WReason; Version=0.1;".to_string();
         let theirs = format!("ShortName=BARb; Version=stable; [OPTIONS] {{ profile={}; }}", self.opponent_profile);
         let their_side = match (self.mirror, self.our_side) {
             (true, side) => side,
