@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitDefId, Vec3};
 
 use super::roster::Kit;
+use crate::strategist::shared::Focus;
 use super::{Brain, FRAMES_PER_SECOND};
 
 /// The commander never builds farther from home than this.
@@ -24,6 +25,16 @@ const ADVANCED_SOLAR_INCOME: f32 = 250.0;
 const SPOT_CLAIM_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 /// A metal extractor this close to a spot occupies it.
 const SPOT_OCCUPIED_RADIUS: f32 = 60.0;
+
+/// The rules a builder tries once the opening stands and energy is not short.
+enum Step {
+    FirstTurrets,
+    MoreTurrets,
+    MoreLabs,
+    OutpostTurret,
+    Expand,
+    Convert,
+}
 
 /// What one builder should do next.
 enum Plan {
@@ -93,29 +104,44 @@ impl Brain {
         if planned(kit.lab) < 1 {
             return (Plan::Near(kit.lab, base), "H-ECO-OPENING");
         }
-        if energy_short {
-            return (Plan::Near(generator, base), "H-ECO-ENERGY-BY-STORAGE");
+        let focus = self.directives.economy_focus.map(|f| f.value);
+        if energy_short || (focus == Some(Focus::Energy) && energy.current < energy.storage * 0.9) {
+            return (Plan::Near(generator, base), if energy_short { "H-ECO-ENERGY-BY-STORAGE" } else { "D-FOCUS-ENERGY" });
         }
-        if planned(kit.turret) < 2 {
-            return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS");
+        // Once the opening stands, the remaining rules run in an order the strategist can change.
+        let order: &[Step] = match focus {
+            Some(Focus::Expand) => &[Step::Expand, Step::OutpostTurret, Step::FirstTurrets, Step::MoreLabs, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Production) => &[Step::MoreLabs, Step::FirstTurrets, Step::Expand, Step::OutpostTurret, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Defence) => &[Step::MoreTurrets, Step::OutpostTurret, Step::Expand, Step::MoreLabs, Step::Convert],
+            Some(Focus::Energy) | None => &[Step::FirstTurrets, Step::MoreLabs, Step::OutpostTurret, Step::Expand, Step::Convert, Step::MoreTurrets],
+        };
+        if focus.is_some() {
+            self.fire("D-ECONOMY-FOCUS");
         }
-        if snapshot.metal.current > FLOATING_METAL && !energy_short && planned(kit.lab) < MAX_LABS {
-            return (Plan::Near(kit.lab, base), "H-ECO-MORE-LABS");
-        }
-        if !is_commander
-            && !energy_short
-            && let Some(outpost) = self.unguarded_outpost(builder, snapshot.own_units.as_slice(), kit)
-        {
-            return (Plan::Near(kit.turret, outpost), "H-ECO-OUTPOST-TURRET");
-        }
-        if let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame) {
-            return (Plan::Extractor(spot), "H-ECO-EXPAND");
-        }
-        if energy_rich && planned(kit.converter) < MAX_CONVERTERS {
-            return (Plan::Near(kit.converter, base), "H-ECO-CONVERT-SURPLUS");
-        }
-        if planned(kit.turret) < MAX_TURRETS && !energy_short {
-            return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS");
+        // A production focus spends on labs as soon as any metal is banked.
+        let floating = if focus == Some(Focus::Production) { FLOATING_METAL / 3.0 } else { FLOATING_METAL };
+        for step in order {
+            match step {
+                Step::FirstTurrets if planned(kit.turret) < 2 => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
+                Step::MoreTurrets if planned(kit.turret) < MAX_TURRETS => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
+                Step::MoreLabs if snapshot.metal.current > floating && planned(kit.lab) < MAX_LABS => {
+                    return (Plan::Near(kit.lab, base), "H-ECO-MORE-LABS");
+                }
+                Step::OutpostTurret if !is_commander => {
+                    if let Some(outpost) = self.unguarded_outpost(builder, snapshot.own_units.as_slice(), kit) {
+                        return (Plan::Near(kit.turret, outpost), "H-ECO-OUTPOST-TURRET");
+                    }
+                }
+                Step::Expand => {
+                    if let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame) {
+                        return (Plan::Extractor(spot), "H-ECO-EXPAND");
+                    }
+                }
+                Step::Convert if energy_rich && planned(kit.converter) < MAX_CONVERTERS => {
+                    return (Plan::Near(kit.converter, base), "H-ECO-CONVERT-SURPLUS");
+                }
+                _ => {}
+            }
         }
         (Plan::Near(generator, base), "H-ECO-FALLBACK-ENERGY")
     }

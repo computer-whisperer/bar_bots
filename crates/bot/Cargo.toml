@@ -7,3 +7,6 @@ description = "Bot process: serves AI shim connections and decides what each AI 
 
 [dependencies]
 bot-protocol = { path = "../bot-protocol" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"

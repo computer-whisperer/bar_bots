@@ -5,17 +5,22 @@
 //! never pick the same one-off building in the same breath.
 
 mod army;
+mod briefing;
 mod economy;
 mod roster;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::sync::Arc;
 
 use bot_protocol::{Command, Event, OwnUnit, Tick, UnitDefId, UnitId, Vec3};
 
+use crate::strategist::shared::{Directives, Shared};
 use crate::world::World;
 use roster::{Kit, ROSTERS};
 
 const FRAMES_PER_SECOND: i32 = 30;
+/// The static map description is published during the first few ticks, once home is known.
+const TICK_FRAMES_HINT: i32 = 10 * FRAMES_PER_SECOND;
 
 pub struct Brain {
     world: World,
@@ -30,10 +35,18 @@ pub struct Brain {
     army: army::Army,
     /// How often each heuristic (docs/heuristics.md) acted since the last status line.
     fired: BTreeMap<&'static str, u32>,
+    /// Present when a strategist is attached; the brain publishes to it and reads directives from it.
+    strategist: Option<Arc<Shared>>,
+    /// This tick's unexpired directives; empty without a strategist.
+    directives: Directives,
+    /// Enemy buildings seen and not known to be destroyed: definition, position, frame last seen.
+    enemy_buildings: HashMap<UnitId, (UnitDefId, Vec3, i32)>,
+    recent_events: VecDeque<String>,
+    last_trigger_frame: HashMap<&'static str, i32>,
 }
 
 impl Brain {
-    pub fn new(world: World) -> Self {
+    pub fn new(world: World, strategist: Option<Arc<Shared>>) -> Self {
         let h = &world.hello;
         eprintln!(
             "[ai {}] team {} on {} ({}x{}), {} unit defs, {} metal spots",
@@ -48,6 +61,11 @@ impl Brain {
             spot_claims: HashMap::new(),
             army: army::Army::default(),
             fired: BTreeMap::new(),
+            strategist,
+            directives: Directives::default(),
+            enemy_buildings: HashMap::new(),
+            recent_events: VecDeque::new(),
+            last_trigger_frame: HashMap::new(),
         }
     }
 
@@ -56,11 +74,14 @@ impl Brain {
             self.adopt_faction(&tick.snapshot.own_units);
         }
         let Some(kit) = self.kit else { return Vec::new() };
+        self.read_directives(tick.frame);
+        self.track_enemy_buildings(tick);
         let mut commands = Vec::new();
         self.protect_commander(tick, &kit, &mut commands);
         self.run_economy(tick, &kit, &mut commands);
         self.run_army(tick, &kit, &mut commands);
         self.report(tick, &kit);
+        self.publish_briefing(tick, &kit);
         commands
     }
 
@@ -104,6 +125,8 @@ impl Brain {
             if hurt && damaged(commander.id) && commander.pos.dist2d(self.home) > SAFE_RADIUS {
                 eprintln!("[ai {}] f={} commander retreats at {:.0} health", self.ai(), tick.frame, commander.health);
                 self.fire("H-COM-RETREAT");
+                let percent = commander.health / commander.max_health * 100.0;
+                self.trigger("commander", tick.frame, format!("Our commander is under fire away from home ({percent:.0}% health)."));
                 self.jobs.remove(&commander.id);
                 commands.push(Command::Move { unit: commander.id, to: self.home, queue: false });
             }

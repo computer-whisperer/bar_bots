@@ -4,6 +4,7 @@
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
 //!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror]
+//!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
 
 mod autohost;
 mod script;
@@ -38,6 +39,7 @@ struct Options {
     max_minutes: u32,
     label: String,
     mirror: bool,
+    strategist: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -91,7 +93,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist,
         }))?,
     )?;
 
@@ -169,9 +171,13 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     fs::write(&script_path, setup.render())?;
 
     let mut autohost = Autohost::bind(setup.autohost_port)?;
-    let socket = dir.join("bot.sock");
+    // Unix socket paths are limited to ~108 bytes, so the socket cannot live in the match directory.
+    let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, Into::into);
+    let socket = runtime_dir.join(format!("bar_bots-arena-{}-{index}.sock", std::process::id()));
     let mut bot = Command::new(repo.join("target/release/bot"))
+        .args(options.strategist.then_some("--strategist"))
         .env("BAR_BOTS_SOCKET", &socket)
+        .env("BAR_BOTS_LOG_DIR", &dir)
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
     let log = File::create(dir.join("engine.log"))?;
@@ -186,10 +192,11 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .spawn()?;
 
     let started = Instant::now();
-    let result = referee(&mut autohost, &mut engine, options, &setup, &dir.join("engine.log"));
+    let result = referee(&mut autohost, &mut engine, &mut bot, options, &setup, &dir.join("engine.log"));
     stop(&mut engine, &mut autohost);
     let _ = bot.kill();
     let _ = bot.wait();
+    let _ = fs::remove_file(&socket);
     let outcome = result?;
     let game_minutes = last_frame(&dir.join("engine.log")) as f32 / (30.0 * 60.0);
     Ok(MatchResult {
@@ -206,6 +213,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
 fn referee(
     autohost: &mut Autohost,
     engine: &mut Child,
+    bot: &mut Child,
     options: &Options,
     setup: &MatchSetup,
     engine_log: &Path,
@@ -217,6 +225,10 @@ fn referee(
     loop {
         if engine.try_wait()?.is_some() {
             return Ok(Outcome::Aborted);
+        }
+        if let Some(status) = bot.try_wait()? {
+            // Without its bot our team stands idle; the result would be meaningless.
+            return Err(io::Error::other(format!("bot process exited ({status}); see bot.log")));
         }
         if Instant::now() > deadline {
             return Ok(if playing { Outcome::Timeout } else { Outcome::Aborted });
@@ -363,12 +375,20 @@ fn parse_args() -> Options {
         max_minutes: 40,
         label: "batch".into(),
         mirror: false,
+        strategist: false,
     };
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
-        if flag == "--mirror" {
-            options.mirror = true;
-            continue;
+        match flag.as_str() {
+            "--mirror" => {
+                options.mirror = true;
+                continue;
+            }
+            "--strategist" => {
+                options.strategist = true;
+                continue;
+            }
+            _ => {}
         }
         let mut value = || args.next().unwrap_or_else(|| usage(&format!("{flag} needs a value")));
         match flag.as_str() {
@@ -386,7 +406,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist]");
     std::process::exit(2)
 }
 

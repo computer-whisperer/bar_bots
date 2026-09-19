@@ -25,6 +25,13 @@ impl World {
         self.names.get(name).copied()
     }
 
+    /// Name of the cell containing `pos` on an 8x8 grid: columns A-H west to east, rows 1-8 north to south.
+    pub fn grid(&self, pos: Vec3) -> String {
+        let cell = |value: f32, extent: f32| ((value / extent * 8.0) as i32).clamp(0, 7) as u8;
+        let (column, row) = (cell(pos.x, self.hello.map.width), cell(pos.z, self.hello.map.height));
+        format!("{}{}", (b'A' + column) as char, row + 1)
+    }
+
     /// The point opposite `pos` through the map centre: a first guess at where the enemy starts.
     pub fn mirrored(&self, pos: Vec3) -> Vec3 {
         Vec3 { x: self.hello.map.width - pos.x, y: 0.0, z: self.hello.map.height - pos.z }

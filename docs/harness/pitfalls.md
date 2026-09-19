@@ -14,3 +14,6 @@
 - **Requested game speed changes outcomes** (see arena.md, OPEN). Evaluate at `--speed 50`.
 - **12 matches is noise-level.** ±14 points at 50%. Confirm with 24+ before believing a gain.
 - After a bot restart the brain takes the commander's current position as home; brain state is not persisted.
+- **Unix socket paths max out at ~108 bytes.** A long batch label once pushed `bot.sock` past it: the bot died at start-up and
+  BARb beat an idle team 11 times (batch strategist-refactor-regression, 0-1-11 — not a brain result). Arena sockets now live in
+  `$XDG_RUNTIME_DIR`, and the arena aborts a match whose bot process exits.
