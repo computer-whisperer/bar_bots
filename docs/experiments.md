@@ -32,3 +32,9 @@ W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 | v8-targets-wind | bb5e674 | easy | 24 | 12-6-6 | waves target remembered enemy buildings; wind generators; lab cap 8 | wins in 11-22 min; in losses H-ARMY-TARGET fired ~1,390 times per match (orders not executing) |
 | move-failures 1-4 | bb5e674+..6416ca3 | easy, as Armada | 6 each, 25 min | (diagnostic) | log UnitMoveFailed | 1,300-6,800 move failures per match: unreachable stations (units piled at the factory), unreachable build sites (constructors), unreachable attack targets (whole army) |
 | v9-reachability | 6416ca3 | easy | 24 | 10-5-9 | remember unreachable sites, stations and targets; enemy base from seen buildings | SE start 8-0-4, NW start 2-5-5; win minutes 13-38 |
+| nosite-diag | b683245+ | easy | 8 | 6-1-1 | (diagnostic) what stands on a refused build site | SE: our own wind generators on the home spot (5640,5352) every game; a dead extractor's wreck blocks the site search though building is possible; a commander boxed in by its own converters (234 refusals in one game) |
+| v10-sites | 0981e2f | easy | 16 | 8-5-3 | extractors exactly on spots, base buildings off spots | SE 7-0-1, NW 1-5-2; no "no site" left; NW attackers parked at home for 7-15 minutes in 6 of 8 games |
+| nw-stuck-diag | 0981e2f+ | easy, NW only | 8 | 2-6-0 | (diagnostic) where soldiers' moves fail | ~17,000 failures, all within ~500 of our start: the base is a maze |
+| nw-layout | c90d555 | easy, NW only | 8 | 3-4-1 | labs in a yard, generators behind, wider gaps | soldier move failures 149; fight ledgers show the enemy fielding OUR faction's units in every loss (resurrected wrecks) and a timeout with 739 units lost in their half for 104 kills |
+| v11-layout | c90d555 | easy | 24 | 13-7-4 | same, both corners | SE 10-0-2, NW 3-7-2: the maze was not the corner gap. In SE games we lose nothing in our own half; NW losses are commander snipes on a healthy economy |
+

@@ -43,3 +43,36 @@ batches logged waves launched at (1593,1804), (2326,2943). Replacement: remember
 else the presumed enemy start (H-ARMY-TARGET rewritten).
 **Would be wrong if.** With building targets the attacker centroid still stayed in our half.
 **Used by.** H-ARMY-TARGET.
+
+### K-army-base-maze
+**Claim.** Base buildings placed around one anchor with a 3-square (24-elmo) gap form a maze that a T1 army cannot leave:
+units fail their moves inside the base, never reach the station, and waves "launch" without going anywhere.
+**Status.** supported (2026-09-19)
+**Evidence.** v10-sites: attackers' average position sat within 350 of our start for 7-15 whole minutes in 6 of 8 NW
+games (up to 64 attackers parked). nw-stuck-diag (8 NW games): ~17,000 soldier move failures, all within ~500 of our
+start; after the yard layout (nw-layout, 8 NW games) 149, none clustered at home. It did not explain the corner gap
+(K-maps-quicksilver-corner-asymmetry). The false alarm it raised: station after station was declared
+unreachable (the failing units were in the base, not at the station) until the station fell back to the start point
+itself, in the middle of the maze.
+**Would be wrong if.** Soldier move failures clustered at home again with the yard layout.
+**Used by.** H-ECO-BASE-LAYOUT.
+
+### K-army-dead-waves-are-resurrected
+**Claim.** BARb easy builds resurrection bots (armrectr / cornecro) and raises our dead attackers in its half; the units
+that finally kill our base are partly our own.
+**Status.** supported (2026-09-19) — inferred from unit names, not from watching a resurrection
+**Evidence.** nw-layout fight ledgers: in all 4 losses the enemy fielded units of OUR faction (7-42 of them killed by us,
+2-49 of our losses caused by them); in the 3 wins and the timeout, none. `killed armrectr`, `killed cornecro` appear.
+**Would be wrong if.** BARb could build both factions' units by some other route (capture, a shared lab).
+**Used by.** (none yet) — candidate: do not feed waves into a defended base; fight where we can reclaim the field.
+
+### K-army-waves-die-to-static-defence
+**Claim.** Our waves arrive strung out and die to static defence they never see. In a 40-minute timeout we lost 739
+units in the enemy half for 104 kills; 427 of those to attackers we had no sight of, 90 to the enemy commander, 114 to
+LLT/HLT/HLLT turrets.
+**Status.** supported (2026-09-19) — one game read closely (nw-layout match 01), others look alike
+**Evidence.** `run/matches/1789857672-nw-layout/01/bot.log` fight ledger.
+**Would be wrong if.** Waves gathered at a staging point before engaging lost just as badly.
+**Used by.** (none yet) — candidates: gather before the assault, skip targets under turret cover while the army is
+small (BARb's own 0.75-power rule), artillery against turrets, a scout for sight.
+

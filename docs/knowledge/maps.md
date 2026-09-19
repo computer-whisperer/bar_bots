@@ -86,9 +86,13 @@ trickling across the map.
 **Used by.** (candidate: H-ECO-MORE-LABS places lab 2 forward, behind the outpost turrets; relates to K-army-piecemeal-midmap)
 
 ### K-maps-quicksilver-corner-asymmetry
-**Claim.** On Quicksilver Remake 1.24 our bot does far better from the south-east start than from the north-west one.
-**Status.** conjectured (2026-09-19) — one batch; cause unknown
-**Evidence.** v9-reachability: SE 8-0-4, NW 2-5-5 (faction alternates independently of corner). Earlier batches leaned the
-same way (v5-easy-confirm SE 9-3, NW 5-7). A traced NW loss (match 00) showed an ordinary collapse rather than a pathing loop.
-**Would be wrong if.** A 48-match batch showed no corner difference, or the same asymmetry did not appear for BARb vs BARb.
-**Used by.** (none) — evaluate on more than one map before tuning against this.
+**Claim.** On Quicksilver Remake 1.24 our bot does far better from the south-east start than from the north-west one,
+and the difference lies in what BARb does, not in what we do: BARb starting north-west hardly ever reaches our half.
+**Status.** conjectured (2026-09-19). The base-maze explanation (K-army-base-maze) was real but is refuted as the cause:
+fixing it left the gap unchanged.
+**Evidence.** v9-reachability SE 8-0-4, NW 2-5-5; v10-sites SE 7-0-1, NW 1-5-2; v11-layout (after the maze fix) SE 10-0-2,
+NW 3-7-2. v11 fight ledgers: in 9 of 12 SE games we lost nothing at all in our own half; in NW games we lost 6-256 units
+there, and the NW losses end with an enemy group killing a healthy commander in 10-20 s (match 14: 3535 health to dead in
+13 s to a pack of armwar, with 8 extractors, 4 labs and 28 soldiers on the books).
+**Would be wrong if.** BARb vs BARb on this map showed no corner difference, or a second map showed the same gap for us.
+**Used by.** (none). Until settled, read the NW record as the honest one; the SE record flatters us.

@@ -36,13 +36,20 @@ const OUTPOST_DISTANCE: f32 = 1200.0;
 const ARRIVED_RADIUS: f32 = 400.0;
 /// Home-group units farther than this from the rally point are called in.
 const RALLY_RADIUS: f32 = 600.0;
+/// H-ARMY-STAGE: attackers gather this far short of the target before going in together.
+const STAGE_DISTANCE: f32 = 1500.0;
+/// Attackers this close to the staging point have gathered.
+const STAGE_RADIUS: f32 = 500.0;
+/// The assault starts once this share of the attackers has gathered, or after this long.
+const STAGE_QUORUM: f32 = 0.7;
+const STAGE_PATIENCE_FRAMES: i32 = 150 * FRAMES_PER_SECOND;
 const DEFEND_REORDER_FRAMES: i32 = 5 * FRAMES_PER_SECOND;
 
 #[derive(Default)]
 pub struct Army {
     attackers: HashSet<UnitId>,
     waves_sent: usize,
-    /// Where attacks go: the most recently seen enemy nearest its presumed start.
+    /// Where attacks go: a remembered enemy building, else a swept metal spot.
     target: Option<Vec3>,
     /// Next metal spot to sweep when attackers find nothing at their target.
     sweep_index: usize,
@@ -55,6 +62,8 @@ pub struct Army {
     /// Frame at which the current target was chosen, or last approached.
     target_since: i32,
     station_failures: u32,
+    /// Where the attackers are gathering before the assault, and since which frame.
+    staging: Option<(Vec3, i32)>,
 }
 
 impl Army {
@@ -279,7 +288,20 @@ impl Brain {
                 );
                 self.event(tick.frame, format!("wave {} launched: {} units towards {grid}", self.army.waves_sent, home_group.len()));
                 self.army.attackers.extend(home_group.iter().map(|u| u.id));
-                commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: target, queue: false }));
+                // H-ARMY-STAGE: sent straight at the target, a wave arrives fastest-first and dies one by one.
+                // Everyone committed, survivors of earlier waves included, gathers short of the target first.
+                let approach = target.dist2d(self.home);
+                let first_stop = if self.enabled("H-ARMY-STAGE") && approach > 2.0 * STAGE_DISTANCE {
+                    self.fire("H-ARMY-STAGE");
+                    let t = STAGE_DISTANCE / approach;
+                    let point = Vec3 { x: target.x + (self.home.x - target.x) * t, y: 0.0, z: target.z + (self.home.z - target.z) * t };
+                    self.army.staging = Some((point, tick.frame));
+                    point
+                } else {
+                    target
+                };
+                let committed = soldiers.iter().filter(|u| self.army.attackers.contains(&u.id));
+                commands.extend(committed.map(|u| Command::Fight { unit: u.id, to: first_stop, queue: false }));
             } else {
                 // H-ARMY-STATION: wait where raids arrive, not scattered around the labs.
                 let stragglers = home_group.iter().filter(|u| u.idle && u.pos.dist2d(rally) > RALLY_RADIUS);
@@ -295,6 +317,25 @@ impl Brain {
                 "[ai {}] f={} attackers {} ({} idle) around ({cx:.0}, {cz:.0}), target ({:.0}, {:.0}), home group {}",
                 self.ai(), tick.frame, attackers.len(), idle, target.x, target.z, home_group.len()
             );
+        }
+
+        // `attackers` was drawn up before this tick's launch, so a wave launched just now is judged from the next tick.
+        let staging = self.army.staging.filter(|(_, since)| *since < tick.frame);
+        if staging.is_some() && attackers.is_empty() {
+            self.army.staging = None;
+        } else if let Some((point, since)) = staging {
+            let gathered = attackers.iter().filter(|u| u.pos.dist2d(point) < STAGE_RADIUS).count();
+            let quorum = gathered as f32 >= attackers.len() as f32 * STAGE_QUORUM;
+            if !quorum && tick.frame - since < STAGE_PATIENCE_FRAMES {
+                // Still gathering: whoever lost their order on the way is sent on to the staging point.
+                let strays = attackers.iter().filter(|u| u.idle && u.pos.dist2d(point) > STAGE_RADIUS);
+                commands.extend(strays.map(|u| Command::Fight { unit: u.id, to: point, queue: false }));
+                return;
+            }
+            eprintln!("[ai {}] f={} assault: {gathered} of {} attackers gathered, going in", self.ai(), tick.frame, attackers.len());
+            self.army.staging = None;
+            commands.extend(attackers.iter().map(|u| Command::Fight { unit: u.id, to: target, queue: false }));
+            return;
         }
 
         // Attackers that ran out of orders keep the pressure on instead of standing around.

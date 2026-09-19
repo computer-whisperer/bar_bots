@@ -64,3 +64,23 @@ station was 250 ahead of an outpost extractor; constructors re-sent to extractor
 **Would be wrong if.** (mechanical)
 **Used by.** `economy.rs` `note_unreachable_sites`; `army.rs` `note_station_failures`, `note_unreachable_targets` (gives up a
 target only after 90 s of failures with no attacker within 600 of it).
+
+
+### K-rules-wreck-blocks-site-search
+**Claim.** `Map_findClosestBuildSite` refuses a position holding a wreck, though `Map_isPossibleToBuildAt` allows it and a
+build order there works (the builder reclaims the wreck first). A dead extractor's wreck therefore hides its spot from
+the site search for good.
+**Status.** supported (2026-09-19)
+**Evidence.** nosite-diag: `no site ... wanted=(3336,3256) possible_at_exact=true feature:cormex_dead`.
+**Would be wrong if.** An extractor ordered onto a wreck-covered spot were never started.
+**Used by.** The shim places extractors with `Map_isPossibleToBuildAt` at the exact spot and searches nowhere.
+
+### K-rules-site-search-ignores-metal-spots
+**Claim.** The engine's site search knows nothing of metal spots: base buildings anchored at the start point get put on
+the nearest spots, which are then lost to us.
+**Status.** supported (2026-09-19)
+**Evidence.** nosite-diag: from the SE start every game refused the spot at (5640,5352) from minute 2, and the diagnostic
+found three or four of our own wind generators on it. After the keep-out, SE extractors at minute 5 went from 4 to 6.
+**Would be wrong if.** "no site" for extractors reappeared with our own buildings listed at the spot.
+**Used by.** Shim `SPOT_KEEPOUT` (100 elmos).
+
