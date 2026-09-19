@@ -71,7 +71,7 @@ spawn location is whatever the game defaults to. Not investigated.
 
 ## MVP — shim + bot process plays a full match (2026-09-19)
 Design in `DESIGN.md`. Crates: `recoil-ai-sys` (bindgen, vendored headers), `bot-protocol`, `ai-shim`, `bot`.
-Run: `run/match.sh run/smoke_shim_vs_barb.txt SECONDS [SPEED]` → logs in `run/logs/{engine,bot,probe}.log`.
+Run (superseded by the arena, below): the original `run/match.sh` + python autohost probe were deleted 2026-09-19.
 - Speed control SOLVED: autohost `/setmaxspeed N` then `/setminspeed N` at SERVER_STARTPLAYING. Requested 10 → ~21,600 frames
   (12 game-min) in ~70s wall. Higher speeds untried.
 - vs BARb (hard) on Quicksilver: bot built 14 extractors, 8 solars, 5 constructors, 1 lab, 44 armpw; 0 build-site failures,
@@ -84,8 +84,23 @@ Run: `run/match.sh run/smoke_shim_vs_barb.txt SECONDS [SPEED]` → logs in `run/
 
 ## Local GUI install (2026-09-19)
 BAR data dir: `~/.local/state/Beyond All Reason`, engine `recoil_2026.07.04`. AI interface headers at tag 2026.07.04 are
-byte-identical to our vendored 2026.09.01 copy, so one build serves both. `run/link_install.sh` symlinks the AI into
-`<data dir>/AI/Skirmish/BarBots`; the install's `spring-headless --list-skirmish-ais` lists `BarBots 0.1`.
+byte-identical to our vendored 2026.09.01 copy, so one build serves both. `run/install_to_bar.sh` COPIES the AI into
+`<data dir>/AI/Skirmish/BarBots` (was a symlink until it crashed a game, see below); the install's `spring-headless --list-skirmish-ais` lists `BarBots 0.1`.
 Bot for GUI games: `target/release/bot` with BAR_BOTS_SOCKET unset (both sides default to `$XDG_RUNTIME_DIR/bar_bots.sock`).
 In-lobby visibility: the lobby hides AIs without a friendly name unless "Simplified AI list" is off. That checkbox is in the
 Developer settings tab, which only exists in dev mode = a `devmode.txt` file in the BAR data dir (configuration.lua:313). Created it.
+
+## Arena + the library-overwrite crash (2026-09-19)
+`cargo run --release -p arena -- --matches N --parallel P --speed S --profile easy|medium|hard|hard_aggressive` → one dir per
+match under `run/matches/<stamp>-<label>/NN/` (script, engine.log, bot.log, replay) + `results.jsonl`. Per-match write dir,
+shared game data via `SPRING_DATADIR` (honoured in isolation mode, DataDirLocater.cpp:432). Alternates corner and faction.
+- Throughput on this 24-core box: requested speed 50 gives ~35x with 2 parallel, ~12x each with 8 parallel (8 matches, 3m06s
+  wall, 28 cpu-min). Engine uses ~2.5-3 cores per match.
+- Baseline, MVP brain vs BARb easy, 8 matches: 1 win, 5 losses, 1 timeout (42 game-min), 1 aborted.
+- CRASH, cause established: arena ran `install_ai.sh`, which `cp`-overwrote libSkirmishAI.so in place while the user's GUI game
+  had it loaded through the symlink. GUI `spring` SIGSEGV 24s later with PC=0 on the main thread (coredumpctl). Fix: installs
+  replace files by rename (new inode), and the BAR install gets its own copy. Not a socket collision: arena matches use
+  per-match `BAR_BOTS_SOCKET` paths.
+- OPEN: one headless match (baseline 02) died with SIGSEGV inside a spring-headless worker thread at 7.9 game-min, frames all
+  in the engine binary, no symbols (release build; `recoil_*_amd64-linux-dbgsym.tar.zst` exists for symbolizing). Unrelated to
+  the overwrite (no install happened during that batch). 1 in 10 headless matches so far; watch the rate.
