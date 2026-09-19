@@ -121,3 +121,12 @@ Engine for the arena is now 2026.07.04 (`run/engine` -> `run/engines/2026.07.04`
 Diagnosis method that worked: per-minute status line in bot.log (economy, counts, attackers' centroid) compared between a win and a loss.
 Known weaknesses: T1 only (no advanced lab / moho extractors), metal income ~+40 at 17 min; attackers trade piecemeal mid-map;
 losses cluster on Armada NW (unexplained); no scouting, no use of enemy unit types.
+| v5-easy-confirm | same brain, 24 matches | 14-10-0 |
+| v5-medium | same brain vs BARb medium, 12 matches | 0-12-0 (all lost at 16-20 game-min) |
+v5-easy-confirm by (our faction, corner): Armada NW 1-5, Armada SE 3-3, Cortex NW 4-2, Cortex SE 6-0. So Cortex 10-2, Armada 4-8;
+SE 9-3, NW 5-7. The arena always gives the opponent the other faction, so "our Armada roster is weak" and "BARb plays Cortex
+better" are confounded — a mirror-matchup option in the arena would separate them.
+Tier-2 research (not implemented): advanced extractors (armmoho/cormoho, 4x yield: extractsmetal 0.004 vs 0.001) are ordered at the
+EXACT position of the existing extractor; `unit_mex_upgrade_reclaimer.lua` reclaims the old one on completion and
+`cmd_mex_denier.lua` exempts same-position orders. Needs an exact-position build option in bot-protocol (the shim always runs
+Map_findClosestBuildSite today). Path: armalab/coralab (2600 metal) -> armack/corack -> moho.
