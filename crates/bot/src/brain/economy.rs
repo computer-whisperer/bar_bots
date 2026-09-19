@@ -42,7 +42,8 @@ impl Brain {
             let Some(def) = self.world.def(unit.def) else { continue };
             let (is_builder, is_mobile) = (def.build_speed > 0.0, def.speed > 0.0);
             if is_builder && is_mobile {
-                let plan = self.plan_for(unit, tick, kit);
+                let (plan, rule) = self.plan_for(unit, tick, kit);
+                self.fire(rule);
                 let (def_id, site) = match plan {
                     Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: 100.0, min_dist: 0 }),
                     Plan::Near(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: 3 }),
@@ -50,6 +51,7 @@ impl Brain {
                 self.jobs.insert(unit.id, def_id);
                 commands.push(Command::Build { unit: unit.id, def: def_id, site: Some(site), queue: false });
             } else if is_builder {
+                self.fire("H-PROD-BATCH");
                 commands.extend(self.production_batch(own, kit).map(|def_id| Command::Build {
                     unit: unit.id,
                     def: def_id,
@@ -60,11 +62,11 @@ impl Brain {
         }
     }
 
-    /// The most urgent thing this builder can safely do.
-    fn plan_for(&mut self, builder: &OwnUnit, tick: &Tick, kit: &Kit) -> Plan {
+    /// The most urgent thing this builder can safely do, and the heuristic (docs/heuristics.md) that chose it.
+    fn plan_for(&mut self, builder: &OwnUnit, tick: &Tick, kit: &Kit) -> (Plan, &'static str) {
         let snapshot = &tick.snapshot;
         let is_commander = builder.def == kit.commander;
-        // Existing (finished or not) plus what other builders are already on their way to build.
+        // H-ECO-JOBS: existing (finished or not) plus what other builders are already on their way to build.
         let mut counts: HashMap<UnitDefId, usize> = HashMap::new();
         let others_jobs = self.jobs.iter().filter(|(id, _)| **id != builder.id).map(|(_, job)| *job);
         for def in snapshot.own_units.iter().map(|u| u.def).chain(others_jobs) {
@@ -83,43 +85,43 @@ impl Brain {
         if planned(kit.extractor) < 2
             && let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame)
         {
-            return Plan::Extractor(spot);
+            return (Plan::Extractor(spot), "H-ECO-OPENING");
         }
         if planned(kit.solar) < 2 {
-            return Plan::Near(kit.solar, base);
+            return (Plan::Near(kit.solar, base), "H-ECO-OPENING");
         }
         if planned(kit.lab) < 1 {
-            return Plan::Near(kit.lab, base);
+            return (Plan::Near(kit.lab, base), "H-ECO-OPENING");
         }
         if energy_short {
-            return Plan::Near(generator, base);
+            return (Plan::Near(generator, base), "H-ECO-ENERGY-BY-STORAGE");
         }
         if planned(kit.turret) < 2 {
-            return Plan::Near(kit.turret, front);
+            return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS");
         }
         if snapshot.metal.current > FLOATING_METAL && !energy_short && planned(kit.lab) < MAX_LABS {
-            return Plan::Near(kit.lab, base);
+            return (Plan::Near(kit.lab, base), "H-ECO-MORE-LABS");
         }
         if !is_commander
             && !energy_short
             && let Some(outpost) = self.unguarded_outpost(builder, snapshot.own_units.as_slice(), kit)
         {
-            return Plan::Near(kit.turret, outpost);
+            return (Plan::Near(kit.turret, outpost), "H-ECO-OUTPOST-TURRET");
         }
         if let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame) {
-            return Plan::Extractor(spot);
+            return (Plan::Extractor(spot), "H-ECO-EXPAND");
         }
         if energy_rich && planned(kit.converter) < MAX_CONVERTERS {
-            return Plan::Near(kit.converter, base);
+            return (Plan::Near(kit.converter, base), "H-ECO-CONVERT-SURPLUS");
         }
         if planned(kit.turret) < MAX_TURRETS && !energy_short {
-            return Plan::Near(kit.turret, front);
+            return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS");
         }
-        Plan::Near(generator, base)
+        (Plan::Near(generator, base), "H-ECO-FALLBACK-ENERGY")
     }
 
     /// Reserves the nearest free metal spot this builder may go to: inside the leash for the
-    /// commander, on our half of the map for constructors.
+    /// commander (H-COM-LEASH), on our half of the map for constructors (H-ECO-OWN-HALF).
     fn claim_spot(&mut self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit, frame: i32) -> Option<Vec3> {
         let is_commander = builder.def == kit.commander;
         let (home, enemy_start) = (self.home, self.enemy_start);

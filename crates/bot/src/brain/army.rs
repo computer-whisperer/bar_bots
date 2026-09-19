@@ -53,12 +53,14 @@ impl Brain {
         if let Some(intruder) = intruder {
             if tick.frame - self.army.last_defend_order >= DEFEND_REORDER_FRAMES {
                 self.army.last_defend_order = tick.frame;
+                self.fire("H-ARMY-DEFEND");
                 commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: intruder.pos, queue: false }));
             }
         } else {
             let wave_size = (FIRST_WAVE + WAVE_GROWTH * self.army.waves_sent).min(MAX_WAVE);
             if home_group.len() >= wave_size {
                 self.army.waves_sent += 1;
+                self.fire("H-ARMY-WAVES");
                 eprintln!(
                     "[ai {}] f={} wave {}: {} units to ({:.0}, {:.0})",
                     self.ai(), tick.frame, self.army.waves_sent, home_group.len(), target.x, target.z
@@ -96,9 +98,11 @@ impl Brain {
             if !spots.is_empty() {
                 next = Vec3 { y: 0.0, ..spots[self.army.sweep_index % spots.len()] };
                 self.army.sweep_index += 1;
+                self.fire("H-ARMY-SWEEP");
                 self.army.target = Some(next);
             }
         }
+        self.fire("H-ARMY-TARGET");
         commands.extend(idle_attackers.iter().map(|u| Command::Fight { unit: u.id, to: next, queue: false }));
     }
 }

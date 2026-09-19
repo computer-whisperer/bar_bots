@@ -1,7 +1,8 @@
 # Experiment ledger
 
 Arena batches, oldest first. Opponent BARb, map Quicksilver Remake 1.24, game `byar:test` (test-31357) unless stated.
-Hand-written for now; to be generated from `run/matches/*/results.jsonl` plus the commit the batch ran at.
+The arena prints a ready-made row (label, commit with `+` if the tree was dirty, opponent, n, result) at the end of each
+batch and stores the same data in the batch's `batch.json`; paste the row here and fill in the last two columns.
 W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 
 | Batch label | Commit | Opponent | n | W-L-T | Testing | Outcome |

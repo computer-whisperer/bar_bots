@@ -1,7 +1,7 @@
 # Heuristic registry
 
-Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. IDs appear in code comments next to the rule
-(to be added) and in knowledge entries. Status: `active`, `retired (date, why)`.
+Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. IDs appear in the code at the rule (`self.fire("H-...")` or a comment for rules that only filter), in the per-minute
+`rules:` line of `bot.log`, in the arena's wins-vs-losses firing table, and in knowledge entries. Status: `active`, `retired (date, why)`.
 
 | ID | Rule | Code | Rests on | Status |
 |---|---|---|---|---|
@@ -16,6 +16,7 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 | H-ECO-CONVERT-SURPLUS | Converters when stored energy > 80% and nothing to expand to (max 40) | `economy.rs` `plan_for` | K-eco-judge-energy-by-storage | active |
 | H-ECO-MORE-LABS | Another lab (max 4) when stored metal > 500 and energy is not short | `economy.rs` `plan_for` | (unexamined) | active |
 | H-ECO-BASE-TURRETS | 2 turrets 450 forward of home after the lab; up to 6 when idle | `economy.rs` `plan_for` | (unexamined) | active |
+| H-ECO-FALLBACK-ENERGY | Nothing else to do: build a generator | `economy.rs` `plan_for` (last line) | (unexamined) | active |
 | H-ECO-JOBS | Builders count each other's in-progress jobs before choosing | `economy.rs` `plan_for`, `Brain::jobs` | (mechanical) | active |
 | H-PROD-BATCH | Factory batch: raider, raider, constructor-or-artillery, skirmisher, skirmisher; constructors wanted = 2 + extractors/4, max 6 | `economy.rs` `production_batch` | K-army-fighters-before-constructors | active |
 | H-ARMY-DEFEND | Enemy within 1400 of home: home group fights it, no wave leaves | `army.rs` `run_army` | (unexamined) | active |

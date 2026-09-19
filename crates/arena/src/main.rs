@@ -3,7 +3,7 @@
 //! the start script, engine log, bot log and replay.
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
-//!              [--map NAME] [--max-minutes N] [--label TEXT]
+//!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror]
 
 mod autohost;
 mod script;
@@ -37,6 +37,7 @@ struct Options {
     map: String,
     max_minutes: u32,
     label: String,
+    mirror: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -84,6 +85,16 @@ fn main() -> io::Result<()> {
         options.matches, options.profile, options.map, options.speed, options.parallel, batch_dir.display()
     );
 
+    let commit = git_commit(&repo);
+    fs::write(
+        batch_dir.join("batch.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
+            "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
+            "max_minutes": options.max_minutes, "mirror": options.mirror,
+        }))?,
+    )?;
+
     let queue = Arc::new(Mutex::new((0..options.matches).collect::<Vec<_>>()));
     let results = Arc::new(Mutex::new(Vec::new()));
     let options = Arc::new(options);
@@ -124,6 +135,13 @@ fn main() -> io::Result<()> {
         "== {} wins, {} losses, {} timeouts, {} aborted ==",
         count(Outcome::Win), count(Outcome::Loss), count(Outcome::Timeout), count(Outcome::Aborted)
     );
+    print_rule_comparison(&batch_dir, &results);
+    println!(
+        "ledger row for docs/experiments.md:\n| {} | {} | {}{} | {} | {}-{}-{}{} | <what this tested> | <what it showed> |",
+        options.label, commit, options.profile, if options.mirror { ", mirror" } else { "" }, results.len(),
+        count(Outcome::Win), count(Outcome::Loss), count(Outcome::Timeout),
+        match count(Outcome::Aborted) { 0 => String::new(), n => format!(" ({n})") }
+    );
     Ok(())
 }
 
@@ -140,6 +158,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         // Alternate corner and faction so neither start nor side biases the batch.
         we_are_first: index.is_multiple_of(2),
         our_side: if (index / 2).is_multiple_of(2) { "Armada" } else { "Cortex" },
+        mirror: options.mirror,
     };
     copy_tree(&repo.join("run/match-template"), &dir)?;
     let cache_template = repo.join("run/cache-template");
@@ -299,6 +318,41 @@ fn stop(engine: &mut Child, autohost: &mut Autohost) {
     let _ = engine.wait();
 }
 
+/// Short commit hash, with `+` when the working tree has uncommitted changes to tracked files.
+fn git_commit(repo: &Path) -> String {
+    let git = |args: &[&str]| Command::new("git").arg("-C").arg(repo).args(args).output().ok();
+    let hash = git(&["rev-parse", "--short", "HEAD"]).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|o| !o.stdout.is_empty());
+    format!("{}{}", hash.unwrap_or_else(|| "unknown".into()), if dirty { "+" } else { "" })
+}
+
+/// Mean firings per match of each heuristic (the `rules:` lines in bot.log), wins against losses.
+fn print_rule_comparison(batch_dir: &Path, results: &[MatchResult]) {
+    let mut totals: std::collections::BTreeMap<String, [f32; 2]> = Default::default();
+    let mut matches = [0f32; 2];
+    for result in results {
+        let side = match result.outcome {
+            Outcome::Win => 0,
+            Outcome::Loss => 1,
+            _ => continue,
+        };
+        matches[side] += 1.0;
+        let log = fs::read_to_string(batch_dir.join(format!("{:02}/bot.log", result.index))).unwrap_or_default();
+        for counts in log.lines().filter_map(|line| line.split_once(" rules: ")).map(|(_, counts)| counts) {
+            for (rule, n) in counts.split_whitespace().filter_map(|pair| pair.split_once('=')) {
+                totals.entry(rule.to_string()).or_default()[side] += n.parse::<f32>().unwrap_or(0.0);
+            }
+        }
+    }
+    if matches[0] == 0.0 || matches[1] == 0.0 {
+        return;
+    }
+    println!("heuristic firings per match      wins   losses");
+    for (rule, [wins, losses]) in totals {
+        println!("  {rule:<28} {:>6.1} {:>8.1}", wins / matches[0], losses / matches[1]);
+    }
+}
+
 fn parse_args() -> Options {
     let mut options = Options {
         matches: 4,
@@ -308,9 +362,14 @@ fn parse_args() -> Options {
         map: "Quicksilver Remake 1.24".into(),
         max_minutes: 40,
         label: "batch".into(),
+        mirror: false,
     };
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
+        if flag == "--mirror" {
+            options.mirror = true;
+            continue;
+        }
         let mut value = || args.next().unwrap_or_else(|| usage(&format!("{flag} needs a value")));
         match flag.as_str() {
             "--matches" => options.matches = value().parse().unwrap_or_else(|_| usage("--matches")),
@@ -327,7 +386,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror]");
     std::process::exit(2)
 }
 

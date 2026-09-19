@@ -7,7 +7,9 @@ Per match: a directory `run/matches/<unix-stamp>-<label>/NN/` holding `script.tx
 `demos/`, and the engine's write-dir litter; `results.jsonl` per batch. The arena rebuilds and reinstalls the AI first
 (`run/install_ai.sh`), starts one bot and one engine per match with a private socket and ports `9100 + 2*index`, requests
 the speed over the autohost channel, reads the winner from SERVER_GAMEOVER, and ends the engine with `/kill`.
-- Corner and faction alternate by match index; the opponent always gets the other faction (see K-opp-faction-asymmetry).
+- Corner and faction alternate by match index; the opponent gets the other faction, or ours with `--mirror`.
+- After a batch the arena prints mean heuristic firings per match for wins against losses (from the `rules:` lines in
+  `bot.log`) and a ledger row for `docs/experiments.md`; `batch.json` records label, commit and options.
 - `game_minutes` is read from the last `[f=N]` in the engine log after exit.
 - Timeout is game time: the shim prints `heartbeat f=N` once per game minute into the engine log and the arena stops the
   match at `--max-minutes` (default 40). A 120 s wall-clock stall allowance is the backstop.

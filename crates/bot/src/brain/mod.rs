@@ -8,7 +8,7 @@ mod army;
 mod economy;
 mod roster;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use bot_protocol::{Command, Event, OwnUnit, Tick, UnitDefId, UnitId, Vec3};
 
@@ -28,6 +28,8 @@ pub struct Brain {
     /// Metal spot index to the frame it was claimed at.
     spot_claims: HashMap<usize, i32>,
     army: army::Army,
+    /// How often each heuristic (docs/heuristics.md) acted since the last status line.
+    fired: BTreeMap<&'static str, u32>,
 }
 
 impl Brain {
@@ -45,6 +47,7 @@ impl Brain {
             jobs: HashMap::new(),
             spot_claims: HashMap::new(),
             army: army::Army::default(),
+            fired: BTreeMap::new(),
         }
     }
 
@@ -53,12 +56,11 @@ impl Brain {
             self.adopt_faction(&tick.snapshot.own_units);
         }
         let Some(kit) = self.kit else { return Vec::new() };
-        self.report(tick, &kit);
-
         let mut commands = Vec::new();
         self.protect_commander(tick, &kit, &mut commands);
         self.run_economy(tick, &kit, &mut commands);
         self.run_army(tick, &kit, &mut commands);
+        self.report(tick, &kit);
         commands
     }
 
@@ -81,6 +83,10 @@ impl Brain {
         }
     }
 
+    fn fire(&mut self, rule: &'static str) {
+        *self.fired.entry(rule).or_default() += 1;
+    }
+
     /// A point `distance` elmos from home towards the enemy.
     fn forward_of_home(&self, distance: f32) -> Vec3 {
         let (dx, dz) = (self.enemy_start.x - self.home.x, self.enemy_start.z - self.home.z);
@@ -97,13 +103,14 @@ impl Brain {
             let hurt = commander.health < commander.max_health * RETREAT_HEALTH;
             if hurt && damaged(commander.id) && commander.pos.dist2d(self.home) > SAFE_RADIUS {
                 eprintln!("[ai {}] f={} commander retreats at {:.0} health", self.ai(), tick.frame, commander.health);
+                self.fire("H-COM-RETREAT");
                 self.jobs.remove(&commander.id);
                 commands.push(Command::Move { unit: commander.id, to: self.home, queue: false });
             }
         }
     }
 
-    fn report(&self, tick: &Tick, kit: &Kit) {
+    fn report(&mut self, tick: &Tick, kit: &Kit) {
         for event in &tick.events {
             match *event {
                 Event::BuildSiteNotFound { unit, def } => {
@@ -125,6 +132,9 @@ impl Brain {
                 count(kit.extractor), count(kit.lab), count(kit.constructor),
                 s.own_units.iter().filter(|u| self.is_army(u, kit)).count(), s.enemies.len()
             );
+            let rules: Vec<String> = self.fired.iter().map(|(rule, n)| format!("{rule}={n}")).collect();
+            eprintln!("[ai {}] f={} rules: {}", self.ai(), tick.frame, rules.join(" "));
+            self.fired.clear();
         }
     }
 

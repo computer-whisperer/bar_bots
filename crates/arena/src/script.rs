@@ -9,6 +9,8 @@ pub struct MatchSetup<'a> {
     /// We take team 0 and the north-west start box; otherwise team 1 and the south-east one.
     pub we_are_first: bool,
     pub our_side: &'static str,
+    /// Give the opponent our faction instead of the other one.
+    pub mirror: bool,
 }
 
 impl MatchSetup<'_> {
@@ -19,7 +21,11 @@ impl MatchSetup<'_> {
     pub fn render(&self) -> String {
         let ours = "ShortName=BarBots; Version=0.1;".to_string();
         let theirs = format!("ShortName=BARb; Version=stable; [OPTIONS] {{ profile={}; }}", self.opponent_profile);
-        let their_side = if self.our_side == "Armada" { "Cortex" } else { "Armada" };
+        let their_side = match (self.mirror, self.our_side) {
+            (true, side) => side,
+            (false, "Armada") => "Cortex",
+            (false, _) => "Armada",
+        };
         let (ai0, ai1, side0, side1) = if self.we_are_first {
             (ours, theirs, self.our_side, their_side)
         } else {
