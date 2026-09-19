@@ -27,6 +27,10 @@ const ADVANCED_SOLAR_INCOME: f32 = 250.0;
 const SPOT_CLAIM_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 /// A metal extractor this close to a spot occupies it.
 const SPOT_OCCUPIED_RADIUS: f32 = 60.0;
+/// Placement may move this far from a metal spot: the build grid's snap, no more.
+const EXTRACTOR_SNAP: f32 = 16.0;
+/// Frames between ticks (the shim's tick interval).
+const TICK_FRAMES: i32 = 15;
 
 /// The rules a builder tries once the opening stands and energy is not short.
 enum Step {
@@ -56,11 +60,35 @@ impl Brain {
             let (is_builder, is_mobile) = (def.build_speed > 0.0, def.speed > 0.0);
             if is_builder && is_mobile {
                 let (plan, rule) = self.plan_for(unit, tick, kit);
+                let planned_def = match plan {
+                    Plan::Extractor(_) => kit.extractor,
+                    Plan::Near(def_id, _) => def_id,
+                };
+                let buildable = self.world.def(unit.def).is_some_and(|d| d.build_options.contains(&planned_def));
+                if !buildable {
+                    // A rule chose something this builder cannot make; say so rather than issue a doomed order.
+                    eprintln!("[ai {}] f={} {rule} chose {} which {} cannot build", self.ai(), tick.frame, self.name(planned_def), self.name(unit.def));
+                    continue;
+                }
                 self.fire(rule);
                 let (def_id, site) = match plan {
-                    Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: 100.0, min_dist: 0 }),
+                    // The game rejects an extractor that is not exactly on its spot (cmd_mex_denier.lua), so no shifting.
+                    Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: EXTRACTOR_SNAP, min_dist: 0 }),
                     Plan::Near(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: 3 }),
                 };
+                // An order whose builder is idle again within two ticks never started: count it and say where.
+                if let Some((frame, earlier, near)) = self.last_orders.insert(unit.id, (tick.frame, def_id, site.near))
+                    && tick.frame - frame <= 2 * TICK_FRAMES
+                {
+                    self.dropped_orders += 1;
+                    if self.dropped_orders <= 40 {
+                        eprintln!(
+                            "[ai {}] f={} DROPPED order: {} (unit {}) at ({:.0}, {:.0}) was to build {} near ({:.0}, {:.0}), {:.0} away",
+                            self.ai(), tick.frame, self.name(unit.def), unit.id.0, unit.pos.x, unit.pos.z,
+                            self.name(earlier), near.x, near.z, unit.pos.dist2d(near)
+                        );
+                    }
+                }
                 self.jobs.insert(unit.id, def_id);
                 commands.push(Command::Build { unit: unit.id, def: def_id, site: Some(site), queue: false });
             } else if is_builder {
@@ -91,7 +119,11 @@ impl Brain {
         // surplus, so usage always catches up with income and would read as a permanent shortage.
         let energy_short = energy.current < energy.storage * 0.4;
         let energy_rich = energy.current > energy.storage * 0.8;
-        let generator = if energy.income > ADVANCED_SOLAR_INCOME { kit.advanced_solar } else { kit.solar };
+        // Builders differ in what they can build (a commander cannot build an advanced solar); an order outside
+        // the builder's options is dropped by the engine without a word, leaving the builder idle forever.
+        let options = self.world.def(builder.def).map(|d| d.build_options.clone()).unwrap_or_default();
+        let can_build = |def: UnitDefId| options.contains(&def);
+        let generator = if energy.income > ADVANCED_SOLAR_INCOME && can_build(kit.advanced_solar) { kit.advanced_solar } else { kit.solar };
         let base = self.home;
         let front = self.forward_of_home(450.0);
 

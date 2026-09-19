@@ -99,7 +99,15 @@ impl Instance {
         for mut command in commands.0 {
             if let Command::Build { unit, def, site: Some(site), .. } = &mut command {
                 match self.engine.find_build_site(*def, *site) {
-                    Some(pos) => *site = BuildSite { near: pos, ..*site },
+                    Some(pos) => {
+                        if std::env::var_os("WITHIN_REASON_TRACE_BUILDS").is_some() {
+                            self.log(format_args!(
+                                "build unit={} def={} wanted=({:.0},{:.0}) placed=({:.0},{:.0})",
+                                unit.0, def.0, site.near.x, site.near.z, pos.x, pos.z
+                            ));
+                        }
+                        *site = BuildSite { near: pos, ..*site }
+                    }
                     None => {
                         self.events.push(Event::BuildSiteNotFound { unit: *unit, def: *def });
                         continue;

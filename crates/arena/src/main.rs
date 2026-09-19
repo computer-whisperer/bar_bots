@@ -226,6 +226,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .arg(&dir)
         .arg(&script_path)
         .env("SPRING_DATADIR", repo.join("run/data"))
+        .env("WITHIN_REASON_TRACE_BUILDS", "1")
         .env("WITHIN_REASON_SOCKET", &socket)
         .stdout(log.try_clone()?)
         .stderr(log)
