@@ -47,7 +47,7 @@ the bot process can be killed and restarted mid-game without stalling the match.
 
 ---
 
-# Strategist: Opus observing and directing through MCP — PROPOSED 2026-09-19, not built
+# Strategist: Opus observing and directing through MCP — ratified 2026-09-19
 
 Ratified order (2026-09-19): docs loop → this → Lua runtime designed from what Opus tries to express → Opus programs Lua →
 heuristic + Jev. Verified mechanics are in `docs/harness/claude-p.md`.
@@ -98,8 +98,8 @@ The session gets no built-in tools (`--tools ""`), only our MCP server, no user 
 directory and a replaced system prompt. The MCP server binds to 127.0.0.1 and exposes game state and directives only.
 No credentials in the repository or in transcripts.
 
-## Open decisions for the user
-1. Directive granularity: the list above is deliberately small. Too coarse and Opus cannot express what it sees; too fine and
-   we have built the Lua layer by another name. The first transcripts should tell us.
-2. Whether the first strategist games are against BARb in the arena (repeatable) or in GUI games the user can watch (richer
-   feedback). Proposed: arena first, at 2x.
+## Decisions (user, 2026-09-19)
+1. Directives start small: `army_stance`, `attack_target`, `wave_size`, `economy_focus`. Chose-because: the transcripts
+   should show what is missing before we add levers; too fine a set is the Lua layer by another name.
+2. First strategist games run in the arena against BARb at 2x speed (repeatable), GUI games later.
+The first tool set is correspondingly small: `overview`, `map`, `set_directives`, `note`.
