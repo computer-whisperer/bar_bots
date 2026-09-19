@@ -20,3 +20,7 @@ W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 | eff-applied | (this commit) | easy | 12 | 1-5-6 | all efficiency changes, speed 200, 12 parallel, 40-min game-time limit | outcomes distorted by requested speed; see arena.md OPEN |
 | eff-speed50 | (this commit) | easy | 12 | 8-3-1 | same settings at speed 50, 8 parallel | normal play at ~40% of the old CPU cost |
 | eff-speed50-par12 | (this commit) | easy | 12 | 5-6-1 | speed 50, 12 parallel | within noise of normal; no wall-time gain over 8 parallel |
+| v5-easy-mirror | 05be9ec | easy, mirror | 24 | 12-6-6 | does the faction split follow our faction or BARb's? | BARb's: vs Armada BARb 7-2-3, vs Cortex BARb 5-4-3; timeouts are the new 40-min cap |
+| strategist-refactor-regression | 264423f+ | easy | 12 | 0-1-11 | INVALID: bot never started (socket path too long) | harness bug, fixed; see pitfalls.md |
+| refactor-regression | 264423f+ | easy | 12 | 3-4-5 | economy rule refactor for directives, no strategist | no gross regression |
+| opus-first | 6b115b5 | easy | 1 | 0-0-1 | first Opus strategist game, 2x, 20-min cap | mechanics work (33 turns, median 5.3 s, $1.27); economy frozen by raids; see transcript digest |

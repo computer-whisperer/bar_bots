@@ -23,3 +23,13 @@ broken launch condition; group membership has to be tracked explicitly.
 oscillating 37 -> 20 -> 34 with few idle.
 **Would be wrong if.** Attacker positions showed them reaching the enemy base in strength and losing there instead.
 **Used by.** (none yet; motivates regrouping before contact)
+
+### K-army-home-defence-does-not-protect-outposts
+**Claim.** Keeping the army at home (our default until a wave is ready, or a `defend` stance) does not protect extractors: raids
+kill the outer ones, the constructor sent to rebuild dies too, and the economy freezes at 2-3 extractors.
+**Status.** conjectured (2026-09-19) — one strategist game plus the medium diagnosis
+**Evidence.** opus-first/00 (docs/transcripts/2026-09-19-opus-first.md): 2-3 extractors and +6-9 metal for 20 minutes with 6
+turrets and 8-17 idle bots at home; Opus identified it at 4:55, 7:10 and 8:55 and asked for a directive to station the army
+at a map point as an escort. Same shape as the v5-medium losses (K-opp-medium-wins-by-20).
+**Would be wrong if.** Stationing the home group forward, between the outposts and the enemy, did not raise extractor survival.
+**Used by.** (candidate: army `station` directive / forward rally near the most exposed extractor cluster)

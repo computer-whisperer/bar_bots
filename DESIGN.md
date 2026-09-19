@@ -103,3 +103,13 @@ No credentials in the repository or in transcripts.
    should show what is missing before we add levers; too fine a set is the Lua layer by another name.
 2. First strategist games run in the arena against BARb at 2x speed (repeatable), GUI games later.
 The first tool set is correspondingly small: `overview`, `map`, `set_directives`, `note`.
+
+## What the first strategist game asked for (opus-first, 2026-09-19)
+Digest: `docs/transcripts/2026-09-19-opus-first.md`. Opus's stated wishes, verbatim themes:
+1. **Station the army at a map point as an escort** (asked three times) — the home group idles at base while outposts die.
+2. **Force converter count / order more constructors directly** — `economy_focus` was too indirect: `energy` added generators
+   but no converters, `expand` could not overcome a single surviving constructor.
+Observed problems on our side: the base-attack trigger fired for lone raiders (11 of 33 turns), spending turns on noise; the
+constructor count rule (2 + extractors/4) collapses exactly when extractors are being lost, which is when more are needed.
+Candidates for the next directive set: `army_station {x, z}`, `min_constructors`, `min_converters`; trigger only on 3+
+intruders or a building lost.
