@@ -1,5 +1,6 @@
 upstream/
-run/engine/
+run/engine
+run/engines/
 run/data/
 target/
 run/logs/

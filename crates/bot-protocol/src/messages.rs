@@ -129,7 +129,8 @@ pub struct Commands(pub Vec<Command>);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Command {
-    /// `site` is `None` for factories, which build in place.
+    /// `site` is `None` for factories, which build in place and always append to their build
+    /// queue; `queue` is ignored for them (the engine reads that option bit as "build five").
     Build { unit: UnitId, def: UnitDefId, site: Option<BuildSite>, queue: bool },
     Move { unit: UnitId, to: Vec3, queue: bool },
     Fight { unit: UnitId, to: Vec3, queue: bool },

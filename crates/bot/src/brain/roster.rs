@@ -1,0 +1,69 @@
+//! Which unit fills which role, per faction.
+
+use bot_protocol::UnitDefId;
+
+use crate::world::World;
+
+/// Unit names for one faction.
+pub struct Roster {
+    pub commander: &'static str,
+    extractor: &'static str,
+    solar: &'static str,
+    advanced_solar: &'static str,
+    converter: &'static str,
+    lab: &'static str,
+    turret: &'static str,
+    constructor: &'static str,
+    raider: &'static str,
+    skirmisher: &'static str,
+    artillery: &'static str,
+}
+
+pub const ROSTERS: [Roster; 2] = [
+    Roster {
+        commander: "armcom", extractor: "armmex", solar: "armsolar", advanced_solar: "armadvsol",
+        converter: "armmakr", lab: "armlab", turret: "armllt", constructor: "armck",
+        raider: "armpw", skirmisher: "armrock", artillery: "armham",
+    },
+    Roster {
+        commander: "corcom", extractor: "cormex", solar: "corsolar", advanced_solar: "coradvsol",
+        converter: "cormakr", lab: "corlab", turret: "corllt", constructor: "corck",
+        raider: "corak", skirmisher: "corstorm", artillery: "corthud",
+    },
+];
+
+/// A roster resolved against the running game's unit definitions.
+#[derive(Clone, Copy)]
+pub struct Kit {
+    pub commander: UnitDefId,
+    pub extractor: UnitDefId,
+    pub solar: UnitDefId,
+    pub advanced_solar: UnitDefId,
+    pub converter: UnitDefId,
+    pub lab: UnitDefId,
+    pub turret: UnitDefId,
+    pub constructor: UnitDefId,
+    pub raider: UnitDefId,
+    pub skirmisher: UnitDefId,
+    pub artillery: UnitDefId,
+}
+
+impl Roster {
+    /// `Err` names the first unit this game does not define.
+    pub fn resolve(&self, world: &World) -> Result<Kit, &'static str> {
+        let id = |name: &'static str| world.def_named(name).ok_or(name);
+        Ok(Kit {
+            commander: id(self.commander)?,
+            extractor: id(self.extractor)?,
+            solar: id(self.solar)?,
+            advanced_solar: id(self.advanced_solar)?,
+            converter: id(self.converter)?,
+            lab: id(self.lab)?,
+            turret: id(self.turret)?,
+            constructor: id(self.constructor)?,
+            raider: id(self.raider)?,
+            skirmisher: id(self.skirmisher)?,
+            artillery: id(self.artillery)?,
+        })
+    }
+}

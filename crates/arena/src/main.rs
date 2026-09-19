@@ -39,7 +39,7 @@ struct Options {
 enum Outcome {
     Win,
     Loss,
-    /// Nobody had won when the game-time limit ran out.
+    /// Nobody had won after at least `--max-minutes` of game time.
     Timeout,
     /// The engine exited without reporting a result.
     Aborted,
@@ -124,8 +124,8 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         autohost_port: host_port + 1,
         seed: index as u32 + 1,
         // Alternate corner and faction so neither start nor side biases the batch.
-        we_are_first: index % 2 == 0,
-        our_side: if (index / 2) % 2 == 0 { "Armada" } else { "Cortex" },
+        we_are_first: index.is_multiple_of(2),
+        our_side: if (index / 2).is_multiple_of(2) { "Armada" } else { "Cortex" },
     };
     let script_path = dir.join("script.txt");
     fs::write(&script_path, setup.render())?;
@@ -168,7 +168,10 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
 fn referee(autohost: &mut Autohost, engine: &mut Child, options: &Options, setup: &MatchSetup) -> io::Result<Outcome> {
     let mut playing = false;
     let mut deadline = Instant::now() + LOAD_ALLOWANCE;
-    let game_limit = Duration::from_secs_f32(options.max_minutes as f32 * 60.0 / options.speed as f32);
+    // Parallel matches do not sustain the requested speed; the limit must hold at the slowest
+    // speed seen in practice, so fast matches simply get more game time before timing out.
+    const SLOWEST_SPEED: f32 = 5.0;
+    let game_limit = Duration::from_secs_f32(options.max_minutes as f32 * 60.0 / SLOWEST_SPEED);
     loop {
         if engine.try_wait()?.is_some() {
             return Ok(Outcome::Aborted);
@@ -182,8 +185,7 @@ fn referee(autohost: &mut Autohost, engine: &mut Child, options: &Options, setup
                 autohost.send(&format!("/setmaxspeed {}", options.speed))?;
                 autohost.send(&format!("/setminspeed {}", options.speed))?;
                 playing = true;
-                // Generous: the engine may not sustain the requested speed.
-                deadline = Instant::now() + game_limit * 3;
+                deadline = Instant::now() + game_limit;
             }
             Some(Event::GameOver { winning_ally_teams }) => {
                 let won = winning_ally_teams.contains(&setup.our_ally_team());

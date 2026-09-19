@@ -157,7 +157,8 @@ impl Engine {
                 self.handle(sys::COMMAND_UNIT_BUILD, &mut sys::SBuildUnitCommand {
                     unitId: unit.0,
                     groupId: NO_GROUP,
-                    options: options(queue),
+                    // For factories the shift bit means "build five" (FactoryCAI.cpp), not "append".
+                    options: options(queue && site.is_some()),
                     timeOut: NO_TIMEOUT,
                     toBuildUnitDefId: def.0,
                     buildPos_posF3: pos.as_mut_ptr(),
