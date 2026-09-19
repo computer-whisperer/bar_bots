@@ -24,8 +24,12 @@ const BASE_RADIUS: f32 = 1400.0;
 const RAID_RADIUS: f32 = 500.0;
 /// The strategist is woken for a base attack of at least this many; lone raiders are routine.
 const NOTABLE_INTRUSION: usize = 3;
-/// The default station stands this far ahead of the most exposed extractor, towards the enemy.
+/// The default station stands this far from the most exposed extractor, on its home side.
 const STATION_LEAD: f32 = 250.0;
+/// Buildings this close to a target given up as unreachable are skipped too (they share its ledge).
+const BAD_TARGET_RADIUS: f32 = 350.0;
+/// A candidate station this close to one given up as unreachable is skipped too.
+const BAD_STATION_RADIUS: f32 = 200.0;
 /// Extractors nearer to home than this are covered by the base itself.
 const OUTPOST_DISTANCE: f32 = 1200.0;
 /// An idle attacker this close to the attack target has arrived and needs a new one.
@@ -43,6 +47,14 @@ pub struct Army {
     /// Next metal spot to sweep when attackers find nothing at their target.
     sweep_index: usize,
     last_defend_order: i32,
+    /// Stations given up as unreachable, with the frame until which to avoid them.
+    bad_stations: Vec<(Vec3, i32)>,
+    /// Attack targets given up as unreachable, with the frame until which to avoid them.
+    bad_targets: Vec<(Vec3, i32)>,
+    target_failures: u32,
+    /// Frame at which the current target was chosen, or last approached.
+    target_since: i32,
+    station_failures: u32,
 }
 
 impl Army {
@@ -69,13 +81,67 @@ impl Brain {
             .iter()
             .filter(|u| u.def == kit.extractor && u.pos.dist2d(self.home) > OUTPOST_DISTANCE)
             .min_by(|a, b| a.pos.dist2d(self.enemy_start).total_cmp(&b.pos.dist2d(self.enemy_start)));
-        match most_exposed.filter(|_| self.enabled("H-ARMY-STATION")) {
-            Some(extractor) => {
-                let (dx, dz) = (self.enemy_start.x - extractor.pos.x, self.enemy_start.z - extractor.pos.z);
-                let len = dx.hypot(dz).max(1.0);
-                Vec3 { x: extractor.pos.x + dx / len * STATION_LEAD, y: 0.0, z: extractor.pos.z + dz / len * STATION_LEAD }
-            }
-            None => self.forward_of_home(500.0),
+        // Candidates in order of preference. The outpost station sits on the home side of the extractor, on ground
+        // our constructor walked to build it; a point ahead of it towards the enemy was often unreachable, and
+        // units that cannot reach their station pile up at the factory exit.
+        let outpost = most_exposed.filter(|_| self.enabled("H-ARMY-STATION")).map(|extractor| {
+            let (dx, dz) = (self.home.x - extractor.pos.x, self.home.z - extractor.pos.z);
+            let len = dx.hypot(dz).max(1.0);
+            Vec3 { x: extractor.pos.x + dx / len * STATION_LEAD, y: 0.0, z: extractor.pos.z + dz / len * STATION_LEAD }
+        });
+        let candidates = [outpost, Some(self.forward_of_home(500.0)), Some(self.forward_of_home(150.0))];
+        let usable = |point: &Vec3| {
+            !self.army.bad_stations.iter().any(|(bad, until)| *until > tick.frame && bad.dist2d(*point) < BAD_STATION_RADIUS)
+        };
+        candidates.into_iter().flatten().find(usable).unwrap_or(self.home)
+    }
+
+    /// Home-group units that cannot reach the station mean the station is a bad place; give it up for a while.
+    fn note_station_failures(&mut self, tick: &Tick, kit: &Kit) {
+        const FAILURES_TO_GIVE_UP: u32 = 6;
+        const GIVE_UP_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
+        let failures = tick
+            .events
+            .iter()
+            .filter(|e| {
+                let bot_protocol::Event::UnitMoveFailed { unit } = e else { return false };
+                let soldier = tick.snapshot.own_units.iter().find(|u| u.id == *unit).is_some_and(|u| self.is_army(u, kit));
+                soldier && !self.army.attackers.contains(unit)
+            })
+            .count() as u32;
+        self.army.station_failures += failures;
+        if self.army.station_failures >= FAILURES_TO_GIVE_UP {
+            self.army.station_failures = 0;
+            let station = self.last_station;
+            eprintln!("[ai {}] f={} station ({:.0}, {:.0}) is unreachable; trying the next", self.ai(), tick.frame, station.x, station.z);
+            self.army.bad_stations.push((station, tick.frame + GIVE_UP_FRAMES));
+        }
+    }
+
+    /// Attackers whose moves keep failing cannot path to the target (a ledge, an island). Without this the whole
+    /// army walks to the nearest reachable point and is re-sent there every tick for the rest of the game.
+    fn note_unreachable_targets(&mut self, tick: &Tick, attackers_nearest: Option<f32>) {
+        const FAILURES_TO_GIVE_UP: u32 = 10;
+        const PATIENCE_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
+        /// Somebody got this close: the target is reachable, and the failures are a crowd jostling.
+        const CLOSE_ENOUGH: f32 = 600.0;
+        const GIVE_UP_FRAMES: i32 = 4 * 60 * FRAMES_PER_SECOND;
+        self.army.bad_targets.retain(|(_, until)| *until > tick.frame);
+        let failures = tick
+            .events
+            .iter()
+            .filter(|e| matches!(e, bot_protocol::Event::UnitMoveFailed { unit } if self.army.attackers.contains(unit)))
+            .count() as u32;
+        self.army.target_failures += failures;
+        let Some(target) = self.army.target else { return };
+        if attackers_nearest.is_some_and(|d| d < CLOSE_ENOUGH) {
+            self.army.target_failures = 0;
+            self.army.target_since = tick.frame;
+        }
+        if self.army.target_failures >= FAILURES_TO_GIVE_UP && tick.frame - self.army.target_since > PATIENCE_FRAMES {
+            eprintln!("[ai {}] f={} target ({:.0}, {:.0}) is unreachable; choosing another", self.ai(), tick.frame, target.x, target.z);
+            self.army.bad_targets.push((target, tick.frame + GIVE_UP_FRAMES));
+            self.army.target = None;
         }
     }
 
@@ -93,6 +159,20 @@ impl Brain {
         let soldiers: Vec<&OwnUnit> =
             snapshot.own_units.iter().filter(|u| !u.being_built && self.is_army(u, kit)).collect();
 
+        for event in &tick.events {
+            let bot_protocol::Event::UnitMoveFailed { unit } = event else { continue };
+            self.move_failures += 1;
+            if self.move_failures <= 30
+                && let Some(u) = snapshot.own_units.iter().find(|u| u.id == *unit)
+            {
+                eprintln!(
+                    "[ai {}] f={} MOVE FAILED: {} at ({:.0}, {:.0}), attacker={}, army target {:?}",
+                    self.ai(), tick.frame, self.name(u.def), u.pos.x, u.pos.z, self.army.attackers.contains(unit),
+                    self.army.target.map(|t| (t.x as i32, t.z as i32))
+                );
+            }
+        }
+
         let committed = self.army.attackers.len();
         self.army.attackers.retain(|id| soldiers.iter().any(|u| u.id == *id));
         if committed >= NOTABLE_WAVE && self.army.attackers.is_empty() {
@@ -106,18 +186,39 @@ impl Brain {
         // drag every wave back into our half of the map. Roll the enemy up from the outside: the remembered
         // building nearest to us, else where the enemy presumably started.
         self.forget_razed_buildings(&soldiers, snapshot.enemies.as_slice());
+        let previous_target = self.army.target;
+        let attackers_nearest = previous_target.and_then(|t| {
+            soldiers.iter().filter(|u| self.army.attackers.contains(&u.id)).map(|u| u.pos.dist2d(t)).min_by(f32::total_cmp)
+        });
+        self.note_unreachable_targets(tick, attackers_nearest);
+        let reachable = |point: &Vec3| !self.army.bad_targets.iter().any(|(bad, _)| bad.dist2d(*point) < BAD_TARGET_RADIUS);
         let nearest_building = self
             .enemy_buildings
             .values()
             .map(|(_, pos, _)| *pos)
+            .filter(reachable)
             .min_by(|a, b| a.dist2d(self.home).total_cmp(&b.dist2d(self.home)));
         self.army.target = nearest_building.or(self.army.target);
+        if self.army.target.zip(previous_target).is_none_or(|(now, before)| now.dist2d(before) > 50.0) {
+            self.army.target_since = tick.frame;
+            self.army.target_failures = 0;
+        }
+        // Seen buildings say where the enemy really is; the mirrored start is only a first guess.
+        if self.enemy_buildings.len() >= 3 {
+            let n = self.enemy_buildings.len() as f32;
+            self.enemy_start = self.enemy_buildings.values().fold(Vec3::default(), |sum, (_, pos, _)| Vec3 {
+                x: sum.x + pos.x / n,
+                y: 0.0,
+                z: sum.z + pos.z / n,
+            });
+        }
         let mut target = nearest_building.or(self.army.target).unwrap_or(self.enemy_start);
         if let Some(ordered) = self.directives.attack_target {
             self.fire("D-ATTACK-TARGET");
             target = ordered.value;
         }
         let stance = self.directives.army_stance.map(|s| s.value);
+        self.note_station_failures(tick, kit);
         let rally = self.station(tick, kit);
         self.last_station = rally;
 

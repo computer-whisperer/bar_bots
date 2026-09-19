@@ -50,6 +50,9 @@ pub struct Brain {
     /// Each builder's latest order: frame, what, and near where. For spotting orders that never start.
     last_orders: HashMap<UnitId, (i32, UnitDefId, Vec3)>,
     dropped_orders: u32,
+    move_failures: u32,
+    /// Places a builder failed to walk to, with the frame until which to avoid them.
+    unreachable: Vec<(Vec3, i32)>,
     /// Heuristic IDs switched off for an ablation run (`WITHIN_REASON_DISABLE=H-A,H-B`).
     disabled: Vec<String>,
     last_trigger_frame: HashMap<&'static str, i32>,
@@ -80,6 +83,8 @@ impl Brain {
             last_station: Vec3::default(),
             last_orders: HashMap::new(),
             dropped_orders: 0,
+            move_failures: 0,
+            unreachable: Vec::new(),
             disabled: std::env::var("WITHIN_REASON_DISABLE").map_or_else(|_| Vec::new(), |ids| ids.split(',').map(str::to_string).collect()),
             last_trigger_frame: HashMap::new(),
         }
@@ -177,7 +182,7 @@ impl Brain {
                 count(kit.extractor), count(kit.lab), count(kit.constructor),
                 s.own_units.iter().filter(|u| self.is_army(u, kit)).count(), s.enemies.len()
             );
-            eprintln!("[ai {}] f={} dropped build orders so far: {}", self.ai(), tick.frame, self.dropped_orders);
+            eprintln!("[ai {}] f={} dropped build orders so far: {}, move failures: {}", self.ai(), tick.frame, self.dropped_orders, self.move_failures);
             let rules: Vec<String> = self.fired.iter().map(|(rule, n)| format!("{rule}={n}")).collect();
             eprintln!("[ai {}] f={} rules: {}", self.ai(), tick.frame, rules.join(" "));
             self.fired.clear();

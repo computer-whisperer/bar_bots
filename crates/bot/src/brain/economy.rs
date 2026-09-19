@@ -34,6 +34,9 @@ const SPOT_CLAIM_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 const SPOT_OCCUPIED_RADIUS: f32 = 60.0;
 /// Placement may move this far from a metal spot: the build grid's snap, no more.
 const EXTRACTOR_SNAP: f32 = 16.0;
+/// A site a builder failed to reach is avoided, with everything this close to it, for this long.
+const UNREACHABLE_RADIUS: f32 = 120.0;
+const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
 /// Frames between ticks (the shim's tick interval).
 const TICK_FRAMES: i32 = 15;
 
@@ -59,6 +62,7 @@ impl Brain {
         let own = &tick.snapshot.own_units;
         self.jobs.retain(|id, _| own.iter().any(|u| u.id == *id && !u.idle));
         self.spot_claims.retain(|_, claimed| tick.frame - *claimed < SPOT_CLAIM_FRAMES);
+        self.note_unreachable_sites(tick);
 
         for unit in own.iter().filter(|u| u.idle && !u.being_built) {
             let Some(def) = self.world.def(unit.def) else { continue };
@@ -79,6 +83,10 @@ impl Brain {
                 let (def_id, site) = match plan {
                     // The game rejects an extractor that is not exactly on its spot (cmd_mex_denier.lua), so no shifting.
                     Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: EXTRACTOR_SNAP, min_dist: 0 }),
+                    // Where the builder stands is reachable by definition; fall back to it when the usual anchor is not.
+                    Plan::Near(def_id, anchor) if self.is_unreachable(anchor) => {
+                        (def_id, BuildSite { near: unit.pos, search_radius: 500.0, min_dist: 3 })
+                    }
                     Plan::Near(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: 3 }),
                 };
                 // An order whose builder is idle again within two ticks never started: count it and say where.
@@ -106,6 +114,24 @@ impl Brain {
                 }));
             }
         }
+    }
+
+    /// A builder whose move failed could not reach its site. Remember that, or it is sent there again at once,
+    /// fails again, and spends the game walking into a cliff. Spots and base sites are avoided for a while.
+    fn note_unreachable_sites(&mut self, tick: &Tick) {
+        self.unreachable.retain(|(_, until)| *until > tick.frame);
+        for event in &tick.events {
+            let bot_protocol::Event::UnitMoveFailed { unit } = event else { continue };
+            let Some((_, def, near)) = self.last_orders.get(unit).copied() else { continue };
+            if !self.unreachable.iter().any(|(bad, _)| bad.dist2d(near) < UNREACHABLE_RADIUS) {
+                eprintln!("[ai {}] f={} cannot reach ({:.0}, {:.0}) to build {}; avoiding it", self.ai(), tick.frame, near.x, near.z, self.name(def));
+                self.unreachable.push((near, tick.frame + UNREACHABLE_FRAMES));
+            }
+        }
+    }
+
+    fn is_unreachable(&self, point: Vec3) -> bool {
+        self.unreachable.iter().any(|(bad, _)| bad.dist2d(point) < UNREACHABLE_RADIUS)
     }
 
     /// The most urgent thing this builder can safely do, and the heuristic (docs/heuristics.md) that chose it.
@@ -212,7 +238,7 @@ impl Brain {
             .metal_spots
             .iter()
             .enumerate()
-            .filter(|(i, s)| !self.spot_claims.contains_key(i) && reachable(**s))
+            .filter(|(i, s)| !self.spot_claims.contains_key(i) && reachable(**s) && !self.is_unreachable(**s))
             .filter(|(_, s)| !own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
             .min_by(|(_, a), (_, b)| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))?;
         self.spot_claims.insert(index, frame);
