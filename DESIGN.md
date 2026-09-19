@@ -44,3 +44,62 @@ Armada and Cortex name tables only; Legion and everything else is out of scope f
 ## Done means
 `run/` script plays shim+bot vs BARb headless; log shows buildings completed, units produced, an attack order issued, and
 the bot process can be killed and restarted mid-game without stalling the match.
+
+---
+
+# Strategist: Opus observing and directing through MCP — PROPOSED 2026-09-19, not built
+
+Ratified order (2026-09-19): docs loop → this → Lua runtime designed from what Opus tries to express → Opus programs Lua →
+heuristic + Jev. Verified mechanics are in `docs/harness/claude-p.md`.
+
+## Principle
+Opus is never in the control loop. A decision takes 4-8 s; the Rust brain keeps playing every tick. Opus reads a summary of
+the game and sets **directives** — parameters and targets that the existing heuristics consult. Every directive expires, so a
+slow, dead or rate-limited strategist degrades to the plain heuristic bot rather than wedging it.
+
+```
+ claude -p (Opus, stream-json, MCP tools only)
+      ▲ user turns: periodic + triggered events          ┌──────────── bot process ─────────────┐
+      │                                                   │ strategist driver (one per AI)       │
+      └── stdin/stdout ──────────────────────────────────►│   spawns claude, sends turns, logs   │
+      ── HTTP MCP (127.0.0.1) ───────────────────────────►│ MCP server ── reads ──► Briefing     │
+                                                          │              writes ─► Directives    │
+                                                          │ brain (every tick): writes Briefing, │
+                                                          │   reads Directives                   │
+                                                          └──────────────────────────────────────┘
+```
+
+## Pieces
+- **Briefing** — what the brain publishes each tick for the strategist to read: game time, economy, counts by role,
+  home group / attackers (size, composition, centroid), enemy intel (clusters of seen enemies with last-seen time, buildings
+  remembered after they leave sight), metal spots by owner (ours / enemy seen / free), recent events digest, directives in
+  force, which heuristics fired. Positions are given as map coordinates plus a coarse named grid (e.g. "C4") so they can be
+  talked about.
+- **Directives** — typed, each with a time-to-live: `army_stance` (defend / gather / attack), `attack_target` (position or
+  enemy cluster id), `wave_size`, `economy_focus` (expand / energy / production / defence), `production_mix` (weights by
+  role), `expansion_reach`, `defend_outposts`. Each maps onto registered heuristic IDs, which read "directive, else default".
+- **MCP tools** — observe: `overview`, `army`, `enemy_intel`, `map`, `events_since`. Direct: `set_directives` (any subset,
+  with ttl), `clear_directives`. Record: `note` (the strategist's reasoning in a sentence or two, stored with the game time).
+  Hand-rolled minimal JSON-RPC over HTTP in the bot (the verified surface is five methods); no async runtime needed.
+- **Driver** — spawns one `claude -p` per AI session at game start when `--strategist opus` is given. Sends a turn every
+  ~45 s of game time and immediately on triggers (base or outpost under attack, commander damaged, wave destroyed, first
+  sight of a new enemy unit class). One turn in flight; triggers that arrive meanwhile are coalesced into the next turn.
+- **Transcript** — `strategist.jsonl` per match: every turn's prompt, tool calls and results, directives set, notes, usage.
+  This is the raw material for the knowledge base and, later, labelled decisions for Jev.
+
+## Evaluation
+Strategist matches run at 1-3x real time (a decision at arena speed 50 would span minutes of game time), a few at a time,
+headless or in the user's GUI client. Compare against the same brain without a strategist on the same seeds; expect to need
+more games per comparison because the strategist adds variance. Subscription rate limits are read from the stream's
+`rate_limit_event` messages; on a limit the driver stops sending turns and the match continues on heuristics.
+
+## Safety
+The session gets no built-in tools (`--tools ""`), only our MCP server, no user or project settings, an empty working
+directory and a replaced system prompt. The MCP server binds to 127.0.0.1 and exposes game state and directives only.
+No credentials in the repository or in transcripts.
+
+## Open decisions for the user
+1. Directive granularity: the list above is deliberately small. Too coarse and Opus cannot express what it sees; too fine and
+   we have built the Lua layer by another name. The first transcripts should tell us.
+2. Whether the first strategist games are against BARb in the arena (repeatable) or in GUI games the user can watch (richer
+   feedback). Proposed: arena first, at 2x.
