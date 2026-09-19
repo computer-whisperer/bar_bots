@@ -32,8 +32,6 @@ const STALLED_ENERGY: f32 = 0.15;
 const SPOT_CLAIM_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 /// A metal extractor this close to a spot occupies it.
 const SPOT_OCCUPIED_RADIUS: f32 = 60.0;
-/// Placement may move this far from a metal spot: the build grid's snap, no more.
-const EXTRACTOR_SNAP: f32 = 16.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
 const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
@@ -81,8 +79,9 @@ impl Brain {
                 }
                 self.fire(rule);
                 let (def_id, site) = match plan {
-                    // The game rejects an extractor that is not exactly on its spot (cmd_mex_denier.lua), so no shifting.
-                    Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: EXTRACTOR_SNAP, min_dist: 0 }),
+                    // The game rejects an extractor that is not exactly on its spot (cmd_mex_denier.lua), and the shim
+                    // places extractors exactly at `near`, searching nowhere.
+                    Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: 0.0, min_dist: 0 }),
                     // Where the builder stands is reachable by definition; fall back to it when the usual anchor is not.
                     Plan::Near(def_id, anchor) if self.is_unreachable(anchor) => {
                         (def_id, BuildSite { near: unit.pos, search_radius: 500.0, min_dist: 3 })

@@ -13,6 +13,8 @@ use recoil_ai_sys as sys;
 /// Heightmap squares to elmos.
 const SQUARE_SIZE: f32 = 8.0;
 const MAX_UNITS: usize = 32_000;
+/// Base buildings stay this far from any metal spot, leaving room for the extractor and a path to it.
+const SPOT_KEEPOUT: f32 = 100.0;
 
 pub struct Engine {
     ai_id: c_int,
@@ -20,6 +22,8 @@ pub struct Engine {
     metal: c_int,
     energy: c_int,
     id_buf: Vec<c_int>,
+    /// Metal spots, kept so base buildings stay off them.
+    metal_spots: Vec<Vec3>,
 }
 
 /// Calls a callback-table entry, which always takes the AI id first.
@@ -34,7 +38,7 @@ impl Engine {
     /// `callback` must be the table the engine passed to `init` for `ai_id`, and stay valid
     /// until `release`.
     pub unsafe fn new(ai_id: c_int, callback: *const sys::SSkirmishAICallback) -> Self {
-        let mut engine = Engine { ai_id, callback, metal: -1, energy: -1, id_buf: vec![0; MAX_UNITS] };
+        let mut engine = Engine { ai_id, callback, metal: -1, energy: -1, id_buf: vec![0; MAX_UNITS], metal_spots: Vec::new() };
         engine.metal = call!(engine, getResourceByName(c"Metal".as_ptr()));
         engine.energy = call!(engine, getResourceByName(c"Energy".as_ptr()));
         engine
@@ -56,8 +60,9 @@ impl Engine {
         let float_count = call!(self, Map_getResourceMapSpotsPositions(self.metal, std::ptr::null_mut(), 0));
         let mut floats = vec![0f32; float_count.max(0) as usize];
         call!(self, Map_getResourceMapSpotsPositions(self.metal, floats.as_mut_ptr(), float_count));
-        let metal_spots =
+        let metal_spots: Vec<Vec3> =
             floats.chunks_exact(3).map(|s| Vec3 { x: s[0], y: s[1], z: s[2] }).collect();
+        self.metal_spots = metal_spots.clone();
 
         Hello {
             ai_id: self.ai_id,
@@ -135,9 +140,35 @@ impl Engine {
         Vec3 { x: pos[0], y: pos[1], z: pos[2] }
     }
 
-    /// Closest legal position for `def` near `site`, if the map has one.
+    /// A legal position for `def` near `site`, if the map has one.
+    ///
+    /// An extractor goes exactly on its spot or nowhere: the engine's site search refuses a spot holding a wreck,
+    /// though building there is allowed (the builder reclaims the wreck first). Anything else keeps off the
+    /// metal spots, or the base's own generators bury the nearest extractor sites.
     pub fn find_build_site(&self, def: UnitDefId, site: BuildSite) -> Option<Vec3> {
-        let mut near = [site.near.x, site.near.y, site.near.z];
+        if call!(self, UnitDef_getExtractsResource(def.0, self.metal)) > 0.0 {
+            let mut at = [site.near.x, site.near.y, site.near.z];
+            return call!(self, Map_isPossibleToBuildAt(def.0, at.as_mut_ptr(), sys::UNIT_COMMAND_BUILD_NO_FACING))
+                .then_some(site.near);
+        }
+        let on_a_spot = |pos: Vec3| self.metal_spots.iter().any(|s| s.dist2d(pos) < SPOT_KEEPOUT);
+        // The search returns the closest site to its centre, so walk the centre outwards until the answer is clear.
+        let rings = [0.0, 1.0, 2.0, 3.0].map(|r| r * 2.0 * SPOT_KEEPOUT);
+        for (ring, radius) in rings.into_iter().enumerate() {
+            let directions = if ring == 0 { 1 } else { 8 };
+            for step in 0..directions {
+                let angle = step as f32 * std::f32::consts::TAU / directions as f32;
+                let centre = Vec3 { x: site.near.x + radius * angle.cos(), z: site.near.z + radius * angle.sin(), ..site.near };
+                if let Some(found) = self.closest_build_site(def, centre, site) && !on_a_spot(found) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+
+    fn closest_build_site(&self, def: UnitDefId, centre: Vec3, site: BuildSite) -> Option<Vec3> {
+        let mut near = [centre.x, centre.y, centre.z];
         let mut found = [0f32; 3];
         call!(self, Map_findClosestBuildSite(
             def.0, near.as_mut_ptr(), site.search_radius, site.min_dist,
@@ -145,6 +176,33 @@ impl Engine {
         ));
         // The engine reports failure as x == -1.
         (found[0] >= 0.0).then_some(Vec3 { x: found[0], y: found[1], z: found[2] })
+    }
+
+    /// What stands within `radius` of `pos`, for diagnosing a build site the engine refused.
+    pub fn describe_site(&mut self, def: UnitDefId, pos: Vec3, radius: f32) -> String {
+        let mut at = [pos.x, pos.y, pos.z];
+        let max = self.id_buf.len() as c_int;
+        let possible = call!(self, Map_isPossibleToBuildAt(def.0, at.as_mut_ptr(), sys::UNIT_COMMAND_BUILD_NO_FACING));
+        let mut out = format!("possible_at_exact={possible}");
+        let n = call!(self, getFriendlyUnitsIn(at.as_mut_ptr(), radius, false, self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        for &id in &self.id_buf[..n] {
+            let def = call!(self, Unit_getDef(id));
+            let name = self.string(call!(self, UnitDef_getName(def)));
+            out += &format!(" friendly:{name}");
+        }
+        let n = call!(self, getEnemyUnitsIn(at.as_mut_ptr(), radius, false, self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        for &id in &self.id_buf[..n] {
+            let def = call!(self, Unit_getDef(id));
+            let name = if def >= 0 { self.string(call!(self, UnitDef_getName(def))) } else { "?".into() };
+            out += &format!(" enemy:{name}");
+        }
+        let n = call!(self, getFeaturesIn(at.as_mut_ptr(), radius, false, self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        for &id in &self.id_buf[..n] {
+            let def = call!(self, Feature_getDef(id));
+            let name = self.string(call!(self, FeatureDef_getName(def)));
+            out += &format!(" feature:{name}");
+        }
+        out
     }
 
     /// Issues a command; `Err` carries the engine's non-zero result code.

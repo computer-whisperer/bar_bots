@@ -109,6 +109,12 @@ impl Instance {
                         *site = BuildSite { near: pos, ..*site }
                     }
                     None => {
+                        if std::env::var_os("WITHIN_REASON_TRACE_BUILDS").is_some() {
+                            let what = self.engine.describe_site(*def, site.near, 64.0);
+                            self.log(format_args!(
+                                "no site unit={} def={} wanted=({:.0},{:.0}) {what}", unit.0, def.0, site.near.x, site.near.z
+                            ));
+                        }
                         self.events.push(Event::BuildSiteNotFound { unit: *unit, def: *def });
                         continue;
                     }

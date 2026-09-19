@@ -148,6 +148,20 @@ impl Brain {
         const SAFE_RADIUS: f32 = 350.0;
         let damaged = |unit: UnitId| tick.events.iter().any(|e| matches!(e, Event::UnitDamaged { unit: u, .. } if *u == unit));
         for commander in tick.snapshot.own_units.iter().filter(|u| u.def == kit.commander) {
+            // Who is hurting the commander: the one fact a lost game's log must hold.
+            for event in &tick.events {
+                let Event::UnitDamaged { unit, attacker, damage } = *event else { continue };
+                if unit != commander.id {
+                    continue;
+                }
+                let enemy = attacker.and_then(|id| tick.snapshot.enemies.iter().find(|e| e.id == id));
+                let who = enemy.and_then(|e| e.def).map_or("unseen", |d| self.name(d));
+                let range = enemy.map_or(-1.0, |e| e.pos.dist2d(commander.pos));
+                eprintln!(
+                    "[ai {}] f={} commander hit for {damage:.0} by {who} from {range:.0} away, {:.0} health left",
+                    self.ai(), tick.frame, commander.health
+                );
+            }
             let hurt = commander.health < commander.max_health * RETREAT_HEALTH;
             if hurt && damaged(commander.id) && commander.pos.dist2d(self.home) > SAFE_RADIUS {
                 eprintln!("[ai {}] f={} commander retreats at {:.0} health", self.ai(), tick.frame, commander.health);
