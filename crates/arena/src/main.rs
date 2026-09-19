@@ -7,6 +7,8 @@
 //!              [--side armada|cortex]   (default: alternate)
 //!              [--bot PATH]   (bot binary from another build, for A/B runs)
 //!              [--disable H-ID,H-ID]   (ablation: switch heuristics off by registry ID)
+//!              [--ab-disable H-ID,H-ID]   (interleaved A/B: arm B also switches these off; blocks of four matches)
+//!              [--claude-config-dir DIR]   (subscription for --strategist sessions; default ~/.claude2)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
 
 mod autohost;
@@ -49,6 +51,11 @@ struct Options {
     bot: Option<std::path::PathBuf>,
     /// Comma-separated heuristic IDs the bot should switch off (ablation).
     disable: String,
+    /// Interleaved A/B: arm B additionally switches these heuristics off. Arms alternate in blocks
+    /// of four matches, so each arm meets every corner and faction under the same machine conditions.
+    ab_disable: Option<String>,
+    /// Claude Code config dir for strategist sessions (which subscription they run on).
+    claude_config_dir: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -64,6 +71,8 @@ enum Outcome {
 #[derive(Debug, Serialize)]
 struct MatchResult {
     index: usize,
+    /// "A" or "B" in an interleaved A/B batch, else empty.
+    arm: &'static str,
     outcome: Outcome,
     our_side: &'static str,
     our_corner: &'static str,
@@ -102,7 +111,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist, "side": options.side, "bot": options.bot, "disable": options.disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist, "side": options.side, "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -118,7 +127,7 @@ fn main() -> io::Result<()> {
                     let Some(index) = queue.lock().unwrap().pop() else { break };
                     let result = run_match(&repo, &batch_dir, &options, index).unwrap_or_else(|e| {
                         eprintln!("match {index}: {e}");
-                        MatchResult { index, outcome: Outcome::Aborted, our_side: "?", our_corner: "?", game_minutes: 0.0, wall_seconds: 0.0 }
+                        MatchResult { index, arm: "", outcome: Outcome::Aborted, our_side: "?", our_corner: "?", game_minutes: 0.0, wall_seconds: 0.0 }
                     });
                     println!(
                         "match {:>2}: {:<7} {} {} {:>5.1} game-min in {:>4.0}s",
@@ -146,6 +155,16 @@ fn main() -> io::Result<()> {
         "== {} wins, {} losses, {} timeouts, {} aborted ==",
         count(Outcome::Win), count(Outcome::Loss), count(Outcome::Timeout), count(Outcome::Aborted)
     );
+    if let Some(extra) = &options.ab_disable {
+        for arm in ["A", "B"] {
+            let tally = |outcome| results.iter().filter(|r| r.arm == arm && r.outcome == outcome).count();
+            println!(
+                "arm {arm} ({}): {} wins, {} losses, {} timeouts",
+                if arm == "A" { "as configured".to_string() } else { format!("also without {extra}") },
+                tally(Outcome::Win), tally(Outcome::Loss), tally(Outcome::Timeout)
+            );
+        }
+    }
     print_rule_comparison(&batch_dir, &results);
     println!(
         "ledger row for docs/experiments.md:\n| {} | {} | {}{} | {} | {}-{}-{}{} | <what this tested> | <what it showed> |",
@@ -183,11 +202,22 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     // Unix socket paths are limited to ~108 bytes, so the socket cannot live in the match directory.
     let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, Into::into);
     let socket = runtime_dir.join(format!("wreason-arena-{}-{index}.sock", std::process::id()));
+    let arm = match &options.ab_disable {
+        None => "",
+        Some(_) if (index / 4).is_multiple_of(2) => "A",
+        Some(_) => "B",
+    };
+    let disable = match (&options.ab_disable, arm) {
+        (Some(extra), "B") if options.disable.is_empty() => extra.clone(),
+        (Some(extra), "B") => format!("{},{extra}", options.disable),
+        _ => options.disable.clone(),
+    };
     let mut bot = Command::new(options.bot.clone().unwrap_or_else(|| repo.join("target/release/bot")))
         .args(options.strategist.then_some("--strategist"))
         .env("WITHIN_REASON_SOCKET", &socket)
         .env("WITHIN_REASON_LOG_DIR", &dir)
-        .env("WITHIN_REASON_DISABLE", &options.disable)
+        .env("WITHIN_REASON_DISABLE", &disable)
+        .envs(options.claude_config_dir.as_ref().map(|dir| ("WITHIN_REASON_CLAUDE_CONFIG_DIR", dir)))
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
     let log = File::create(dir.join("engine.log"))?;
@@ -211,6 +241,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     let game_minutes = last_frame(&dir.join("engine.log")) as f32 / (30.0 * 60.0);
     Ok(MatchResult {
         index,
+        arm,
         outcome,
         our_side: setup.our_side,
         our_corner: if setup.we_are_first { "NW" } else { "SE" },
@@ -389,6 +420,8 @@ fn parse_args() -> Options {
         side: None,
         bot: None,
         disable: String::new(),
+        ab_disable: None,
+        claude_config_dir: None,
     };
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
@@ -412,6 +445,8 @@ fn parse_args() -> Options {
             "--profile" => options.profile = value(),
             "--bot" => options.bot = Some(value().into()),
             "--disable" => options.disable = value(),
+            "--ab-disable" => options.ab_disable = Some(value()),
+            "--claude-config-dir" => options.claude_config_dir = Some(value()),
             "--side" => {
                 options.side = Some(match value().to_lowercase().as_str() {
                     "armada" => "Armada",
@@ -428,7 +463,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist] [--side armada|cortex] [--bot PATH] [--disable H-ID,H-ID]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist] [--side armada|cortex] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR]");
     std::process::exit(2)
 }
 

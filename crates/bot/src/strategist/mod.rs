@@ -21,6 +21,9 @@ use transcript::Transcript;
 /// Game time between routine calls when nothing triggers one sooner.
 const ROUTINE_INTERVAL_FRAMES: i32 = 45 * 30;
 const MODEL: &str = "claude-opus-5";
+/// Strategist sessions run on this subscription unless `WITHIN_REASON_CLAUDE_CONFIG_DIR` says otherwise: it has
+/// extra usage (paid credits) disabled, so it can be blocked but never charged (`docs/harness/claude-p.md`).
+const DEFAULT_CLAUDE_CONFIG_DIR: &str = ".claude2";
 
 pub struct Strategist {
     pub shared: Arc<Shared>,
@@ -38,8 +41,13 @@ impl Strategist {
         let cwd = dir.join(format!("strategist-{ai_id}-cwd"));
         std::fs::create_dir_all(&cwd)?;
         let mcp_config = json!({ "mcpServers": { "wreason": { "type": "http", "url": format!("http://127.0.0.1:{}/mcp", server.port) } } });
+        let config_dir = std::env::var_os("WITHIN_REASON_CLAUDE_CONFIG_DIR").map_or_else(
+            || std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(DEFAULT_CLAUDE_CONFIG_DIR),
+            Into::into,
+        );
         let mut child = Command::new("claude")
             .current_dir(&cwd)
+            .env("CLAUDE_CONFIG_DIR", &config_dir)
             .args(["-p", "--model", MODEL, "--tools", "", "--strict-mcp-config", "--mcp-config"])
             .arg(mcp_config.to_string())
             .args(["--allowedTools", "mcp__wreason__*", "--permission-mode", "dontAsk", "--setting-sources", ""])
@@ -61,6 +69,15 @@ impl Strategist {
                 if matches!(kind, "assistant" | "result" | "rate_limit_event") {
                     reader_transcript.record(json!({ "kind": kind, "message": message }));
                 }
+                // We spend weekly allotments only: the first sign of paid overage, or of any limit, ends the session.
+                let limit = &message["rate_limit_info"];
+                if kind == "rate_limit_event"
+                    && (limit["isUsingOverage"].as_bool() == Some(true) || limit["status"].as_str().is_some_and(|s| s != "allowed"))
+                {
+                    eprintln!("[strategist] STOPPING: rate limit event {limit}");
+                    reader_transcript.record(json!({ "kind": "stopped", "reason": limit }));
+                    break;
+                }
                 if kind == "result" && turn_done_tx.send(()).is_err() {
                     break;
                 }
@@ -68,7 +85,7 @@ impl Strategist {
         });
         let driver_shared = shared.clone();
         std::thread::spawn(move || drive(stdin, turn_done, &driver_shared, &transcript, ai_id));
-        eprintln!("[ai {ai_id}] strategist started ({MODEL}, MCP on port {})", server.port);
+        eprintln!("[ai {ai_id}] strategist started ({MODEL}, account {}, MCP on port {})", config_dir.display(), server.port);
         Ok(Strategist { shared, _server: server, child })
     }
 }

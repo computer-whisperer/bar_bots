@@ -71,8 +71,13 @@ fn handle(call: &Value, shared: &Shared, transcript: &Transcript) -> Option<Valu
             let name = call["params"]["name"].as_str().unwrap_or_default();
             let arguments = &call["params"]["arguments"];
             let outcome = call_tool(name, arguments, shared);
-            transcript.record(json!({ "kind": "tool_call", "tool": name, "arguments": arguments,
-                "result": outcome.as_ref().map_or_else(|e| e.clone(), |text| summary(text)) }));
+            // Full results, briefings included: they are what the strategist decided on, and the
+            // labelled state for evaluating faster models against its decisions.
+            let recorded = outcome.as_ref().map_or_else(
+                |problem| Value::String(problem.clone()),
+                |text| serde_json::from_str(text).unwrap_or_else(|_| Value::String(text.clone())),
+            );
+            transcript.record(json!({ "kind": "tool_call", "tool": name, "arguments": arguments, "result": recorded }));
             Ok(match outcome {
                 Ok(text) => json!({ "content": [{ "type": "text", "text": text }] }),
                 Err(problem) => json!({ "content": [{ "type": "text", "text": problem }], "isError": true }),
@@ -84,11 +89,6 @@ fn handle(call: &Value, shared: &Shared, transcript: &Transcript) -> Option<Valu
         Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
         Err(error) => json!({ "jsonrpc": "2.0", "id": id, "error": error }),
     })
-}
-
-/// Briefings are long; the transcript keeps what was asked and that it was answered.
-fn summary(text: &str) -> String {
-    if text.len() > 200 { format!("{} bytes", text.len()) } else { text.to_string() }
 }
 
 fn tool_list() -> Value {
