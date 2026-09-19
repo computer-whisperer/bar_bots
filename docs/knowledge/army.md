@@ -76,3 +76,13 @@ LLT/HLT/HLLT turrets.
 **Used by.** (none yet) — candidates: gather before the assault, skip targets under turret cover while the army is
 small (BARb's own 0.75-power rule), artillery against turrets, a scout for sight.
 
+### K-army-commander-sniped-after-wave-leaves
+**Claim.** Many of our losses are not collapses: an enemy group of ~15 walks into a healthy base just after a wave has
+left and kills the commander in 10-20 seconds, which ends the game.
+**Status.** supported (2026-09-19)
+**Evidence.** v11-layout match 14: wave 7 (32 units) left at f=34560; at f=36105 the commander had 3535 health, at
+f=36495 it was dead to a pack of armwar, with 8 extractors, 4 labs and 28 soldiers alive, 10 of them at home. v10-sites
+losses 04, 08, 12: the commander dies at home to corthud / corstorm from under 300 away.
+**Would be wrong if.** With H-ARMY-RECALL, losses with a healthy economy (8+ extractors at the end) still happened as often.
+**Used by.** H-ARMY-RECALL.
+

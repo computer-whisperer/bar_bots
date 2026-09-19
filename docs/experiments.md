@@ -37,4 +37,5 @@ W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 | nw-stuck-diag | 0981e2f+ | easy, NW only | 8 | 2-6-0 | (diagnostic) where soldiers' moves fail | ~17,000 failures, all within ~500 of our start: the base is a maze |
 | nw-layout | c90d555 | easy, NW only | 8 | 3-4-1 | labs in a yard, generators behind, wider gaps | soldier move failures 149; fight ledgers show the enemy fielding OUR faction's units in every loss (resurrected wrecks) and a timeout with 739 units lost in their half for 104 kills |
 | v11-layout | c90d555 | easy | 24 | 13-7-4 | same, both corners | SE 10-0-2, NW 3-7-2: the maze was not the corner gap. In SE games we lose nothing in our own half; NW losses are commander snipes on a healthy economy |
+| v12-stage | 52ae15a | easy | 24 | 17-5-2 | H-ARMY-STAGE: waves gather 1500 short of the target | SE 11-0-1, NW 6-5-1; timeouts down from 4-9 to 2. One batch: read as "not worse", with a plausible mechanism |
 

@@ -43,6 +43,8 @@ const STAGE_RADIUS: f32 = 500.0;
 /// The assault starts once this share of the attackers has gathered, or after this long.
 const STAGE_QUORUM: f32 = 0.7;
 const STAGE_PATIENCE_FRAMES: i32 = 150 * FRAMES_PER_SECOND;
+/// This many enemies at the base call every attacker home.
+const RECALL_INTRUDERS: usize = 6;
 const DEFEND_REORDER_FRAMES: i32 = 5 * FRAMES_PER_SECOND;
 
 #[derive(Default)]
@@ -241,6 +243,16 @@ impl Brain {
             self.fire("D-STANCE-DEFEND");
             commands.extend(self.army.attackers.iter().map(|id| Command::Move { unit: *id, to: rally, queue: false }));
             self.army.attackers.clear();
+        }
+        // H-ARMY-RECALL: a real attack on the base outranks the offensive. The game ends with the commander, and
+        // enemy groups have walked in and killed it within seconds of a wave leaving.
+        let intruders = snapshot.enemies.iter().filter(|e| e.pos.dist2d(self.home) < BASE_RADIUS).count();
+        if self.enabled("H-ARMY-RECALL") && intruders >= RECALL_INTRUDERS && !self.army.attackers.is_empty() {
+            self.fire("H-ARMY-RECALL");
+            eprintln!("[ai {}] f={} recall: {intruders} enemies at the base, {} attackers called home", self.ai(), tick.frame, self.army.attackers.len());
+            self.army.attackers.clear();
+            self.army.staging = None;
+            self.army.last_defend_order = 0;
         }
         let (attackers, home_group): (Vec<&OwnUnit>, Vec<&OwnUnit>) =
             soldiers.iter().partition(|u| self.army.attackers.contains(&u.id));

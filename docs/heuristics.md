@@ -27,7 +27,8 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 | H-ARMY-DEFEND-OUTPOST | Home group fights raiders within 500 of any of our extractors | `army.rs` `run_army` | same | active; effect unknown |
 | H-PROD-CONSTRUCTOR-FLOOR | At least 3 constructors wanted | `economy.rs` `production_batch` | K-eco-outposts-get-raided | active; effect unknown |
 | H-ECO-BASE-LAYOUT | Labs in a yard 350 ahead of the start (8-square gaps), generators and converters 150 behind it (5-square gaps), base turrets 650 ahead; extractors exactly on spots; nothing else within 100 of a spot | `economy.rs` `plan_for`, `gap_around`; shim `find_build_site` | K-army-base-maze, K-rules-site-search-ignores-metal-spots | active; soldier move failures in base 17,000 -> 149 per 8 games |
-| H-ARMY-STAGE | A launched wave, with the survivors of earlier ones, gathers 1500 short of the target; the assault starts at 70 % gathered or after 150 s | `army.rs` `run_army` | K-army-waves-die-to-static-defence, K-army-piecemeal-midmap | active (untested) |
+| H-ARMY-STAGE | A launched wave, with the survivors of earlier ones, gathers 1500 short of the target; the assault starts at 70 % gathered or after 150 s | `army.rs` `run_army` | K-army-waves-die-to-static-defence, K-army-piecemeal-midmap | active; v12-stage 17-5-2 against 13-7-4 before (one batch each) |
+| H-ARMY-RECALL | 6 or more enemies within 1400 of the start: every attacker rejoins the home group and defends | `army.rs` `run_army` | K-army-commander-sniped-after-wave-leaves | active (untested) |
 | H-ARMY-SWEEP | Idle attackers at an empty target sweep metal spots from the enemy side | `army.rs` `run_army` | (unexamined) | active |
 
 Retired:
