@@ -42,6 +42,11 @@ pub struct Brain {
     /// Enemy buildings seen and not known to be destroyed: definition, position, frame last seen.
     enemy_buildings: HashMap<UnitId, (UnitDefId, Vec3, i32)>,
     recent_events: VecDeque<String>,
+    /// Our units as last seen, to name what a destroyed-unit event refers to.
+    known_units: HashMap<UnitId, (UnitDefId, Vec3)>,
+    /// Frames at which we lost an extractor, within the trigger cooldown.
+    extractor_losses: VecDeque<i32>,
+    last_station: Vec3,
     last_trigger_frame: HashMap<&'static str, i32>,
 }
 
@@ -65,6 +70,9 @@ impl Brain {
             directives: Directives::default(),
             enemy_buildings: HashMap::new(),
             recent_events: VecDeque::new(),
+            known_units: HashMap::new(),
+            extractor_losses: VecDeque::new(),
+            last_station: Vec3::default(),
             last_trigger_frame: HashMap::new(),
         }
     }
@@ -76,6 +84,7 @@ impl Brain {
         let Some(kit) = self.kit else { return Vec::new() };
         self.read_directives(tick.frame);
         self.track_enemy_buildings(tick);
+        self.track_losses(tick, &kit);
         let mut commands = Vec::new();
         self.protect_commander(tick, &kit, &mut commands);
         self.run_economy(tick, &kit, &mut commands);

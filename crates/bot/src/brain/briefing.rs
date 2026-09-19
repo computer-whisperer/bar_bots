@@ -53,6 +53,33 @@ impl Brain {
         shared.trigger(text);
     }
 
+    /// Notes our own losses by name, and wakes the strategist when extractors go down in numbers.
+    pub(super) fn track_losses(&mut self, tick: &Tick, kit: &Kit) {
+        const LOSSES_WORTH_WAKING_FOR: usize = 2;
+        for event in &tick.events {
+            let Event::UnitDestroyed { unit, .. } = event else { continue };
+            let Some((def, pos)) = self.known_units.remove(unit) else { continue };
+            if self.world.def(def).is_some_and(|d| d.speed > 0.0 && d.build_speed == 0.0) {
+                continue; // soldiers die all the time
+            }
+            let (name, grid) = (self.name(def).to_string(), self.world.grid(pos));
+            self.event(tick.frame, format!("lost {name} at {grid}"));
+            if def == kit.extractor {
+                self.extractor_losses.push_back(tick.frame);
+            }
+        }
+        while self.extractor_losses.front().is_some_and(|f| tick.frame - f > TRIGGER_COOLDOWN_FRAMES) {
+            self.extractor_losses.pop_front();
+        }
+        if self.extractor_losses.len() >= LOSSES_WORTH_WAKING_FOR {
+            let lost = self.extractor_losses.len();
+            self.trigger("extractors", tick.frame, format!("We lost {lost} extractors in the last minute."));
+        }
+        for unit in &tick.snapshot.own_units {
+            self.known_units.insert(unit.id, (unit.def, unit.pos));
+        }
+    }
+
     pub(super) fn track_enemy_buildings(&mut self, tick: &Tick) {
         for event in &tick.events {
             if let Event::EnemyDestroyed { enemy } = event {
@@ -134,6 +161,7 @@ impl Brain {
             home_group: self.group(&home_group),
             attackers: self.group(&attackers),
             waves_sent: self.army.waves_sent(),
+            army_station: self.place(self.last_station),
             enemies_visible,
             enemy_buildings_remembered,
             recent_events: self.recent_events.iter().cloned().collect(),

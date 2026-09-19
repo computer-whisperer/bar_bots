@@ -108,6 +108,12 @@ fn tool_list() -> Value {
                   "required": ["x", "z"], "description": "Where attackers go, in map coordinates." },
               "wave_size": { "type": ["integer", "null"], "minimum": 1, "maximum": 200,
                   "description": "Home-group size at which the bot launches a wave on its own." },
+              "army_station": { "type": ["object", "null"], "properties": { "x": { "type": "number" }, "z": { "type": "number" } },
+                  "required": ["x", "z"], "description": "Where the home group waits and gathers. By default it stands just ahead of our most exposed extractors; it still turns on raiders near any of our extractors and on intruders at the base." },
+              "min_constructors": { "type": ["integer", "null"], "minimum": 1, "maximum": 10,
+                  "description": "Factories keep at least this many constructors alive (the bot's own floor is 3)." },
+              "min_converters": { "type": ["integer", "null"], "minimum": 0, "maximum": 40,
+                  "description": "Constructors build energy-to-metal converters up to this count before expanding further, energy permitting." },
               "economy_focus": { "enum": ["expand", "energy", "production", "defence", null],
                   "description": "What constructors prefer once the opening is done." },
               "ttl_seconds": { "type": "integer", "minimum": 10, "maximum": MAX_TTL_SECONDS } } } },
@@ -145,19 +151,26 @@ fn set_directives(arguments: &Value, shared: &Shared) -> Result<String, String> 
             "wave_size" => {
                 directives.wave_size = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
             }
-            "attack_target" => {
-                directives.attack_target = match value {
-                    Value::Null => None,
-                    target => {
-                        let coordinate = |axis: &str| target[axis].as_f64().ok_or(format!("attack_target needs a number {axis}"));
-                        Some(Timed { value: Vec3 { x: coordinate("x")? as f32, y: 0.0, z: coordinate("z")? as f32 }, expires_frame })
-                    }
-                };
+            "min_constructors" => {
+                directives.min_constructors = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
             }
+            "min_converters" => {
+                directives.min_converters = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
+            }
+            "attack_target" => directives.attack_target = position(value, field)?.map(|value| Timed { value, expires_frame }),
+            "army_station" => directives.army_station = position(value, field)?.map(|value| Timed { value, expires_frame }),
             other => return Err(format!("unknown directive {other}")),
         }
     }
     Ok(format!("in force: {}", directives.describe(frame).join("; ")))
+}
+
+fn position(value: &Value, field: &str) -> Result<Option<Vec3>, String> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    let coordinate = |axis: &str| value[axis].as_f64().ok_or(format!("{field} needs a number {axis}"));
+    Ok(Some(Vec3 { x: coordinate("x")? as f32, y: 0.0, z: coordinate("z")? as f32 }))
 }
 
 fn parse<T: serde::de::DeserializeOwned>(value: &Value) -> Result<Option<T>, String> {

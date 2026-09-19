@@ -4,6 +4,7 @@
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
 //!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror]
+//!              [--side armada|cortex]   (default: alternate)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
 
 mod autohost;
@@ -40,6 +41,8 @@ struct Options {
     label: String,
     mirror: bool,
     strategist: bool,
+    /// Play every match as this faction instead of alternating.
+    side: Option<&'static str>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -93,7 +96,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist, "side": options.side,
         }))?,
     )?;
 
@@ -159,7 +162,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         seed: index as u32 + 1,
         // Alternate corner and faction so neither start nor side biases the batch.
         we_are_first: index.is_multiple_of(2),
-        our_side: if (index / 2).is_multiple_of(2) { "Armada" } else { "Cortex" },
+        our_side: options.side.unwrap_or(if (index / 2).is_multiple_of(2) { "Armada" } else { "Cortex" }),
         mirror: options.mirror,
     };
     copy_tree(&repo.join("run/match-template"), &dir)?;
@@ -376,6 +379,7 @@ fn parse_args() -> Options {
         label: "batch".into(),
         mirror: false,
         strategist: false,
+        side: None,
     };
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
@@ -397,6 +401,13 @@ fn parse_args() -> Options {
             "--speed" => options.speed = value().parse().unwrap_or_else(|_| usage("--speed")),
             "--max-minutes" => options.max_minutes = value().parse().unwrap_or_else(|_| usage("--max-minutes")),
             "--profile" => options.profile = value(),
+            "--side" => {
+                options.side = Some(match value().to_lowercase().as_str() {
+                    "armada" => "Armada",
+                    "cortex" => "Cortex",
+                    _ => usage("--side takes armada or cortex"),
+                })
+            }
             "--map" => options.map = value(),
             "--label" => options.label = value(),
             _ => usage(&format!("unknown argument {flag}")),
@@ -406,7 +417,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist] [--side armada|cortex]");
     std::process::exit(2)
 }
 

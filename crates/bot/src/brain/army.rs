@@ -20,6 +20,14 @@ const MIN_ORDERED_WAVE: usize = 3;
 const NOTABLE_WAVE: usize = 5;
 /// Enemies this close to home are an attack on the base.
 const BASE_RADIUS: f32 = 1400.0;
+/// Enemies this close to one of our extractors are raiding it.
+const RAID_RADIUS: f32 = 500.0;
+/// The strategist is woken for a base attack of at least this many; lone raiders are routine.
+const NOTABLE_INTRUSION: usize = 3;
+/// The default station stands this far ahead of the most exposed extractor, towards the enemy.
+const STATION_LEAD: f32 = 250.0;
+/// Extractors nearer to home than this are covered by the base itself.
+const OUTPOST_DISTANCE: f32 = 1200.0;
 /// An idle attacker this close to the attack target has arrived and needs a new one.
 const ARRIVED_RADIUS: f32 = 400.0;
 /// Home-group units farther than this from the rally point are called in.
@@ -48,6 +56,29 @@ impl Army {
 }
 
 impl Brain {
+    /// Where the home group waits: the strategist's station, else just ahead of our most exposed
+    /// outpost extractor, else in front of the base.
+    pub(super) fn station(&mut self, tick: &Tick, kit: &Kit) -> Vec3 {
+        if let Some(ordered) = self.directives.army_station {
+            self.fire("D-ARMY-STATION");
+            return ordered.value;
+        }
+        let most_exposed = tick
+            .snapshot
+            .own_units
+            .iter()
+            .filter(|u| u.def == kit.extractor && u.pos.dist2d(self.home) > OUTPOST_DISTANCE)
+            .min_by(|a, b| a.pos.dist2d(self.enemy_start).total_cmp(&b.pos.dist2d(self.enemy_start)));
+        match most_exposed {
+            Some(extractor) => {
+                let (dx, dz) = (self.enemy_start.x - extractor.pos.x, self.enemy_start.z - extractor.pos.z);
+                let len = dx.hypot(dz).max(1.0);
+                Vec3 { x: extractor.pos.x + dx / len * STATION_LEAD, y: 0.0, z: extractor.pos.z + dz / len * STATION_LEAD }
+            }
+            None => self.forward_of_home(500.0),
+        }
+    }
+
     pub(super) fn run_army(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
         let snapshot = &tick.snapshot;
         let soldiers: Vec<&OwnUnit> =
@@ -71,7 +102,8 @@ impl Brain {
             target = ordered.value;
         }
         let stance = self.directives.army_stance.map(|s| s.value);
-        let rally = self.forward_of_home(500.0);
+        let rally = self.station(tick, kit);
+        self.last_station = rally;
 
         if stance == Some(Stance::Defend) && !self.army.attackers.is_empty() {
             // Attackers come home and rejoin the home group.
@@ -82,15 +114,28 @@ impl Brain {
         let (attackers, home_group): (Vec<&OwnUnit>, Vec<&OwnUnit>) =
             soldiers.iter().partition(|u| self.army.attackers.contains(&u.id));
 
-        // Defence first: the home group turns on intruders and no wave leaves meanwhile.
-        let intruder = nearest_to(self.home).filter(|e: &&EnemyUnit| e.pos.dist2d(self.home) < BASE_RADIUS);
+        // Defence first: the home group turns on intruders at the base, then on raiders at any
+        // extractor, and no wave leaves meanwhile.
+        let at_base = nearest_to(self.home).filter(|e: &&EnemyUnit| e.pos.dist2d(self.home) < BASE_RADIUS);
+        let raider = || {
+            let extractors = snapshot.own_units.iter().filter(|u| u.def == kit.extractor);
+            extractors
+                .filter_map(|x| nearest_to(x.pos).filter(|e| e.pos.dist2d(x.pos) < RAID_RADIUS))
+                .min_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)))
+        };
+        let (intruder, rule) = match at_base {
+            Some(enemy) => (Some(enemy), "H-ARMY-DEFEND"),
+            None => (raider(), "H-ARMY-DEFEND-OUTPOST"),
+        };
         if let Some(intruder) = intruder {
             if tick.frame - self.army.last_defend_order >= DEFEND_REORDER_FRAMES {
                 self.army.last_defend_order = tick.frame;
-                self.fire("H-ARMY-DEFEND");
+                self.fire(rule);
                 let count = snapshot.enemies.iter().filter(|e| e.pos.dist2d(self.home) < BASE_RADIUS).count();
-                let grid = self.world.grid(intruder.pos);
-                self.trigger("base-attack", tick.frame, format!("Our base is under attack: {count} enemies near {grid}."));
+                if count >= NOTABLE_INTRUSION {
+                    let grid = self.world.grid(intruder.pos);
+                    self.trigger("base-attack", tick.frame, format!("Our base is under attack: {count} enemies near {grid}."));
+                }
                 commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: intruder.pos, queue: false }));
             }
         } else {
@@ -113,7 +158,7 @@ impl Brain {
                 self.army.attackers.extend(home_group.iter().map(|u| u.id));
                 commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: target, queue: false }));
             } else {
-                // Wait where the base's turrets are, not scattered around the labs.
+                // H-ARMY-STATION: wait where raids arrive, not scattered around the labs.
                 let stragglers = home_group.iter().filter(|u| u.idle && u.pos.dist2d(rally) > RALLY_RADIUS);
                 commands.extend(stragglers.map(|u| Command::Move { unit: u.id, to: rally, queue: false }));
             }

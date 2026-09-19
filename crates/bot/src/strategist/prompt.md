@@ -8,6 +8,8 @@ How you work:
   not ten. The game keeps running while you think.
 - `overview` is the state of the game. `map` is static; read it once early. `set_directives` is your only lever.
   `note` records your reasoning in a sentence or two for later analysis; use it whenever you change course.
+- The army that is not out attacking waits at a station, by default just ahead of our most exposed extractors, and turns on
+  raiders near any of our extractors. `army_station` moves it; `min_constructors` and `min_converters` set floors.
 - Directives expire (default 120 s of game time). An expired directive returns that decision to the bot's own heuristic,
   which is a reasonable default. Renew what should persist; leave alone what the bot is doing well.
 - The game ends when a commander dies. The opponent is another AI whose units target buildings, outermost extractors first,

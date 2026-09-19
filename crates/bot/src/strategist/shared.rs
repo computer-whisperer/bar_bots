@@ -18,6 +18,8 @@ pub struct Briefing {
     pub home_group: Group,
     pub attackers: Group,
     pub waves_sent: usize,
+    /// Where the home group waits: ahead of our most exposed extractors unless a directive says otherwise.
+    pub army_station: Place,
     /// Enemies in sight or radar right now, grouped by map grid cell.
     pub enemies_visible: Vec<EnemyCluster>,
     /// Enemy buildings seen earlier and not known to be destroyed.
@@ -105,6 +107,9 @@ pub struct Directives {
     pub attack_target: Option<Timed<Vec3>>,
     pub wave_size: Option<Timed<usize>>,
     pub economy_focus: Option<Timed<Focus>>,
+    pub army_station: Option<Timed<Vec3>>,
+    pub min_constructors: Option<Timed<usize>>,
+    pub min_converters: Option<Timed<usize>>,
 }
 
 impl Directives {
@@ -118,6 +123,9 @@ impl Directives {
         lapse(&mut self.attack_target, frame);
         lapse(&mut self.wave_size, frame);
         lapse(&mut self.economy_focus, frame);
+        lapse(&mut self.army_station, frame);
+        lapse(&mut self.min_constructors, frame);
+        lapse(&mut self.min_converters, frame);
     }
 
     pub fn describe(&self, frame: i32) -> Vec<String> {
@@ -134,6 +142,15 @@ impl Directives {
         }
         if let Some(t) = self.economy_focus {
             lines.push(format!("economy_focus={:?} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(t) = self.army_station {
+            lines.push(format!("army_station=({:.0}, {:.0}) ({})", t.value.x, t.value.z, left(t.expires_frame)));
+        }
+        if let Some(t) = self.min_constructors {
+            lines.push(format!("min_constructors={} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(t) = self.min_converters {
+            lines.push(format!("min_converters={} ({})", t.value, left(t.expires_frame)));
         }
         lines
     }

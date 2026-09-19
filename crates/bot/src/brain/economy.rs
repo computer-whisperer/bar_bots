@@ -17,6 +17,8 @@ const MAX_CONVERTERS: usize = 40;
 const OUTPOST_DISTANCE: f32 = 1200.0;
 const OUTPOST_GUARD_RADIUS: f32 = 350.0;
 const MAX_CONSTRUCTORS: usize = 6;
+/// Constructors die with the outposts they build; the count must not shrink with the extractor count.
+const MIN_CONSTRUCTORS: usize = 3;
 /// Stored metal above which the base is under-spending and wants another lab.
 const FLOATING_METAL: f32 = 500.0;
 /// Energy income beyond which solar collectors are too small to keep up.
@@ -108,6 +110,11 @@ impl Brain {
         if energy_short || (focus == Some(Focus::Energy) && energy.current < energy.storage * 0.9) {
             return (Plan::Near(generator, base), if energy_short { "H-ECO-ENERGY-BY-STORAGE" } else { "D-FOCUS-ENERGY" });
         }
+        if let Some(ordered) = self.directives.min_converters
+            && planned(kit.converter) < ordered.value
+        {
+            return (Plan::Near(kit.converter, base), "D-MIN-CONVERTERS");
+        }
         // Once the opening stands, the remaining rules run in an order the strategist can change.
         let order: &[Step] = match focus {
             Some(Focus::Expand) => &[Step::Expand, Step::OutpostTurret, Step::FirstTurrets, Step::MoreLabs, Step::Convert, Step::MoreTurrets],
@@ -184,7 +191,9 @@ impl Brain {
     /// What an idle factory queues next.
     fn production_batch(&self, own: &[OwnUnit], kit: &Kit) -> impl Iterator<Item = UnitDefId> + use<> {
         let count = |def: UnitDefId| own.iter().filter(|u| u.def == def).count();
-        let wanted_constructors = (2 + count(kit.extractor) / 4).min(MAX_CONSTRUCTORS);
+        // H-PROD-CONSTRUCTOR-FLOOR
+        let floor = self.directives.min_constructors.map_or(MIN_CONSTRUCTORS, |d| d.value);
+        let wanted_constructors = (2 + count(kit.extractor) / 4).min(MAX_CONSTRUCTORS).max(floor);
         let support = if count(kit.constructor) < wanted_constructors { kit.constructor } else { kit.artillery };
         // Fighters first: early raids arrive before an all-constructor opening pays off.
         [kit.raider, kit.raider, support, kit.skirmisher, kit.skirmisher].into_iter()
