@@ -10,7 +10,7 @@ use super::{Brain, FRAMES_PER_SECOND};
 
 /// The commander never builds farther from home than this.
 const COMMANDER_LEASH: f32 = 900.0;
-const MAX_LABS: usize = 4;
+const MAX_LABS: usize = 8;
 const MAX_TURRETS: usize = 6;
 const MAX_CONVERTERS: usize = 40;
 /// An extractor beyond this distance from home gets a turret of its own.
@@ -23,6 +23,11 @@ const MIN_CONSTRUCTORS: usize = 3;
 const FLOATING_METAL: f32 = 500.0;
 /// Energy income beyond which solar collectors are too small to keep up.
 const ADVANCED_SOLAR_INCOME: f32 = 250.0;
+/// Average wind speed from which wind generators replace solar collectors (solar: 20 energy for 155 metal; wind: the
+/// wind speed in energy for 40 metal).
+const WINDY_AVERAGE: f32 = 8.0;
+/// Stored energy, as a fraction of storage, below which nothing that costs energy to build gets started.
+const STALLED_ENERGY: f32 = 0.15;
 /// How long a metal spot stays reserved for a builder that was sent to it.
 const SPOT_CLAIM_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 /// A metal extractor this close to a spot occupies it.
@@ -123,7 +128,13 @@ impl Brain {
         // the builder's options is dropped by the engine without a word, leaving the builder idle forever.
         let options = self.world.def(builder.def).map(|d| d.build_options.clone()).unwrap_or_default();
         let can_build = |def: UnitDefId| options.contains(&def);
-        let generator = if energy.income > ADVANCED_SOLAR_INCOME && can_build(kit.advanced_solar) { kit.advanced_solar } else { kit.solar };
+        // H-ECO-WIND: on a windy map a wind generator gives about twice a solar's energy per metal.
+        let map = &self.world.hello.map;
+        let windy = (map.wind_min + map.wind_max) / 2.0 >= WINDY_AVERAGE && self.enabled("H-ECO-WIND");
+        // A wind generator costs energy to build and a solar collector none, so an energy stall is dug out of with solars.
+        let stalled = energy.current < energy.storage * STALLED_ENERGY;
+        let small_generator = if windy && !stalled && can_build(kit.wind) { kit.wind } else { kit.solar };
+        let generator = if energy.income > ADVANCED_SOLAR_INCOME && can_build(kit.advanced_solar) { kit.advanced_solar } else { small_generator };
         let base = self.home;
         let front = self.forward_of_home(450.0);
 
@@ -132,8 +143,10 @@ impl Brain {
         {
             return (Plan::Extractor(spot), "H-ECO-OPENING");
         }
-        if planned(kit.solar) < 2 {
-            return (Plan::Near(kit.solar, base), "H-ECO-OPENING");
+        // Two solars' worth of energy before the lab; a wind generator counts as half a solar.
+        let opening_energy = planned(kit.wind) + 2 * planned(kit.solar);
+        if opening_energy < 4 {
+            return (Plan::Near(small_generator, base), "H-ECO-OPENING");
         }
         if planned(kit.lab) < 1 {
             return (Plan::Near(kit.lab, base), "H-ECO-OPENING");

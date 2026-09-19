@@ -21,12 +21,17 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 | H-PROD-BATCH | Factory batch: raider, raider, constructor-or-artillery, skirmisher, skirmisher; constructors wanted = 2 + extractors/4, max 6 | `economy.rs` `production_batch` | K-army-fighters-before-constructors | active |
 | H-ARMY-DEFEND | Enemy within 1400 of home: home group fights it, no wave leaves | `army.rs` `run_army` | (unexamined) | active |
 | H-ARMY-WAVES | Home group of 8 (+4 per wave, max 40) is committed as attackers | `army.rs` `run_army` | K-army-crowds-are-never-idle | active |
-| H-ARMY-TARGET | Attack the visible enemy nearest the presumed enemy start, else the mirrored home position | `army.rs` `run_army` | (unexamined) | active |
+| H-ARMY-TARGET | Attack remembered enemy buildings, the one nearest to us first; else the presumed enemy start. Buildings our soldiers stand next to and cannot see are forgotten | `army.rs` `run_army`, `forget_razed_buildings` | K-army-waves-chased-raiders | active (untested) |
+| H-ECO-WIND | Average map wind >= 8: wind generators instead of solars (4 in the opening instead of 2) | `economy.rs` `plan_for`, `WINDY_AVERAGE` | K-maps/K-mechanics wind entries (reported) | active (untested) |
+| H-ARMY-STATION | Home group waits 250 ahead of our most exposed outpost extractor | `army.rs` `station` | K-army-home-defence-does-not-protect-outposts | active; effect unknown (ablations were noise) |
+| H-ARMY-DEFEND-OUTPOST | Home group fights raiders within 500 of any of our extractors | `army.rs` `run_army` | same | active; effect unknown |
+| H-PROD-CONSTRUCTOR-FLOOR | At least 3 constructors wanted | `economy.rs` `production_batch` | K-eco-outposts-get-raided | active; effect unknown |
 | H-ARMY-SWEEP | Idle attackers at an empty target sweep metal spots from the enemy side | `army.rs` `run_army` | (unexamined) | active |
 
 Retired:
 | ID | Rule | Retired | Why |
 |---|---|---|---|
+| H-ARMY-TARGET (v1) | Attack the visible enemy nearest the presumed enemy start | 2026-09-19 | K-army-waves-chased-raiders |
 | H-MVP-COM-EXPANDS | Commander takes the nearest free metal spot anywhere | 2026-09-19 | K-rules-commander-death-ends-game |
 | H-MVP-IDLE-WAVES | Launch when enough idle units stand near home | 2026-09-19 | K-army-crowds-are-never-idle |
 | H-ECO-ENERGY-BY-INCOME | Energy short when income < usage + 20 | 2026-09-19 | K-eco-judge-energy-by-storage |

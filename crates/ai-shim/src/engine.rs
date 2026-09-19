@@ -45,6 +45,8 @@ impl Engine {
             name: self.string(call!(self, Map_getName())),
             width: call!(self, Map_getWidth()) as f32 * SQUARE_SIZE,
             height: call!(self, Map_getHeight()) as f32 * SQUARE_SIZE,
+            wind_min: call!(self, Map_getMinWind()),
+            wind_max: call!(self, Map_getMaxWind()),
         };
         let def_count = call!(self, getUnitDefs(std::ptr::null_mut(), 0));
         let mut def_ids = vec![0; def_count.max(0) as usize];

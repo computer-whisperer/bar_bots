@@ -17,3 +17,8 @@
 - **Unix socket paths max out at ~108 bytes.** A long batch label once pushed `bot.sock` past it: the bot died at start-up and
   BARb beat an idle team 11 times (batch strategist-refactor-regression, 0-1-11 — not a brain result). Arena sockets now live in
   `$XDG_RUNTIME_DIR`, and the arena aborts a match whose bot process exits.
+- **Look for gross mistakes before measuring small ones** (user, 2026-09-19). BARb easy is trivial for a human; while we lose to
+  it, the bot is doing something absurd, and a 24-match batch cannot resolve rule-sized effects anyway (the same binary scored
+  13-6-5 and 10-9-5; a behaviourally identical build 6-10-8). The per-minute `rules:` line is the detector: a rule firing
+  hundreds of times per match means its orders are not executing. `DROPPED order` lines in `bot.log` and
+  `WITHIN_REASON_TRACE_BUILDS` placements in `engine.log` say which and where.

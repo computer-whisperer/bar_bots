@@ -45,6 +45,9 @@ pub struct MapInfo {
     /// Extent in elmos.
     pub width: f32,
     pub height: f32,
+    /// Wind speed range; a wind generator produces the current wind speed in energy, up to its cap.
+    pub wind_min: f32,
+    pub wind_max: f32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

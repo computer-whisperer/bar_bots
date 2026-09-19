@@ -79,6 +79,15 @@ impl Brain {
         }
     }
 
+    /// A remembered building that our soldiers are standing next to and cannot see is gone.
+    fn forget_razed_buildings(&mut self, soldiers: &[&OwnUnit], visible: &[EnemyUnit]) {
+        const IN_PLAIN_SIGHT: f32 = 250.0;
+        self.enemy_buildings.retain(|id, (_, pos, _)| {
+            let we_are_there = soldiers.iter().any(|u| u.pos.dist2d(*pos) < IN_PLAIN_SIGHT);
+            !we_are_there || visible.iter().any(|e| e.id == *id)
+        });
+    }
+
     pub(super) fn run_army(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
         let snapshot = &tick.snapshot;
         let soldiers: Vec<&OwnUnit> =
@@ -93,10 +102,17 @@ impl Brain {
         let nearest_to = |point: Vec3| {
             snapshot.enemies.iter().min_by(|a, b| a.pos.dist2d(point).total_cmp(&b.pos.dist2d(point)))
         };
-        if let Some(enemy) = nearest_to(self.enemy_start) {
-            self.army.target = Some(enemy.pos);
-        }
-        let mut target = self.army.target.unwrap_or(self.enemy_start);
+        // H-ARMY-TARGET: attack buildings, never whatever unit was seen last. Raiders near our own base used to
+        // drag every wave back into our half of the map. Roll the enemy up from the outside: the remembered
+        // building nearest to us, else where the enemy presumably started.
+        self.forget_razed_buildings(&soldiers, snapshot.enemies.as_slice());
+        let nearest_building = self
+            .enemy_buildings
+            .values()
+            .map(|(_, pos, _)| *pos)
+            .min_by(|a, b| a.dist2d(self.home).total_cmp(&b.dist2d(self.home)));
+        self.army.target = nearest_building.or(self.army.target);
+        let mut target = nearest_building.or(self.army.target).unwrap_or(self.enemy_start);
         if let Some(ordered) = self.directives.attack_target {
             self.fire("D-ATTACK-TARGET");
             target = ordered.value;
@@ -182,7 +198,7 @@ impl Brain {
         }
         let mut next = target;
         let nothing_here = snapshot.enemies.is_empty() && idle_attackers.iter().any(|u| u.pos.dist2d(target) < ARRIVED_RADIUS);
-        if nothing_here && self.directives.attack_target.is_none() {
+        if nothing_here && self.directives.attack_target.is_none() && self.enemy_buildings.is_empty() {
             // Sweep metal spots, starting from the enemy's side of the map.
             let mut spots = self.world.hello.metal_spots.clone();
             spots.sort_by(|a, b| a.dist2d(self.enemy_start).total_cmp(&b.dist2d(self.enemy_start)));

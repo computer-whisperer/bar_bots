@@ -33,3 +33,13 @@ turrets and 8-17 idle bots at home; Opus identified it at 4:55, 7:10 and 8:55 an
 at a map point as an escort. Same shape as the v5-medium losses (K-opp-medium-wins-by-20).
 **Would be wrong if.** Stationing the home group forward, between the outposts and the enemy, did not raise extractor survival.
 **Used by.** (candidate: army `station` directive / forward rally near the most exposed extractor cluster)
+
+### K-army-waves-chased-raiders
+**Claim.** Targeting "the visible enemy nearest the enemy start" sends waves to wherever an enemy was last seen, which is
+usually a raider inside our own half; the army then spends the game near home.
+**Status.** supported as a description of the old behaviour (2026-09-19); the replacement is untested
+**Evidence.** dropped-orders-2/00: attacker centroid (2000-2900, 1300-2400) with home at (2032,1188) through minute 20; earlier
+batches logged waves launched at (1593,1804), (2326,2943). Replacement: remembered enemy buildings, nearest to us first,
+else the presumed enemy start (H-ARMY-TARGET rewritten).
+**Would be wrong if.** With building targets the attacker centroid still stayed in our half.
+**Used by.** H-ARMY-TARGET.

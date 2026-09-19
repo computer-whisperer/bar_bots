@@ -32,3 +32,23 @@ reclaimed when the new one finishes. Advanced extractors yield 4x (extractsmetal
 **Would be wrong if.** The engine rejects the build order because the square is occupied (the AI interface path may differ
 from the player UI path).
 **Used by.** (planned tier-2 economy; needs an exact-position build in bot-protocol)
+
+### K-rules-impossible-orders-vanish
+**Claim.** A build order for something outside the builder's build options is accepted by the AI interface (return code 0) and
+then dropped without any event. The builder is idle again on the next tick.
+**Status.** supported (2026-09-19)
+**Evidence.** dropped-orders batch: 560-890 dropped orders per 20-minute match, 103 of 160 logged ones were the commander told
+to build `armadvsol` (constructor-only, see `units/ArmBots/armck.lua` vs `units/armcom.lua`). After guarding by
+`UnitDefInfo.build_options` (dropped-orders-2): 7-38 per match, minute-20 metal income +38-44 on 16-19 extractors.
+**Would be wrong if.** (mechanical)
+**Used by.** Guard in `economy.rs` `run_economy`; H-ECO-ENERGY-BY-STORAGE / H-ECO-FALLBACK-ENERGY pick per builder.
+
+### K-rules-extractor-must-be-exact
+**Claim.** The game rejects an extractor order that is not exactly on a metal spot, or where an allied extractor already stands
+(`luarules/gadgets/cmd_mex_denier.lua`, `AllowCommand`); the rejection is silent. Letting the engine shift the site to the
+"closest buildable" position therefore produces doomed orders when the exact spot is blocked.
+**Status.** supported (2026-09-19)
+**Evidence.** dropped-orders/01: spot (5640,5352) placed at (5648,5360) was built; three later orders for the same spot were
+placed at (5664,5264) and all dropped. Extractor site search radius is now the build-grid snap (16).
+**Would be wrong if.** A shifted extractor order ever produced an extractor.
+**Used by.** `EXTRACTOR_SNAP` in `economy.rs`.

@@ -149,7 +149,7 @@ impl Brain {
             energy: snapshot.energy,
             counts: Counts {
                 extractors: count(kit.extractor),
-                generators: count(kit.solar) + count(kit.advanced_solar),
+                generators: count(kit.solar) + count(kit.wind) + count(kit.advanced_solar),
                 converters: count(kit.converter),
                 labs: count(kit.lab),
                 turrets: count(kit.turret),
