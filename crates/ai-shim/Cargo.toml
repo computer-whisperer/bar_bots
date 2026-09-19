@@ -2,7 +2,12 @@
 name = "ai-shim"
 version = "0.1.0"
 edition = "2024"
-description = "Skirmish AI library loaded by the Recoil engine through its C AI interface"
+license = "GPL-2.0-or-later"
+description = "Skirmish AI library loaded by the Recoil engine; relays between the engine and the bot process"
 
 [lib]
 crate-type = ["cdylib"]
+
+[dependencies]
+bot-protocol = { path = "../bot-protocol" }
+recoil-ai-sys = { path = "../recoil-ai-sys" }

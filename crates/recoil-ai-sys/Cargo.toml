@@ -1,0 +1,9 @@
+[package]
+name = "recoil-ai-sys"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Raw bindgen bindings to the Recoil engine's C skirmish AI interface"
+
+[build-dependencies]
+bindgen = "0.72"

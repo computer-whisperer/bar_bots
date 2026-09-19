@@ -1,0 +1,9 @@
+[package]
+name = "bot-protocol"
+version = "0.1.0"
+edition = "2024"
+description = "Messages exchanged between the engine-side AI shim and the bot process"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+postcard = { version = "1", features = ["use-std"] }

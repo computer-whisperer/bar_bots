@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Smoke-test probe: listen on the engine's autohost UDP port, print events, /kill after N seconds."""
+"""Autohost probe: listen on the engine's autohost UDP port, print events, /kill after N seconds.
+
+usage: autohost_probe.py PORT RUN_SECONDS [GAME_SPEED]
+"""
 import socket, struct, sys, time
 
 NAMES = {0: "SERVER_STARTED", 1: "SERVER_QUIT", 2: "SERVER_STARTPLAYING", 3: "SERVER_GAMEOVER",
@@ -7,6 +10,7 @@ NAMES = {0: "SERVER_STARTED", 1: "SERVER_QUIT", 2: "SERVER_STARTPLAYING", 3: "SE
          12: "PLAYER_READY", 13: "PLAYER_CHAT", 14: "PLAYER_DEFEATED", 20: "GAME_LUAMSG",
          60: "GAME_TEAMSTAT"}
 port, run_secs = int(sys.argv[1]), float(sys.argv[2])
+speed = sys.argv[3] if len(sys.argv) > 3 else None
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("127.0.0.1", port))
 sock.settimeout(1.0)
@@ -31,6 +35,10 @@ while time.time() - t0 < run_secs + 20:
     else:
         detail = data[1:].hex()[:40]
     print(f"{now:7.1f}s  {NAMES.get(ev, ev)}  {detail}", flush=True)
+    if ev == 2 and speed:
+        # Raising the minimum forces the server's speed up; the maximum has to allow it first.
+        sock.sendto(f"/setmaxspeed {speed}".encode(), engine)
+        sock.sendto(f"/setminspeed {speed}".encode(), engine)
     if ev == 1:
         break
 print(f"lua messages ignored: {luamsgs}")

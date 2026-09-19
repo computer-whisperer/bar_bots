@@ -1,0 +1,8 @@
+[package]
+name = "bot"
+version = "0.1.0"
+edition = "2024"
+description = "Bot process: serves AI shim connections and decides what each AI does"
+
+[dependencies]
+bot-protocol = { path = "../bot-protocol" }

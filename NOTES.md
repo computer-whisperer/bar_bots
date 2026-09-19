@@ -68,3 +68,16 @@ Verified: engine discovers it from the write dir, calls init/handleEvent/release
 plus INIT, UNIT_CREATED/FINISHED (commander), ENEMY_ENTER/LEAVE_LOS/RADAR. stderr from the AI lands in the engine's stdout log.
 Oddity: enemy entered LOS at frame 8 despite opposite-corner start boxes — the shim never sends a start position, so its
 spawn location is whatever the game defaults to. Not investigated.
+
+## MVP — shim + bot process plays a full match (2026-09-19)
+Design in `DESIGN.md`. Crates: `recoil-ai-sys` (bindgen, vendored headers), `bot-protocol`, `ai-shim`, `bot`.
+Run: `run/match.sh run/smoke_shim_vs_barb.txt SECONDS [SPEED]` → logs in `run/logs/{engine,bot,probe}.log`.
+- Speed control SOLVED: autohost `/setmaxspeed N` then `/setminspeed N` at SERVER_STARTPLAYING. Requested 10 → ~21,600 frames
+  (12 game-min) in ~70s wall. Higher speeds untried.
+- vs BARb (hard) on Quicksilver: bot built 14 extractors, 8 solars, 5 constructors, 1 lab, 44 armpw; 0 build-site failures,
+  0 rejected commands. It LOSES: SERVER_GAMEOVER at 12.0 game-min in run 1. Expected — the brain is a loop exerciser.
+- Restart test (`run/restart_test.sh`): bot killed at ~f6780, match kept running, new bot reconnected at f9330 and resumed.
+  After a restart the brain takes the commander's current position as "home" (state is not persisted).
+- Hello carries 587 unit defs and 44 metal spots; tick interval 15 frames (2 Hz).
+- Test-harness trap: `pkill -f <pattern>` matches the invoking shell's own command line. Use PID files / `pgrep -x`.
+- Not yet looked at: why an enemy was in LOS at frame 8 in the first skeleton run (not reproduced in bot logs: 0 enemies visible early).

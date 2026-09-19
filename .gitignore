@@ -2,3 +2,4 @@ upstream/
 run/engine/
 run/data/
 target/
+run/logs/
