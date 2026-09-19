@@ -32,6 +32,13 @@ const STALLED_ENERGY: f32 = 0.15;
 const SPOT_CLAIM_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 /// A metal extractor this close to a spot occupies it.
 const SPOT_OCCUPIED_RADIUS: f32 = 60.0;
+/// Gaps between base buildings, in 8-elmo build squares. Three squares made a maze the army could not leave.
+const BUILDING_GAP: i32 = 5;
+const LAB_GAP: i32 = 8;
+/// Distances from the start point along the line to the enemy: generators behind, labs ahead, turrets beyond them.
+const BACK_FIELD: f32 = 150.0;
+const LAB_YARD: f32 = 350.0;
+const TURRET_LINE: f32 = 650.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
 const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
@@ -84,9 +91,11 @@ impl Brain {
                     Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: 0.0, min_dist: 0 }),
                     // Where the builder stands is reachable by definition; fall back to it when the usual anchor is not.
                     Plan::Near(def_id, anchor) if self.is_unreachable(anchor) => {
-                        (def_id, BuildSite { near: unit.pos, search_radius: 500.0, min_dist: 3 })
+                        (def_id, BuildSite { near: unit.pos, search_radius: 500.0, min_dist: self.gap_around(def_id, kit) })
                     }
-                    Plan::Near(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: 3 }),
+                    Plan::Near(def_id, anchor) => {
+                        (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: self.gap_around(def_id, kit) })
+                    }
                 };
                 // An order whose builder is idle again within two ticks never started: count it and say where.
                 if let Some((frame, earlier, near)) = self.last_orders.insert(unit.id, (tick.frame, def_id, site.near))
@@ -129,6 +138,11 @@ impl Brain {
         }
     }
 
+    /// The gap, in build squares, a new building keeps from its neighbours: wide enough for units to walk through.
+    fn gap_around(&self, def: UnitDefId, kit: &Kit) -> i32 {
+        if def == kit.lab { LAB_GAP } else { BUILDING_GAP }
+    }
+
     fn is_unreachable(&self, point: Vec3) -> bool {
         self.unreachable.iter().any(|(bad, _)| bad.dist2d(point) < UNREACHABLE_RADIUS)
     }
@@ -160,8 +174,11 @@ impl Brain {
         let stalled = energy.current < energy.storage * STALLED_ENERGY;
         let small_generator = if windy && !stalled && can_build(kit.wind) { kit.wind } else { kit.solar };
         let generator = if energy.income > ADVANCED_SOLAR_INCOME && can_build(kit.advanced_solar) { kit.advanced_solar } else { small_generator };
-        let base = self.home;
-        let front = self.forward_of_home(450.0);
+        // H-ECO-BASE-LAYOUT: labs in a yard out front, generators and converters behind the start, turrets beyond
+        // the yard. Everything used to go around the start point, and the army jammed in the maze that made.
+        let base = self.forward_of_home(-BACK_FIELD);
+        let yard = self.forward_of_home(LAB_YARD);
+        let front = self.forward_of_home(TURRET_LINE);
 
         if planned(kit.extractor) < 2
             && let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame)
@@ -174,7 +191,7 @@ impl Brain {
             return (Plan::Near(small_generator, base), "H-ECO-OPENING");
         }
         if planned(kit.lab) < 1 {
-            return (Plan::Near(kit.lab, base), "H-ECO-OPENING");
+            return (Plan::Near(kit.lab, yard), "H-ECO-OPENING");
         }
         let focus = self.directives.economy_focus.map(|f| f.value);
         if energy_short || (focus == Some(Focus::Energy) && energy.current < energy.storage * 0.9) {
@@ -202,7 +219,7 @@ impl Brain {
                 Step::FirstTurrets if planned(kit.turret) < 2 => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
                 Step::MoreTurrets if planned(kit.turret) < MAX_TURRETS => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
                 Step::MoreLabs if snapshot.metal.current > floating && planned(kit.lab) < MAX_LABS => {
-                    return (Plan::Near(kit.lab, base), "H-ECO-MORE-LABS");
+                    return (Plan::Near(kit.lab, yard), "H-ECO-MORE-LABS");
                 }
                 Step::OutpostTurret if !is_commander => {
                     if let Some(outpost) = self.unguarded_outpost(builder, snapshot.own_units.as_slice(), kit) {

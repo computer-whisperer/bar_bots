@@ -4,7 +4,7 @@
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
 //!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror]
-//!              [--side armada|cortex]   (default: alternate)
+//!              [--side armada|cortex] [--corner nw|se]   (default: alternate)
 //!              [--bot PATH]   (bot binary from another build, for A/B runs)
 //!              [--disable H-ID,H-ID]   (ablation: switch heuristics off by registry ID)
 //!              [--ab-disable H-ID,H-ID]   (interleaved A/B: arm B also switches these off; blocks of four matches)
@@ -47,6 +47,8 @@ struct Options {
     strategist: bool,
     /// Play every match as this faction instead of alternating.
     side: Option<&'static str>,
+    /// Fixes our start corner; otherwise it alternates.
+    corner: Option<bool>,
     /// Bot binary to run instead of this workspace's, for A/B runs against an older build.
     bot: Option<std::path::PathBuf>,
     /// Comma-separated heuristic IDs the bot should switch off (ablation).
@@ -111,7 +113,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist, "side": options.side, "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -186,7 +188,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         autohost_port: host_port + 1,
         seed: index as u32 + 1,
         // Alternate corner and faction so neither start nor side biases the batch.
-        we_are_first: index.is_multiple_of(2),
+        we_are_first: options.corner.unwrap_or(index.is_multiple_of(2)),
         our_side: options.side.unwrap_or(if (index / 2).is_multiple_of(2) { "Armada" } else { "Cortex" }),
         mirror: options.mirror,
     };
@@ -419,6 +421,7 @@ fn parse_args() -> Options {
         mirror: false,
         strategist: false,
         side: None,
+        corner: None,
         bot: None,
         disable: String::new(),
         ab_disable: None,
@@ -455,6 +458,13 @@ fn parse_args() -> Options {
                     _ => usage("--side takes armada or cortex"),
                 })
             }
+            "--corner" => {
+                options.corner = Some(match value().to_lowercase().as_str() {
+                    "nw" => true,
+                    "se" => false,
+                    _ => usage("--corner takes nw or se"),
+                })
+            }
             "--map" => options.map = value(),
             "--label" => options.label = value(),
             _ => usage(&format!("unknown argument {flag}")),
@@ -464,7 +474,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist] [--side armada|cortex] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR]");
     std::process::exit(2)
 }
 

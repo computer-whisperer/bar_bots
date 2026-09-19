@@ -44,6 +44,12 @@ pub struct Brain {
     recent_events: VecDeque<String>,
     /// Our units as last seen, to name what a destroyed-unit event refers to.
     known_units: HashMap<UnitId, (UnitDefId, Vec3)>,
+    /// Every enemy unit's type once seen, so a killer that has left sight still has a name.
+    enemy_defs: HashMap<UnitId, UnitDefId>,
+    /// This minute's fight ledger for the log: "lost X to Y near home" and "killed Y", with counts.
+    fight_ledger: std::collections::BTreeMap<String, u32>,
+    /// This minute's soldier move failures by 200-elmo cell.
+    stuck_cells: HashMap<(i32, i32), u32>,
     /// Frames at which we lost an extractor, within the trigger cooldown.
     extractor_losses: VecDeque<i32>,
     last_station: Vec3,
@@ -79,6 +85,9 @@ impl Brain {
             enemy_buildings: HashMap::new(),
             recent_events: VecDeque::new(),
             known_units: HashMap::new(),
+            enemy_defs: HashMap::new(),
+            fight_ledger: Default::default(),
+            stuck_cells: HashMap::new(),
             extractor_losses: VecDeque::new(),
             last_station: Vec3::default(),
             last_orders: HashMap::new(),
@@ -196,6 +205,16 @@ impl Brain {
                 count(kit.extractor), count(kit.lab), count(kit.constructor),
                 s.own_units.iter().filter(|u| self.is_army(u, kit)).count(), s.enemies.len()
             );
+            if !self.stuck_cells.is_empty() {
+                let mut cells: Vec<_> = std::mem::take(&mut self.stuck_cells).into_iter().collect();
+                cells.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+                let worst: Vec<String> = cells.iter().take(4).map(|((x, z), n)| format!("({}, {}) x{n}", x * 200 + 100, z * 200 + 100)).collect();
+                eprintln!("[ai {}] f={} soldiers' moves failed around: {}", self.ai(), tick.frame, worst.join(", "));
+            }
+            if !self.fight_ledger.is_empty() {
+                let ledger: Vec<String> = std::mem::take(&mut self.fight_ledger).into_iter().map(|(what, n)| format!("{what} x{n}")).collect();
+                eprintln!("[ai {}] f={} fights: {}", self.ai(), tick.frame, ledger.join(", "));
+            }
             eprintln!("[ai {}] f={} dropped build orders so far: {}, move failures: {}", self.ai(), tick.frame, self.dropped_orders, self.move_failures);
             let rules: Vec<String> = self.fired.iter().map(|(rule, n)| format!("{rule}={n}")).collect();
             eprintln!("[ai {}] f={} rules: {}", self.ai(), tick.frame, rules.join(" "));

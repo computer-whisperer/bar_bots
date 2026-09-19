@@ -56,9 +56,21 @@ impl Brain {
     /// Notes our own losses by name, and wakes the strategist when extractors go down in numbers.
     pub(super) fn track_losses(&mut self, tick: &Tick, kit: &Kit) {
         const LOSSES_WORTH_WAKING_FOR: usize = 2;
+        for enemy in &tick.snapshot.enemies {
+            if let Some(def) = enemy.def {
+                self.enemy_defs.insert(enemy.id, def);
+            }
+        }
         for event in &tick.events {
-            let Event::UnitDestroyed { unit, .. } = event else { continue };
+            if let Event::EnemyDestroyed { enemy } = event {
+                let name = self.enemy_defs.remove(enemy).map_or("unseen", |d| self.name(d));
+                *self.fight_ledger.entry(format!("killed {name}")).or_default() += 1;
+            }
+            let Event::UnitDestroyed { unit, attacker } = event else { continue };
             let Some((def, pos)) = self.known_units.remove(unit) else { continue };
+            let killer = attacker.and_then(|id| self.enemy_defs.get(&id)).map_or("unseen", |d| self.name(*d));
+            let place = if pos.dist2d(self.home) < super::army::BASE_RADIUS { "at home" } else if pos.dist2d(self.home) < pos.dist2d(self.enemy_start) { "in our half" } else { "in their half" };
+            *self.fight_ledger.entry(format!("lost {} to {killer} {place}", self.name(def))).or_default() += 1;
             if self.world.def(def).is_some_and(|d| d.speed > 0.0 && d.build_speed == 0.0) {
                 continue; // soldiers die all the time
             }

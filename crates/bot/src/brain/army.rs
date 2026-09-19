@@ -19,7 +19,7 @@ const MIN_ORDERED_WAVE: usize = 3;
 /// A wave of at least this many that is wiped out is worth waking the strategist for.
 const NOTABLE_WAVE: usize = 5;
 /// Enemies this close to home are an attack on the base.
-const BASE_RADIUS: f32 = 1400.0;
+pub(super) const BASE_RADIUS: f32 = 1400.0;
 /// Enemies this close to one of our extractors are raiding it.
 const RAID_RADIUS: f32 = 500.0;
 /// The strategist is woken for a base attack of at least this many; lone raiders are routine.
@@ -93,7 +93,8 @@ impl Brain {
         let usable = |point: &Vec3| {
             !self.army.bad_stations.iter().any(|(bad, until)| *until > tick.frame && bad.dist2d(*point) < BAD_STATION_RADIUS)
         };
-        candidates.into_iter().flatten().find(usable).unwrap_or(self.home)
+        // Never the start point itself: it stands in the middle of the generator field.
+        candidates.into_iter().flatten().find(usable).unwrap_or(self.forward_of_home(150.0))
     }
 
     /// Home-group units that cannot reach the station mean the station is a bad place; give it up for a while.
@@ -162,6 +163,10 @@ impl Brain {
         for event in &tick.events {
             let bot_protocol::Event::UnitMoveFailed { unit } = event else { continue };
             self.move_failures += 1;
+            if let Some(u) = snapshot.own_units.iter().find(|u| u.id == *unit && self.is_army(u, kit)) {
+                // Where soldiers get stuck, in 200-elmo cells, for the per-minute log.
+                *self.stuck_cells.entry(((u.pos.x / 200.0) as i32, (u.pos.z / 200.0) as i32)).or_default() += 1;
+            }
             if self.move_failures <= 30
                 && let Some(u) = snapshot.own_units.iter().find(|u| u.id == *unit)
             {
