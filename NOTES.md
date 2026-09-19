@@ -81,3 +81,10 @@ Run: `run/match.sh run/smoke_shim_vs_barb.txt SECONDS [SPEED]` → logs in `run/
 - Hello carries 587 unit defs and 44 metal spots; tick interval 15 frames (2 Hz).
 - Test-harness trap: `pkill -f <pattern>` matches the invoking shell's own command line. Use PID files / `pgrep -x`.
 - Not yet looked at: why an enemy was in LOS at frame 8 in the first skeleton run (not reproduced in bot logs: 0 enemies visible early).
+
+## Local GUI install (2026-09-19)
+BAR data dir: `~/.local/state/Beyond All Reason`, engine `recoil_2026.07.04`. AI interface headers at tag 2026.07.04 are
+byte-identical to our vendored 2026.09.01 copy, so one build serves both. `run/link_install.sh` symlinks the AI into
+`<data dir>/AI/Skirmish/BarBots`; the install's `spring-headless --list-skirmish-ais` lists `BarBots 0.1`.
+Bot for GUI games: `target/release/bot` with BAR_BOTS_SOCKET unset (both sides default to `$XDG_RUNTIME_DIR/bar_bots.sock`).
+In-lobby visibility needs Settings → "Simple AI list" off (unverified in the GUI).
