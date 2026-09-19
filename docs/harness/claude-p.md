@@ -36,3 +36,16 @@ method-not-found error), `initialize` (client sent protocolVersion `2025-11-25`;
 Tool results: `{"content":[{"type":"text","text":"..."}]}`. Tool names surface as `mcp__<server>__<tool>`.
 An MCP server cannot push into the session; new information arrives as a tool result or as a user turn on stdin.
 Limits (from documentation, not tested): `MCP_TIMEOUT` startup (30 s default), `MCP_TOOL_TIMEOUT`, `MAX_MCP_OUTPUT_TOKENS` (25k default).
+
+## Subscription budget and how to check it
+`run/claude_usage.py [--json] [CONFIG_DIR ...]` prints, per Claude Code config dir (default `~/.claude` and `~/.claude2`), the
+5-hour window, the 7-day window and the per-model 7-day caps (e.g. Fable), with reset times. Method borrowed from
+`~/workspace/prism-widgets`: OAuth access token from `<dir>/.credentials.json`, `GET https://api.anthropic.com/api/oauth/usage`
+with `anthropic-beta: oauth-2025-04-20`. The token goes only to that endpoint and is never printed. A stale token comes back as
+HTTP 429, not 401 — running that account's CLI once refreshes it.
+
+Budget (user, 2026-09-19): two personal Max 20x subscriptions, `claude` (`~/.claude`) and `claude2` (`CLAUDE_CONFIG_DIR=~/.claude2`).
+The user's main projects run Fable, which has its own cap of up to half the weekly allotment; the other half of each week is
+free for Opus, Sonnet and Haiku here. The 5-hour window is rarely a constraint — watch it, but spend where it makes sense.
+Check usage before and after any batch of strategist games and put the delta in the ledger. Prefer the account with more
+7-day headroom (on 2026-09-19: `claude` at 31%, `claude2` at 0%).
