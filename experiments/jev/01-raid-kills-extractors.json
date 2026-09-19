@@ -1,0 +1,40 @@
+{
+ "about": "opus-first 4:55 \u2014 raiders just killed two extractors and a constructor",
+ "opus_decided": "stance defend (kept), economy_focus defence for 100 s, then back to expand; wished for an escort order",
+ "state": {
+  "situation": {
+   "game_time": "early game, about five minutes in",
+   "rules": "The game is lost if our commander dies. The enemy AI's units target buildings, outermost extractors first, and mostly ignore our mobile units.",
+   "economy": "Metal income is very low and just fell by a third. Energy is plentiful and overflowing. We have two extractors left, one factory, one constructor.",
+   "what_just_happened": "A small enemy raiding party of two fast light units destroyed two of our outer extractors and the constructor that built them. The raiders are still near our southern extractors.",
+   "our_army": "Seven light combat units standing idle at the base. The base has two defensive turrets.",
+   "enemy": "Only the two raiders are visible. The enemy base is far away across the map."
+  }
+ },
+ "questions": {
+  "army_order": {
+   "type": "choice",
+   "instructions": "Choose the standing order for the part of our army that is currently at home, given `situation`.",
+   "criteria": {
+    "defend": "Keep the army at home to protect the base and commander.",
+    "escort": "Move the army out to stand guard at our exposed extractors.",
+    "gather": "Keep massing units at home and launch nothing yet.",
+    "attack": "Commit the army now against an enemy position."
+   }
+  },
+  "constructor_priority": {
+   "type": "choice",
+   "instructions": "Choose what our constructors should prioritise next, given `situation`.",
+   "criteria": {
+    "expand": "Build metal extractors on free metal spots.",
+    "defence": "Build defensive turrets.",
+    "energy": "Build energy generators and energy-to-metal converters inside the base.",
+    "production": "Build more factories to spend banked metal."
+   }
+  },
+  "raid_is_main_threat": {
+   "type": "noul",
+   "instructions": "Is losing extractors to small raids the biggest threat to us right now, rather than a large attack on the base?"
+  }
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "about": "opus-first 10:06 \u2014 a 10-unit enemy push arrives at the base just after our army left",
+ "opus_decided": "recall everything, stance defend, clear the attack target",
+ "state": {
+  "situation": {
+   "game_time": "about ten minutes in",
+   "rules": "The game is lost if our commander dies.",
+   "what_just_happened": "A large enemy group of ten units has arrived at our base. Our eight combat units left the base half a minute ago towards the middle of the map and are still close.",
+   "our_base": "Six defensive turrets, the commander, one factory.",
+   "economy": "Very weak; two extractors."
+  }
+ },
+ "questions": {
+  "army_order": {
+   "type": "choice",
+   "instructions": "Choose what our eight units that just left should do now, given `situation`.",
+   "criteria": {
+    "return_and_defend": "Turn around and fight the enemy group at our base.",
+    "continue_attack": "Keep going to the middle of the map as planned.",
+    "counterattack_enemy_base": "Ignore the attack and go for the enemy's base while their army is away.",
+    "none_of_these": "None of the listed orders fits."
+   }
+  },
+  "commander_in_danger": {
+   "type": "noul",
+   "instructions": "Is our commander in serious danger right now?"
+  },
+  "threat_level": {
+   "type": "score",
+   "instructions": "How severe is the threat to our base described in `situation`?",
+   "criteria": [
+    "No threat: nothing hostile near the base.",
+    "Nuisance: one or two raiders the turrets will handle.",
+    "Serious: an enemy group that can destroy buildings unless our army responds.",
+    "Critical: an enemy force that can overrun the base and kill the commander."
+   ]
+  }
+ }
+}

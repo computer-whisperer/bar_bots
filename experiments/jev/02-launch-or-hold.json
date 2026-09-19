@@ -1,0 +1,34 @@
+{
+ "about": "opus-first 9:39 \u2014 economy frozen, 8 idle bots at home, 6 turrets; Opus launched a mid-map raid, and a 10-unit push hit the base 27 s later",
+ "opus_decided": "attack a mid-map metal cluster (in hindsight wrong: recalled 27 s later)",
+ "state": {
+  "situation": {
+   "game_time": "about ten minutes in",
+   "rules": "The game is lost if our commander dies. The enemy AI's units target buildings, outermost extractors first, and mostly ignore our mobile units.",
+   "economy": "Frozen: two extractors, metal income very low, every scrap of metal is consumed by the single factory. Extractors we build outside the base keep being destroyed by raids.",
+   "our_army": "Eight light combat units idle at the base. Six defensive turrets already stop the small raids that reach the base.",
+   "enemy": "No enemy units visible right now. We have not scouted the enemy army. The enemy has had ten minutes to build up and has sent only small raids so far.",
+   "option_under_consideration": "Send the eight units to a cluster of metal spots in the middle of the map to clear raiders and hold it."
+  }
+ },
+ "questions": {
+  "army_order": {
+   "type": "choice",
+   "instructions": "Choose the standing order for the part of our army that is currently at home, given `situation`.",
+   "criteria": {
+    "defend": "Keep the army at home to protect the base and commander.",
+    "escort": "Move the army out to stand guard at our exposed extractors.",
+    "gather": "Keep massing units at home and launch nothing yet.",
+    "attack": "Commit the army now against an enemy position."
+   }
+  },
+  "large_enemy_attack_likely_soon": {
+   "type": "noul",
+   "instructions": "Given `situation.enemy`, is a large enemy attack on our base likely within the next minute or two?"
+  },
+  "sending_army_out_is_safe": {
+   "type": "noul",
+   "instructions": "Would our base and commander remain safe if the eight units left now?"
+  }
+ }
+}
