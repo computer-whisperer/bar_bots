@@ -47,6 +47,8 @@ pub struct Brain {
     /// Frames at which we lost an extractor, within the trigger cooldown.
     extractor_losses: VecDeque<i32>,
     last_station: Vec3,
+    /// Heuristic IDs switched off for an ablation run (`BAR_BOTS_DISABLE=H-A,H-B`).
+    disabled: Vec<String>,
     last_trigger_frame: HashMap<&'static str, i32>,
 }
 
@@ -73,6 +75,7 @@ impl Brain {
             known_units: HashMap::new(),
             extractor_losses: VecDeque::new(),
             last_station: Vec3::default(),
+            disabled: std::env::var("BAR_BOTS_DISABLE").map_or_else(|_| Vec::new(), |ids| ids.split(',').map(str::to_string).collect()),
             last_trigger_frame: HashMap::new(),
         }
     }
@@ -111,6 +114,11 @@ impl Brain {
             eprintln!("[ai {}] playing {} from ({:.0}, {:.0})", self.ai(), roster.commander, unit.pos.x, unit.pos.z);
             return;
         }
+    }
+
+    /// False when an ablation run has switched this heuristic off.
+    fn enabled(&self, rule: &str) -> bool {
+        !self.disabled.iter().any(|id| id == rule)
     }
 
     fn fire(&mut self, rule: &'static str) {

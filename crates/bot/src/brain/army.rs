@@ -69,7 +69,7 @@ impl Brain {
             .iter()
             .filter(|u| u.def == kit.extractor && u.pos.dist2d(self.home) > OUTPOST_DISTANCE)
             .min_by(|a, b| a.pos.dist2d(self.enemy_start).total_cmp(&b.pos.dist2d(self.enemy_start)));
-        match most_exposed {
+        match most_exposed.filter(|_| self.enabled("H-ARMY-STATION")) {
             Some(extractor) => {
                 let (dx, dz) = (self.enemy_start.x - extractor.pos.x, self.enemy_start.z - extractor.pos.z);
                 let len = dx.hypot(dz).max(1.0);
@@ -125,7 +125,8 @@ impl Brain {
         };
         let (intruder, rule) = match at_base {
             Some(enemy) => (Some(enemy), "H-ARMY-DEFEND"),
-            None => (raider(), "H-ARMY-DEFEND-OUTPOST"),
+            None if self.enabled("H-ARMY-DEFEND-OUTPOST") => (raider(), "H-ARMY-DEFEND-OUTPOST"),
+            None => (None, "H-ARMY-DEFEND-OUTPOST"),
         };
         if let Some(intruder) = intruder {
             if tick.frame - self.army.last_defend_order >= DEFEND_REORDER_FRAMES {

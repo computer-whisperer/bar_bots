@@ -5,6 +5,8 @@
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
 //!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror]
 //!              [--side armada|cortex]   (default: alternate)
+//!              [--bot PATH]   (bot binary from another build, for A/B runs)
+//!              [--disable H-ID,H-ID]   (ablation: switch heuristics off by registry ID)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
 
 mod autohost;
@@ -43,6 +45,10 @@ struct Options {
     strategist: bool,
     /// Play every match as this faction instead of alternating.
     side: Option<&'static str>,
+    /// Bot binary to run instead of this workspace's, for A/B runs against an older build.
+    bot: Option<std::path::PathBuf>,
+    /// Comma-separated heuristic IDs the bot should switch off (ablation).
+    disable: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -96,7 +102,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist, "side": options.side,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist, "side": options.side, "bot": options.bot, "disable": options.disable,
         }))?,
     )?;
 
@@ -177,10 +183,11 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     // Unix socket paths are limited to ~108 bytes, so the socket cannot live in the match directory.
     let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, Into::into);
     let socket = runtime_dir.join(format!("bar_bots-arena-{}-{index}.sock", std::process::id()));
-    let mut bot = Command::new(repo.join("target/release/bot"))
+    let mut bot = Command::new(options.bot.clone().unwrap_or_else(|| repo.join("target/release/bot")))
         .args(options.strategist.then_some("--strategist"))
         .env("BAR_BOTS_SOCKET", &socket)
         .env("BAR_BOTS_LOG_DIR", &dir)
+        .env("BAR_BOTS_DISABLE", &options.disable)
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
     let log = File::create(dir.join("engine.log"))?;
@@ -380,6 +387,8 @@ fn parse_args() -> Options {
         mirror: false,
         strategist: false,
         side: None,
+        bot: None,
+        disable: String::new(),
     };
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
@@ -401,6 +410,8 @@ fn parse_args() -> Options {
             "--speed" => options.speed = value().parse().unwrap_or_else(|_| usage("--speed")),
             "--max-minutes" => options.max_minutes = value().parse().unwrap_or_else(|_| usage("--max-minutes")),
             "--profile" => options.profile = value(),
+            "--bot" => options.bot = Some(value().into()),
+            "--disable" => options.disable = value(),
             "--side" => {
                 options.side = Some(match value().to_lowercase().as_str() {
                     "armada" => "Armada",
@@ -417,7 +428,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist] [--side armada|cortex]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist] [--side armada|cortex] [--bot PATH] [--disable H-ID,H-ID]");
     std::process::exit(2)
 }
 

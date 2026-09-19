@@ -192,7 +192,8 @@ impl Brain {
     fn production_batch(&self, own: &[OwnUnit], kit: &Kit) -> impl Iterator<Item = UnitDefId> + use<> {
         let count = |def: UnitDefId| own.iter().filter(|u| u.def == def).count();
         // H-PROD-CONSTRUCTOR-FLOOR
-        let floor = self.directives.min_constructors.map_or(MIN_CONSTRUCTORS, |d| d.value);
+        let own_floor = if self.enabled("H-PROD-CONSTRUCTOR-FLOOR") { MIN_CONSTRUCTORS } else { 0 };
+        let floor = self.directives.min_constructors.map_or(own_floor, |d| d.value);
         let wanted_constructors = (2 + count(kit.extractor) / 4).min(MAX_CONSTRUCTORS).max(floor);
         let support = if count(kit.constructor) < wanted_constructors { kit.constructor } else { kit.artillery };
         // Fighters first: early raids arrive before an all-constructor opening pays off.
