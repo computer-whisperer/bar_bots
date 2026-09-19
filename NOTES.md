@@ -45,3 +45,15 @@ Lua AIs are set per-team with `LuaAI=name`.
 - Engine log is block-buffered: only trustworthy after graceful exit (`/kill`), not after SIGTERM.
 - BARb loads its AngelScript/config from the GAME archive (`LuaRules/Configs/BARb/stable/...`), not from the engine's AI dir.
 - Replay written to `run/data/demos/*.sdfz` on graceful exit.
+
+## Lobby question (2026-09-19) — source reading only, nothing tested against the live server
+Extra clones in `upstream/`: BYAR-Chobby (lobby client), teiserver (lobby server), SPADS (autohost), bar-lobby (new client, not read).
+- Chobby lists AIs from the LOCAL install: `VFS.GetAvailableAIs` (ai_list_window.lua:14). Blacklist is only `CircuitAI`.
+  With the "simple AI list" setting on, AIs without a simple name are hidden (ai_list_window.lua:86-91) — turn it off to see a custom AI.
+- teiserver `ADDBOT` (spring_in.ex:1169): stores `ai_dll` as an opaque string, owner = the adding user. No AI-name validation.
+  Permission `Lobby.allow?(:add_bot)` (lobby.ex:747): SPECTATORS CANNOT ADD BOTS (`player_command and changer.player == false -> false`);
+  founder/moderators always can. Tachyon path (`lobby/addBot`, tachyon_handler.ex:884) not read.
+- SPADS (spads.pl ~14360): only counts bots against maxBots / maxLocalBots / maxRemoteBots; no AI-name validation for remote bots.
+  "Local bots" (owned by the autohost itself) are restricted by `allowedLocalAIs` and need `springServerType` headless.
+- Unknown: the deployed BAR hosts' actual maxRemoteBots etc.; whether a bot survives its owner switching to spectator;
+  game-side gadgets touching AIs (ai_namer.lua etc.) not read.
