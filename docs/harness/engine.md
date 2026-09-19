@@ -12,7 +12,7 @@ A 31MB Linux archive ships `spring`, `spring-headless`, `spring-dedicated`, `pr-
 - `run/engine` -> `run/engines/2026.07.04` — the version the user's BAR install runs. Use this.
 - `run/engines/2026.09.01` — DO NOT USE for batches: SIGSEGV in a pathfinder worker thread in 3 of 18 headless matches,
   `QTPFS::IPath::SetPoint` (Path.h:239) via `PathSearch::Finalize` / `LoadPartialPath` <- `PathManager::ExecuteSearch`
-  (symbolized with the release's `-dbgsym` archive). 0 crashes in 100+ matches on 2026.07.04. Not reported upstream.
+  (symbolized with the release's `-dbgsym` archive). 0 crashes in 86 matches on 2026.07.04 (as of 2026-09-19). Not reported upstream.
 - AI interface headers are byte-identical between the two tags, so one shim build serves both.
 
 ## Game data
