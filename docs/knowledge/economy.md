@@ -32,5 +32,7 @@ commander retreat triggered 15 times. The turret-per-outpost response has not be
 **Status.** conjectured (2026-09-19)
 **Evidence.** v5-probe/00 (+38 at minute 17, 18 extractors); v5-medium 0-12, all lost between minute 16 and 20. BARb's own
 income was not measured, so "not enough" is inference.
+**Reopened 2026-09-19.** The medium losses are decided by extractor raids at minute 8-10 (see K-opp-medium-wins-by-20), long
+before a tier-1 ceiling could matter; the ceiling may still be real but is not why we lose today.
 **Would be wrong if.** A tier-1 brain with better army handling beat medium, or a tier-2 economy did not change the result.
 **Used by.** (motivates the planned tier-2 work)
