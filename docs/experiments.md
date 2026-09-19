@@ -15,3 +15,7 @@ W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 | v5-easy | ce87634 | easy | 12 | 7-4-1 | cap removed, labs gated on energy | |
 | v5-easy-confirm | same | easy | 24 | 14-10-0 | confirmation | Cortex 10-2, Armada 4-8; SE 9-3, NW 5-7 |
 | v5-medium | same | medium | 12 | 0-12-0 | reference against next tier | all lost at minute 16-20 |
+| eff-base / eff-cfg | be2fbee | easy | 8+8 | (throughput only) | research agent's config A/B at speed 80 | 12.1 -> 5.8 CPU-s per game-min |
+| eff-applied | (this commit) | easy | 12 | 1-5-6 | all efficiency changes, speed 200, 12 parallel, 40-min game-time limit | outcomes distorted by requested speed; see arena.md OPEN |
+| eff-speed50 | (this commit) | easy | 12 | 8-3-1 | same settings at speed 50, 8 parallel | normal play at ~40% of the old CPU cost |
+| eff-speed50-par12 | (this commit) | easy | 12 | 5-6-1 | speed 50, 12 parallel | within noise of normal; no wall-time gain over 8 parallel |

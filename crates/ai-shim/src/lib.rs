@@ -21,6 +21,8 @@ use link::Link;
 /// Frames between ticks sent to the bot (the sim runs 30 per second).
 const TICK_INTERVAL: i32 = 15;
 const RECONNECT_INTERVAL: i32 = 30;
+/// Frames between heartbeat lines in the engine log; the arena reads game time from them.
+const HEARTBEAT_INTERVAL: i32 = 30 * 30;
 
 struct Instance {
     ai_id: c_int,
@@ -49,6 +51,9 @@ impl Instance {
     }
 
     fn update(&mut self, frame: i32) {
+        if frame % HEARTBEAT_INTERVAL == 0 {
+            self.log(format_args!("heartbeat f={frame}"));
+        }
         if self.link.is_none() && frame % RECONNECT_INTERVAL == 0 {
             self.connect(frame);
         }

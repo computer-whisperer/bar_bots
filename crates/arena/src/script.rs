@@ -37,6 +37,7 @@ impl MatchSetup<'_> {
 	AutohostPort={autohost_port};
 	MyPlayerName=arena;
 	StartPosType=2;
+	GameStartDelay=0;
 	FixedRNGSeed={seed};
 	NumPlayers=1;
 	NumTeams=2;
