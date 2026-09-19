@@ -49,3 +49,16 @@ The user's main projects run Fable, which has its own cap of up to half the week
 free for Opus, Sonnet and Haiku here. The 5-hour window is rarely a constraint — watch it, but spend where it makes sense.
 Check usage before and after any batch of strategist games and put the delta in the ledger. Prefer the account with more
 7-day headroom (on 2026-09-19: `claude` at 31%, `claude2` at 0%).
+
+### Extra usage (paid credits) — we do not spend it
+Aim (user, 2026-09-19): weekly allotments only. Anthropic has been known to move heavy `claude -p` users onto extra-usage
+credits; we do not know the heuristics, so watch the numbers rather than guess.
+- `claude` has extra usage ENABLED ($200 monthly limit; $13.16 used when first read on 2026-09-19, origin not attributable —
+  the one Opus game before that reading reported `isUsingOverage: false` on every rate-limit event).
+- `claude2` has extra usage NOT enabled and never had: it cannot be charged beyond the plan, only blocked. **Run strategist
+  sweeps on `claude2`.**
+- Before a strategist batch: `run/claude_usage.py --snapshot run/usage-<label>.json`. After (and during long sweeps):
+  `run/claude_usage.py --since run/usage-<label>.json` — it prints the 7-day and extra-usage deltas and exits 3 if extra
+  usage rose on any account. A rise means stop and tell the user.
+- Live tripwire (to build): every `rate_limit_event` in the stream carries `isUsingOverage`, `overageStatus` and `status`;
+  the strategist driver must stop sending turns the moment `isUsingOverage` is true or `status` is not `allowed`.

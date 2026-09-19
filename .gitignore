@@ -6,3 +6,4 @@ target/
 run/logs/
 run/matches/
 run/cache-template/
+run/usage-*.json
