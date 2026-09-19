@@ -2,6 +2,7 @@
 name = "bot-protocol"
 version = "0.1.0"
 edition = "2024"
+license = "GPL-2.0-or-later"
 description = "Messages exchanged between the engine-side AI shim and the bot process"
 
 [dependencies]
