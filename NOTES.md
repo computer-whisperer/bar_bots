@@ -87,4 +87,5 @@ BAR data dir: `~/.local/state/Beyond All Reason`, engine `recoil_2026.07.04`. AI
 byte-identical to our vendored 2026.09.01 copy, so one build serves both. `run/link_install.sh` symlinks the AI into
 `<data dir>/AI/Skirmish/BarBots`; the install's `spring-headless --list-skirmish-ais` lists `BarBots 0.1`.
 Bot for GUI games: `target/release/bot` with BAR_BOTS_SOCKET unset (both sides default to `$XDG_RUNTIME_DIR/bar_bots.sock`).
-In-lobby visibility needs Settings → "Simple AI list" off (unverified in the GUI).
+In-lobby visibility: the lobby hides AIs without a friendly name unless "Simplified AI list" is off. That checkbox is in the
+Developer settings tab, which only exists in dev mode = a `devmode.txt` file in the BAR data dir (configuration.lua:313). Created it.
