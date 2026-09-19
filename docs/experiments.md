@@ -38,4 +38,5 @@ W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 | nw-layout | c90d555 | easy, NW only | 8 | 3-4-1 | labs in a yard, generators behind, wider gaps | soldier move failures 149; fight ledgers show the enemy fielding OUR faction's units in every loss (resurrected wrecks) and a timeout with 739 units lost in their half for 104 kills |
 | v11-layout | c90d555 | easy | 24 | 13-7-4 | same, both corners | SE 10-0-2, NW 3-7-2: the maze was not the corner gap. In SE games we lose nothing in our own half; NW losses are commander snipes on a healthy economy |
 | v12-stage | 52ae15a | easy | 24 | 17-5-2 | H-ARMY-STAGE: waves gather 1500 short of the target | SE 11-0-1, NW 6-5-1; timeouts down from 4-9 to 2. One batch: read as "not worse", with a plausible mechanism |
+| v13-recall | 78ab2dc | easy | 24 | 23-1-0 | H-ARMY-RECALL: six enemies at the base call the attackers home | SE 12-0-0, NW 11-1-0, but the rule fired in only 4 of 24 games (3 of them SE), so it cannot explain the jump from v12; same-binary swings this large have been seen before. Pool v12+v13 for the staged bot: 40-6-2, NW 17-6-1 |
 
