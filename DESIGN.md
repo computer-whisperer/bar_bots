@@ -1,6 +1,6 @@
 # bar_bots — target design (MVP)
 
-Ratified 2026-09-19. Findings and test results are in `NOTES.md`.
+Ratified 2026-09-19. Findings live under `docs/` (start at `docs/README.md`).
 
 ## Shape
 
