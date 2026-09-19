@@ -1,0 +1,8 @@
+[package]
+name = "ai-shim"
+version = "0.1.0"
+edition = "2024"
+description = "Skirmish AI library loaded by the Recoil engine through its C AI interface"
+
+[lib]
+crate-type = ["cdylib"]

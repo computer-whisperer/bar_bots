@@ -57,3 +57,14 @@ Extra clones in `upstream/`: BYAR-Chobby (lobby client), teiserver (lobby server
   "Local bots" (owned by the autohost itself) are restricted by `allowedLocalAIs` and need `springServerType` headless.
 - Unknown: the deployed BAR hosts' actual maxRemoteBots etc.; whether a bot survives its owner switching to spectator;
   game-side gadgets touching AIs (ai_namer.lua etc.) not read.
+- Owner-spectates question: teiserver removes a bot only when its owner LEAVES the lobby (lobby.ex:447); SPADS checks limits only at
+  add time. So "join as player, add local AI, switch to spectator" should keep the bot, hosted by the owner's client. Untested live.
+  Target flow (user, 2026-09-19): own GUI client, pick our local AI in a public lobby with a cooperative group; own autohost as alternative.
+
+## Rust AI skeleton — loads and receives events (2026-09-19)
+`crates/ai-shim` (cdylib, hand-written FFI for the 3 exports, no bindings yet); `run/install_ai.sh` builds and installs to
+`run/data/AI/Skirmish/BarBots/0.1/`; `run/smoke_shim_vs_barb.txt` runs it against BARb.
+Verified: engine discovers it from the write dir, calls init/handleEvent/release; 1464 UPDATE events over 1464 frames (one per frame),
+plus INIT, UNIT_CREATED/FINISHED (commander), ENEMY_ENTER/LEAVE_LOS/RADAR. stderr from the AI lands in the engine's stdout log.
+Oddity: enemy entered LOS at frame 8 despite opposite-corner start boxes — the shim never sends a start position, so its
+spawn location is whatever the game defaults to. Not investigated.
