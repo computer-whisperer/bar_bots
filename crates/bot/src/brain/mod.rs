@@ -7,6 +7,7 @@
 mod army;
 mod briefing;
 mod economy;
+mod raid;
 mod roster;
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -33,6 +34,7 @@ pub struct Brain {
     /// Metal spot index to the frame it was claimed at.
     spot_claims: HashMap<usize, i32>,
     army: army::Army,
+    raids: raid::Raids,
     /// How often each heuristic (docs/heuristics.md) acted since the last status line.
     fired: BTreeMap<&'static str, u32>,
     /// Present when a strategist is attached; the brain publishes to it and reads directives from it.
@@ -79,6 +81,7 @@ impl Brain {
             jobs: HashMap::new(),
             spot_claims: HashMap::new(),
             army: army::Army::default(),
+            raids: Default::default(),
             fired: BTreeMap::new(),
             strategist,
             directives: Directives::default(),

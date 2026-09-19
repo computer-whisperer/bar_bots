@@ -86,3 +86,11 @@ losses 04, 08, 12: the commander dies at home to corthud / corstorm from under 3
 **Would be wrong if.** With H-ARMY-RECALL, losses with a healthy economy (8+ extractors at the end) still happened as often.
 **Used by.** H-ARMY-RECALL.
 
+### K-army-we-never-raid
+**Claim.** Marching every soldier in one group at one target leaves the enemy's extractors alone all game, while BARb
+medium's small fast groups strip ours.
+**Status.** supported (2026-09-19)
+**Evidence.** v13-medium: per game we killed 3.1 enemy extractors from NW and 7.4 from SE, and lost 22.2 and 18.5.
+**Would be wrong if.** With raid squads the enemy extractors killed per game did not rise.
+**Used by.** H-ARMY-RAID.
+

@@ -169,7 +169,7 @@ impl Brain {
     pub(super) fn run_army(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
         let snapshot = &tick.snapshot;
         let soldiers: Vec<&OwnUnit> =
-            snapshot.own_units.iter().filter(|u| !u.being_built && self.is_army(u, kit)).collect();
+            snapshot.own_units.iter().filter(|u| !u.being_built && self.is_army(u, kit) && !self.raids.is_raider(u.id)).collect();
 
         for event in &tick.events {
             let bot_protocol::Event::UnitMoveFailed { unit } = event else { continue };
@@ -256,6 +256,10 @@ impl Brain {
         }
         let (attackers, home_group): (Vec<&OwnUnit>, Vec<&OwnUnit>) =
             soldiers.iter().partition(|u| self.army.attackers.contains(&u.id));
+
+        let pool: Vec<&OwnUnit> = home_group.clone();
+        self.run_raids(tick, kit, &pool, commands);
+        let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| !self.raids.is_raider(u.id)).collect();
 
         // Defence first: the home group turns on intruders at the base, then on raiders at any
         // extractor, and no wave leaves meanwhile.
