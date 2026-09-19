@@ -72,9 +72,11 @@ impl Brain {
         }
         let planned = |def: UnitDefId| counts.get(&def).copied().unwrap_or(0);
         let energy = snapshot.energy;
-        let energy_short = energy.current < energy.storage * 0.3 || energy.income < energy.usage + 20.0;
-        let energy_rich = energy.current > energy.storage * 0.8 && energy.income > energy.usage + 60.0;
-        let generator = if energy.income > ADVANCED_SOLAR_INCOME && !is_commander { kit.advanced_solar } else { kit.solar };
+        // Judge energy by what is stored, not by income against usage: converters soak up any
+        // surplus, so usage always catches up with income and would read as a permanent shortage.
+        let energy_short = energy.current < energy.storage * 0.4;
+        let energy_rich = energy.current > energy.storage * 0.8;
+        let generator = if energy.income > ADVANCED_SOLAR_INCOME { kit.advanced_solar } else { kit.solar };
         let base = self.home;
         let front = self.forward_of_home(450.0);
 
@@ -89,17 +91,14 @@ impl Brain {
         if planned(kit.lab) < 1 {
             return Plan::Near(kit.lab, base);
         }
-        if energy_short && planned(generator) < snapshot.own_units.iter().filter(|u| u.def == generator).count() + 2 {
+        if energy_short {
             return Plan::Near(generator, base);
         }
         if planned(kit.turret) < 2 {
             return Plan::Near(kit.turret, front);
         }
-        if snapshot.metal.current > FLOATING_METAL && planned(kit.lab) < MAX_LABS {
+        if snapshot.metal.current > FLOATING_METAL && !energy_short && planned(kit.lab) < MAX_LABS {
             return Plan::Near(kit.lab, base);
-        }
-        if energy_rich && planned(kit.converter) < MAX_CONVERTERS {
-            return Plan::Near(kit.converter, base);
         }
         if !is_commander
             && !energy_short
@@ -109,6 +108,9 @@ impl Brain {
         }
         if let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame) {
             return Plan::Extractor(spot);
+        }
+        if energy_rich && planned(kit.converter) < MAX_CONVERTERS {
+            return Plan::Near(kit.converter, base);
         }
         if planned(kit.turret) < MAX_TURRETS && !energy_short {
             return Plan::Near(kit.turret, front);

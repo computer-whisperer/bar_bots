@@ -73,6 +73,16 @@ impl Brain {
             }
         }
 
+        if tick.frame % (60 * FRAMES_PER_SECOND) == 0 && !attackers.is_empty() {
+            let n = attackers.len() as f32;
+            let (cx, cz) = attackers.iter().fold((0.0, 0.0), |(x, z), u| (x + u.pos.x / n, z + u.pos.z / n));
+            let idle = attackers.iter().filter(|u| u.idle).count();
+            eprintln!(
+                "[ai {}] f={} attackers {} ({} idle) around ({cx:.0}, {cz:.0}), target ({:.0}, {:.0}), home group {}",
+                self.ai(), tick.frame, attackers.len(), idle, target.x, target.z, home_group.len()
+            );
+        }
+
         // Attackers that ran out of orders keep the pressure on instead of standing around.
         let idle_attackers: Vec<&&OwnUnit> = attackers.iter().filter(|u| u.idle).collect();
         if idle_attackers.is_empty() {
