@@ -8,10 +8,15 @@ pub struct MatchSetup<'a> {
     pub seed: u32,
     /// We take team 0 and the north-west start box; otherwise team 1 and the south-east one.
     pub we_are_first: bool,
+    /// Team 0 starts south-east and team 1 north-west, to tell the corner's effect from the team slot's.
+    pub swap_corners: bool,
     pub our_side: &'static str,
     /// Give the opponent our faction instead of the other one.
     pub mirror: bool,
 }
+
+const NORTH_WEST: &str = "StartRectLeft=0; StartRectTop=0; StartRectRight=0.3; StartRectBottom=0.3;";
+const SOUTH_EAST: &str = "StartRectLeft=0.7; StartRectTop=0.7; StartRectRight=1; StartRectBottom=1;";
 
 impl MatchSetup<'_> {
     pub fn our_ally_team(&self) -> u8 {
@@ -53,10 +58,12 @@ impl MatchSetup<'_> {
 	[AI1] {{ Name=ai1; Team=1; Host=0; {ai1} }}
 	[TEAM0] {{ TeamLeader=0; AllyTeam=0; Side={side0}; }}
 	[TEAM1] {{ TeamLeader=0; AllyTeam=1; Side={side1}; }}
-	[ALLYTEAM0] {{ NumAllies=0; StartRectLeft=0; StartRectTop=0; StartRectRight=0.3; StartRectBottom=0.3; }}
-	[ALLYTEAM1] {{ NumAllies=0; StartRectLeft=0.7; StartRectTop=0.7; StartRectRight=1; StartRectBottom=1; }}
+	[ALLYTEAM0] {{ NumAllies=0; {rect0} }}
+	[ALLYTEAM1] {{ NumAllies=0; {rect1} }}
 }}
 ",
+            rect0 = if self.swap_corners { SOUTH_EAST } else { NORTH_WEST },
+            rect1 = if self.swap_corners { NORTH_WEST } else { SOUTH_EAST },
             map = self.map,
             host_port = self.host_port,
             autohost_port = self.autohost_port,

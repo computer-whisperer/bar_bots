@@ -41,3 +41,6 @@ W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 | v13-recall | 78ab2dc | easy | 24 | 23-1-0 | H-ARMY-RECALL: six enemies at the base call the attackers home | SE 12-0-0, NW 11-1-0, but the rule fired in only 4 of 24 games (3 of them SE), so it cannot explain the jump from v12; same-binary swings this large have been seen before. Pool v12+v13 for the staged bot: 40-6-2, NW 17-6-1 |
 
 | v13-medium | 6dafd19 | medium | 24 | 11-13-0 | same bot against medium (was 0-12 at v5) | SE 10-2-0, NW 1-11-0: the corner gap at its starkest. From NW our extractors at minute 10 are 4-9 against 8-14 from SE, and losses come at 17-24 min |
+| nw-medium-mexfirst / -2 | 322d10b+ (not kept) | medium, NW only | 12+12 | 0-12-0 / 0-12-0 | extractors before turrets and converters, constructors first from the lab (first try also a longer commander leash) | extractor curve unchanged (2.2 at min 3, ~5 at min 7-12); first try banked 700+ metal while the commander wandered. Reverted: opening priority is not what holds NW back |
+| v13-medium-swapped | 322d10b+ | medium | 16 | 6-10-0 | `--swap-corners`: team 0 starts SE, team 1 NW | NW (as team 1) 0-8, SE (as team 0) 6-2: the gap follows the corner, not the team slot |
+

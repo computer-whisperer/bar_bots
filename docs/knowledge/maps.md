@@ -94,5 +94,8 @@ fixing it left the gap unchanged.
 NW 3-7-2. v11 fight ledgers: in 9 of 12 SE games we lost nothing at all in our own half; in NW games we lost 6-256 units
 there, and the NW losses end with an enemy group killing a healthy commander in 10-20 s (match 14: 3535 health to dead in
 13 s to a pack of armwar, with 8 extractors, 4 labs and 28 soldiers on the books).
+Against medium (v13-medium) SE 10-2, NW 1-11. NW and SE games build identically through minute 6 (5.7 against 6.0
+extractors); in the first ten minutes we then lose 8 extractors a game from NW against 3.4 from SE. With the start boxes
+swapped (v13-medium-swapped) the gap stayed with the corner: NW as team 1 0-8, SE as team 0 6-2, so it is not the team slot.
 **Would be wrong if.** BARb vs BARb on this map showed no corner difference, or a second map showed the same gap for us.
 **Used by.** (none). Until settled, read the NW record as the honest one; the SE record flatters us.

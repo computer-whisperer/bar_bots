@@ -3,7 +3,7 @@
 //! the start script, engine log, bot log and replay.
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
-//!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror]
+//!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners]
 //!              [--side armada|cortex] [--corner nw|se]   (default: alternate)
 //!              [--bot PATH]   (bot binary from another build, for A/B runs)
 //!              [--disable H-ID,H-ID]   (ablation: switch heuristics off by registry ID)
@@ -44,6 +44,7 @@ struct Options {
     max_minutes: u32,
     label: String,
     mirror: bool,
+    swap_corners: bool,
     strategist: bool,
     /// Play every match as this faction instead of alternating.
     side: Option<&'static str>,
@@ -113,7 +114,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "strategist": options.strategist, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "swap_corners": options.swap_corners, "strategist": options.strategist, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -188,9 +189,11 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         autohost_port: host_port + 1,
         seed: index as u32 + 1,
         // Alternate corner and faction so neither start nor side biases the batch.
-        we_are_first: options.corner.unwrap_or(index.is_multiple_of(2)),
+        // `--corner` names the corner; which team slot that means depends on `--swap-corners`.
+        we_are_first: options.corner.map_or(index.is_multiple_of(2), |north_west| north_west != options.swap_corners),
         our_side: options.side.unwrap_or(if (index / 2).is_multiple_of(2) { "Armada" } else { "Cortex" }),
         mirror: options.mirror,
+        swap_corners: options.swap_corners,
     };
     copy_tree(&repo.join("run/match-template"), &dir)?;
     let cache_template = repo.join("run/cache-template");
@@ -247,7 +250,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         arm,
         outcome,
         our_side: setup.our_side,
-        our_corner: if setup.we_are_first { "NW" } else { "SE" },
+        our_corner: if setup.we_are_first != setup.swap_corners { "NW" } else { "SE" },
         game_minutes,
         wall_seconds: started.elapsed().as_secs_f32(),
     })
@@ -419,6 +422,7 @@ fn parse_args() -> Options {
         max_minutes: 40,
         label: "batch".into(),
         mirror: false,
+        swap_corners: false,
         strategist: false,
         side: None,
         corner: None,
@@ -432,6 +436,10 @@ fn parse_args() -> Options {
         match flag.as_str() {
             "--mirror" => {
                 options.mirror = true;
+                continue;
+            }
+            "--swap-corners" => {
+                options.swap_corners = true;
                 continue;
             }
             "--strategist" => {
@@ -474,7 +482,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--strategist] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--strategist] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR]");
     std::process::exit(2)
 }
 
