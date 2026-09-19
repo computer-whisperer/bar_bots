@@ -104,3 +104,20 @@ shared game data via `SPRING_DATADIR` (honoured in isolation mode, DataDirLocate
 - OPEN: one headless match (baseline 02) died with SIGSEGV inside a spring-headless worker thread at 7.9 game-min, frames all
   in the engine binary, no symbols (release build; `recoil_*_amd64-linux-dbgsym.tar.zst` exists for symbolizing). Unrelated to
   the overwrite (no install happened during that batch). 1 in 10 headless matches so far; watch the rate.
+
+## Brain iteration log vs BARb easy, Quicksilver Remake, arena batches (2026-09-19)
+Engine for the arena is now 2026.07.04 (`run/engine` -> `run/engines/2026.07.04`; 2026.09.01 kept beside it).
+- ENGINE BUG (2026.09.01 only, 3 of 18 headless matches): SIGSEGV in a pathfinder worker thread,
+  `QTPFS::IPath::SetPoint` (Path.h:239) via `PathSearch::Finalize` / `LoadPartialPath` <- `PathManager::ExecuteSearch`.
+  Symbolized with the release's dbgsym archive. 0 crashes in 60+ matches on 2026.07.04. Not reported upstream yet.
+- Arena timeout is wall-clock derived from `--max-minutes` at an assumed 5x floor (parallel matches sustain ~10x, single ~35x+).
+| label | change | W-L-T (aborted) |
+|---|---|---|
+| baseline-easy | MVP brain | 1-5-1 (1) |
+| v2-easy-0704 | leashed commander, job coordination, turrets, unit mix, converters | 2-5-5 (timeouts were a harness bug) |
+| v3-easy | membership-based waves (army of 148 had been idling), outpost turrets | 3-9-0 |
+| v4-easy | factory orders no longer carry SHIFT (= "build five", FactoryCAI.cpp:150); fighters before constructors | 4-8-0 |
+| v5-easy | energy judged by storage not income-vs-usage (converters made "short" permanent, blocking expansion) | 7-4-1 |
+Diagnosis method that worked: per-minute status line in bot.log (economy, counts, attackers' centroid) compared between a win and a loss.
+Known weaknesses: T1 only (no advanced lab / moho extractors), metal income ~+40 at 17 min; attackers trade piecemeal mid-map;
+losses cluster on Armada NW (unexplained); no scouting, no use of enemy unit types.
