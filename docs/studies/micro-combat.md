@@ -16,7 +16,7 @@ frames = 0.5 s):
 | Policy | Expressible? |
 |---|---|
 | Fight spread out | **Yes** — one `Fight` per unit, at its own point. No new command, no faster tick. |
-| Pull a damaged unit back | **Yes** — `Move` away; the unit keeps firing, as a unit under a move order does. |
+| Pull a damaged unit back | **Yes** — `Move` away. The simulator assumes it keeps firing on the way, which is what a unit at the engine's default fire state does; **not checked in the engine**, and it would have to be before this policy was built. |
 | Do not chase | **Yes** — withhold the order, or `Stop`. |
 | Hold at max range / kite | **Partly** — `Move` back then `Fight` again is a 0.5 s round trip, and the engine already stops an attack-move at `range x 0.9` of whatever it acquires, so the only part that is missing is backing off when the enemy closes. A step of 0.5 s at 46-87 elmos a second is 23-44 elmos; a Grunt closes 40 of them in the same tick. |
 | Focus fire | **No.** There is no attack-unit command. `Fight` names a *point*; which enemy a unit shoots is the engine's choice, and the engine's choice is roughly the nearest. Focus fire cannot be ordered without adding a command to the protocol. |
@@ -31,7 +31,7 @@ plain attack-move the duel tables were made with. `combatsim micro` prices them 
 
 - **`spread=N`** — while advancing, a unit is pushed away from friends closer than N elmos. This is the behaviour
   a wave given one destination point each, laid out over the ground, produces.
-- **`withdraw=F`** — a unit under F of its health turns round and walks away from the enemy, still firing.
+- **`withdraw=F`** — a unit under F of its health turns round and walks away from the enemy, still firing (an assumption about the engine, see the table above).
 - **`kite`** — a unit that out-reaches its target by 40 elmos *and* out-runs it backs off when the target comes
   inside its stopping distance. **`kite-slow`** drops the speed condition.
 - **`focus=weakest`** — shoot the enemy with the fewest hit points left, among those already in range (a unit with

@@ -248,7 +248,9 @@ tested and still loses ground: over 135 simulated tier-1 cells it took metal kil
 and cost 0.039 of margin. Fewer of ours die; the ones that leave stop shooting, so fewer of theirs die too, and what
 walks away walks away hurt. The two measures disagree by exactly the question of whether a hurt soldier is ever
 repaired, and ours are not. Only when outnumbered (0.7x metal) is it not negative: +0.005 of margin, 0.66 to 1.02.
-**Status.** conjectured (2026-09-20) — simulator only, never run in the engine.
+**Status.** conjectured (2026-09-20) — simulator only, never run in the engine. It also rests on an unchecked
+assumption: that a unit under a `Move` order keeps firing at what comes into range, which is what the engine's
+default fire state should do but was not verified.
 **Evidence.** `combatsim micro --reps 16`, `docs/studies/micro-combat.md`.
 **Would be wrong if.** A duel arm with `withdraw` orders traded better *and* won as often, or if soldiers were
 repaired at home, which would move the true measure from margin towards metal.
