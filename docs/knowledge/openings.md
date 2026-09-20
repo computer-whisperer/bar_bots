@@ -174,3 +174,25 @@ simulator's constant wind hides in-game troughs, so the effect is more likely un
 **Would be wrong if.** Arena batches with a solar opening built measurably less by minute 10 than the wind opening in
 games whose recorded wind average was at or above the mean.
 **Used by.** (candidate: H-ECO-WIND)
+
+### K-open-energy-stall-minute-5
+**Claim.** Today's opening runs out of energy at 4:30-5:00 with 600-740 metal unspent, and the extractors stop with it:
+metal income falls from 20-22 to 14-16 for 20-40 s. The spending that does it is the first construction turret, light
+turrets and Hammers started together (230-270 energy/s asked of 130-190 coming in, wind falling).
+**Status.** measured (2026-09-20): 8 of 8 games, Quicksilver and Mithril Mountain, both factions, BARb easy.
+**Evidence.** `open-cal2-quicksilver`, `open-cal2-mithril`: stored energy reaches 0 between 4:30 and 5:00 in every
+record; `buildorder calibrate` shows the income dip the simulator lacked until it modelled it.
+**Would be wrong if.** A batch against BARb medium (more early losses, so less to spend on) showed no stall.
+**Used by.** (none yet) — the opening search's energy floor (`docs/design/2026-09-20-opening-search.md`).
+
+### K-open-seconds-lost-between-builds
+**Claim.** Our mobile builders lose 3.5-4.0 s between one build's last frame and the next one's first when the next site
+is already in reach (53 trips), and 4-5 s before the game's first build. At some thirty builds in the first five
+minutes that is about two minutes of builder time. The orders are given one at a time when the builder reports idle;
+nothing is queued.
+**Status.** measured (2026-09-20), two maps, 8 games; the cause (idle detection on a half-second tick, the site query,
+the engine's own start-up of a build) is not split.
+**Evidence.** `buildorder walks` on `open-cal2-*` (recorded against predicted, by length of walk).
+**Would be wrong if.** Queued orders (the plan executor's) left the gap where it is: then it is the engine's and not ours.
+**Used by.** `Scenario::mobile_overhead` (3.5 s) in `crates/buildorder`.
+

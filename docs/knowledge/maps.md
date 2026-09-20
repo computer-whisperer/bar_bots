@@ -194,3 +194,13 @@ moves the estimate"; opponent ground truth in every Quicksilver batch from v17 t
 **Would be wrong if.** The two corners' extractor counts evened out once our own play stopped plateauing in the
 north-west (K-eco-reach-stops-at-the-first-gap): part of BARb's 20.8 is spots we never contest.
 **Used by.** (none yet) — candidate: the tempo model conditions on it; expansion and defence rules could too.
+
+### K-maps-early-walks-nearly-straight
+**Claim.** In the first six minutes our builders' ways are 4-7 % longer on foot than in a straight line on Quicksilver
+and on Mithril Mountain (median 1.04-1.07, longest 1.35): the home plateau is open. The map's ground matters to the
+opening where a start sits behind a choke (not measured yet: Great Divide).
+**Status.** measured (2026-09-20), 8 games, 247 trips.
+**Evidence.** `buildorder walks` on `open-cal2-*`, last column.
+**Would be wrong if.** The same report on Great Divide or Comet Catcher gave the same ratio.
+**Used by.** (none) — the search uses the map's ground anyway (`buildorder::game::Walked`).
+

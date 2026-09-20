@@ -28,8 +28,23 @@ pub struct Observed {
     pub losses: u32,
 }
 
+/// One walk of a mobile builder between two builds, as the record shows it.
+#[derive(Clone, Copy, Debug)]
+pub struct Trip {
+    /// The builder's unit type.
+    pub builder: usize,
+    /// Where it stood when it became free (the site of its previous build, or where it was made) and where it built next.
+    pub from: (f64, f64),
+    pub to: (f64, f64),
+    /// Seconds from becoming free to the next build's first frame.
+    pub took: f64,
+    /// The game's first build: the engine drops orders given in the opening seconds.
+    pub first: bool,
+}
+
 pub struct Replay {
     pub game: Game,
+    pub trips: Vec<Trip>,
     pub plan: Plan,
     pub observed: Vec<Observed>,
     /// Wind per turbine, per second, inferred from energy income; `None` where no turbine stood.
@@ -140,6 +155,10 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
     }
     let mut slot_of: HashMap<u64, Slot> = HashMap::new(); // builder unit id -> its queue
     let mut pending: HashMap<u64, Vec<Step>> = HashMap::new();
+    // Mobile builders between builds: unit id -> (its type, where and when it became free); and who builds what.
+    let mut free: HashMap<u64, (usize, (f64, f64), f64)> = HashMap::new();
+    let mut built_by: HashMap<u64, u64> = HashMap::new();
+    let mut trips = Vec::new();
     let (mut home, mut commander, mut unknown, mut abandoned, mut first_factory_finished) = (None, None, Vec::new(), 0, None);
     for r in records.iter().filter(|r| r["t"] == "ev") {
         let id = r["u"].as_u64().unwrap_or(0);
@@ -152,6 +171,10 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
                     commander = commander.or(units.index(&name));
                     continue;
                 };
+                if let Some((builder, from, since)) = free.remove(&by) {
+                    trips.push(Trip { builder, from, to: site, took: r["f"].as_f64().unwrap_or(0.0) / 30.0 - since, first: trips.is_empty() });
+                    built_by.insert(id, by);
+                }
                 let still_building = !finished_ids.contains_key(&id) && !destroyed_ids.contains_key(&id);
                 if !finished_ids.contains_key(&id) && !still_building {
                     abandoned += 1;
@@ -162,7 +185,18 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
                     None => unknown.push(name),
                 }
             }
-            Some("finished") => match units.index(&name).map(|u| units.list[u].role) {
+            Some("finished") => {
+                let now = r["f"].as_f64().unwrap_or(0.0) / 30.0;
+                // Whoever built this is free again, standing at it; a new commander or constructor is free where it is.
+                if let Some(builder) = built_by.remove(&id) {
+                    if let Some(unit) = records.iter().find(|c| c["t"] == "ev" && c["k"] == "created" && c["u"].as_u64() == Some(builder)).and_then(|c| units.index(names.get(c["d"].as_i64().unwrap_or(-1) as usize)?)) {
+                        free.insert(builder, (unit, site, now));
+                    }
+                }
+                if let Some(unit) = units.index(&name).filter(|u| matches!(units.list[*u].role, Role::Commander | Role::Builder)) {
+                    free.insert(id, (unit, site, if units.list[unit].role == Role::Commander { 0.0 } else { now }));
+                }
+                match units.index(&name).map(|u| units.list[u].role) {
                 Some(Role::Commander) => {
                     slot_of.insert(id, Slot::Commander);
                 }
@@ -176,7 +210,8 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
                     plan.constructors.push(Vec::new());
                 }
                 _ => {}
-            },
+                }
+            }
             _ => {}
         }
     }
@@ -247,5 +282,5 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
         units: table,
         terrain: terrain(path, &header),
     };
-    Ok(Replay { game, plan, observed, wind, unknown, abandoned, first_factory_finished })
+    Ok(Replay { game, trips, plan, observed, wind, unknown, abandoned, first_factory_finished })
 }

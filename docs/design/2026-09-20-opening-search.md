@@ -96,4 +96,10 @@ time lost to walking, by minute, across settings of the knobs in arena batches; 
   `crates/buildorder` reads a game from either (`game::Game`), chooses what to offer the search by what units do and
   not by name, enforces build menus, and walks over the map's own ground (`game::Walked` on the new `crates/terrain`,
   moved out of the bot). Its compiled-in unit table, Quicksilver constants and `study` command are deleted.
-  Calibration and everything after it: not done.
+- 2026-09-20, step 1, calibration half (`open-cal2-*`, 4 games each on Quicksilver and Mithril Mountain): metal income
+  within 1.6 metal/s (13 %) of the played game to minute 6 on both maps after three corrections the records forced:
+  3.5 s lost between builds (ours, not the engine's walk), extractors stopping at zero energy with upkeep given no
+  priority, and each build held back only by the resources it costs. Builders' walks predicted within 2 s (median) at
+  every length. Found on the way: today's opening energy-stalls at 4:30-5:00 in 8 of 8 games with 600-740 metal
+  unspent. Beyond minute 6 a replay by order drifts (the played bot reacts to its stall, the replay cannot).
+  Steps 2-4: not started.

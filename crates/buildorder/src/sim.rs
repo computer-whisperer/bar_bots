@@ -74,13 +74,28 @@ impl Scenario {
             base_storage: 1000.0,
             dt: 0.5,
             reach_bonus: 40.0,
-            mobile_overhead: 1.5,
-            walk_overhead: 1.5,
+            mobile_overhead: 3.5,
+            walk_overhead: 0.0,
             factory_overhead: 1.0,
             assist_chunk: 20.0,
             converter_level: 0.75,
             constructors_default_to_extractors: false,
         }
+    }
+}
+
+impl Scenario {
+    /// A mobile builder's way to a build: the seconds before the build's first frame, and where it then stands
+    /// (as far from the site as it reaches).
+    pub fn trip(&self, place: (f64, f64), site: (f64, f64), range: f64, speed: f64) -> (f64, (f64, f64)) {
+        let gap = distance(place, site);
+        let reach = range + self.reach_bonus;
+        if gap <= reach {
+            return (self.mobile_overhead, place);
+        }
+        let walk = (self.ground.walk(place, site) - reach).max(0.0) / speed;
+        let keep = reach / gap;
+        (walk + walk.min(self.walk_overhead) + self.mobile_overhead, (site.0 + (place.0 - site.0) * keep, site.1 + (place.1 - site.1) * keep))
     }
 }
 
@@ -206,7 +221,9 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
     let (mut metal_storage, mut energy_storage) = (sc.base_storage, sc.base_storage);
     let mut steady_metal = commander.metal_make;
     let mut steady_energy = commander.energy_make;
-    let mut upkeep = 0.0;
+    // Extractors pay upkeep; with no energy to pay it they stand still (every recorded game's income dips when stored
+    // energy reaches zero: open-cal2, 2026-09-20).
+    let (mut upkeep, mut extractor_metal) = (0.0, 0.0);
     let (mut extractors, mut converters) = (0u32, 0u32);
     let mut wind_caps: Vec<f64> = Vec::new();
     let (mut conv_capacity, mut conv_efficiency) = (0.0, 0.0);
@@ -290,15 +307,8 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                             })
                         };
                         let builder = &builders[b];
-                        let gap = distance(builder.place, site);
-                        let reach = builder.range + sc.reach_bonus;
-                        let walked = if gap > reach { (sc.ground.walk(builder.place, site) - reach).max(0.0) } else { 0.0 };
-                        if gap > reach {
-                            let keep = reach / gap;
-                            builders[b].place = (site.0 + (builder.place.0 - site.0) * keep, site.1 + (builder.place.1 - site.1) * keep);
-                        }
-                        let walk = walked / builders[b].speed;
-                        let left = walk + walk.min(sc.walk_overhead) + sc.mobile_overhead;
+                        let (left, stands) = sc.trip(builder.place, site, builder.range, builder.speed);
+                        builders[b].place = stands;
                         builders[b].state = State::begin(left, unit, site, pays);
                         outcome.effective[queue].push(*next);
                     }
@@ -328,14 +338,35 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
         let wind = sc.wind.at(t);
         let wind_energy: f64 = wind_caps.iter().map(|cap| wind.min(*cap)).sum();
         let energy_rate = steady_energy + wind_energy;
-        let mut metal_rate = steady_metal;
-        metal += steady_metal * sc.dt;
-        energy = (energy + (energy_rate - upkeep) * sc.dt).max(0.0);
         let share = |have: f64, want: f64| if want > have { have / want } else { 1.0 };
-        let factor = share(metal, want_metal).min(share(energy, want_energy));
-        metal -= want_metal * factor;
-        energy -= want_energy * factor;
-        metal_spent += want_metal * factor;
+        // Upkeep stands in the same queue for energy as the builds do: the engine gives it no priority.
+        energy += energy_rate * sc.dt;
+        want_energy += upkeep * sc.dt;
+        let running = share(energy, want_energy);
+        energy -= upkeep * sc.dt * running;
+        want_energy -= upkeep * sc.dt * running;
+        let mut metal_rate = steady_metal + extractor_metal * running;
+        metal += metal_rate * sc.dt;
+        // Each build is held back by the resources it needs only: a solar collector (no energy in its cost) goes up at
+        // full speed through an energy stall, as it does in the engine.
+        let (metal_share, energy_share) = (share(metal, want_metal), running.min(share(energy, want_energy)));
+        let held = |unit: usize| {
+            let def = &units.list[unit];
+            (if def.metal_cost > 0.0 { metal_share } else { 1.0 }).min(if def.energy_cost > 0.0 { energy_share } else { 1.0 })
+        };
+        let mut factor = 0.0;
+        for (b, gain) in &asks {
+            let State::Build { unit, .. } = builders[*b].state else { unreachable!() };
+            let def = &units.list[unit];
+            metal -= gain * held(unit) * def.metal_cost;
+            energy -= gain * held(unit) * def.energy_cost;
+            metal_spent += gain * held(unit) * def.metal_cost;
+            factor += held(unit) / asks.len() as f64;
+        }
+        if asks.is_empty() {
+            factor = 1.0;
+        }
+        (metal, energy) = (metal.max(0.0), energy.max(0.0));
 
         // 4. Converters take what is above the level, up to their capacity.
         let surplus = energy - sc.converter_level * energy_storage;
@@ -357,7 +388,7 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
         // 5. Progress and completions.
         for (b, gain) in asks {
             let State::Build { unit, site, pays, progress } = &mut builders[b].state else { unreachable!() };
-            *progress += gain * factor;
+            *progress += gain * held(*unit);
             if *progress < 1.0 - 1e-9 {
                 continue;
             }
@@ -373,7 +404,7 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
             energy_storage += def.energy_storage;
             if def.extracts_metal > 0.0 {
                 extractors += 1;
-                steady_metal += pays;
+                extractor_metal += pays;
             }
             if def.wind_cap > 0.0 {
                 wind_caps.push(def.wind_cap);

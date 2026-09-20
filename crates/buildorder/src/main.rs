@@ -14,6 +14,7 @@ const USAGE: &str = "usage: (the game, that is map, start, faction and unit numb
                        [--no-nano] [--csv FILE] [--plan-out FILE]      (--detour X: open ground, every walk X straight lines,
                                                                         in place of the map's own ground)
   buildorder simulate  --game RECORD.jsonl --plan FILE [--minutes ..] [--wind ..] [--detour X] [--csv FILE]
+  buildorder walks     RECORD.jsonl... [--minutes 6]      (builders' ways between builds: recorded against predicted)
   buildorder calibrate RECORD.jsonl... [--minutes 10] [--detour X] [--constant-wind] [--trace] [--csv-dir DIR]";
 
 struct Args(Vec<String>);
@@ -213,9 +214,9 @@ fn calibrate(args: &Args) {
         }
         if let Some(dir) = args.value("--csv-dir") {
             let name = path.trim_end_matches("/record-0.jsonl").rsplit('/').take(2).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("-");
-            let mut text = String::from("t,rec_metal_income,sim_metal_income,rec_energy_income,sim_energy_income,rec_extractors,sim_extractors,rec_army_value,sim_army_value,rec_losses\n");
+            let mut text = String::from("t,rec_metal_income,sim_metal_income,rec_energy_income,sim_energy_income,rec_extractors,sim_extractors,rec_army_value,sim_army_value,rec_losses,rec_metal,sim_metal,rec_energy,sim_energy\n");
             for (o, s) in replay.observed.iter().zip(&outcome.samples).filter(|(o, _)| (o.t as u32).is_multiple_of(10)) {
-                let _ = writeln!(text, "{},{:.2},{:.2},{:.1},{:.1},{},{},{:.0},{:.0},{}", o.t, o.metal_income, s.metal_income, o.energy_income, s.energy_income, o.extractors, s.extractors, o.army_value, s.army_value, o.losses);
+                let _ = writeln!(text, "{},{:.2},{:.2},{:.1},{:.1},{},{},{:.0},{:.0},{},{:.0},{:.0},{:.0},{:.0}", o.t, o.metal_income, s.metal_income, o.energy_income, s.energy_income, o.extractors, s.extractors, o.army_value, s.army_value, o.losses, o.metal, s.metal, o.energy, s.energy);
             }
             let file = format!("{dir}/calibration-{name}.csv");
             std::fs::write(&file, text).unwrap_or_else(|e| die(&format!("{file}: {e}")));
@@ -238,12 +239,44 @@ fn calibrate(args: &Args) {
     }
 }
 
+/// Every mobile builder's way from one build to the next in the records' first minutes: the seconds it took against
+/// what the simulator charges, over the map's own ground and over open ground, by how far the walk was.
+fn walks(args: &Args) {
+    let minutes: f64 = args.number("--minutes", 6.0);
+    const BINS: [(&str, f64, f64); 5] = [("first build of the game", 0.0, 0.0), ("site in reach", 0.0, 0.0), ("walk under 300", 0.0, 300.0), ("walk 300-800", 300.0, 800.0), ("walk over 800", 800.0, f64::MAX)];
+    // Per bin: (recorded, predicted on the map's ground, predicted on open ground, walked / straight).
+    let mut rows: Vec<Vec<[f64; 4]>> = vec![Vec::new(); BINS.len()];
+    for path in args.positional(&[]) {
+        let replay = record::read(path, minutes * 60.0).unwrap_or_else(|e| die(&e));
+        let game = &replay.game;
+        let on_map = game.scenario(Vec::new(), game.ground());
+        let open = game.scenario(Vec::new(), Arc::new(Straight { detour: 1.05 }));
+        for trip in &replay.trips {
+            let unit = &game.units.list[trip.builder];
+            let beyond = buildorder::game::distance(trip.from, trip.to) - unit.build_distance - on_map.reach_bonus;
+            // Where the builder stood is known only as "within reach of its last site": predict from the site itself.
+            let predicted = |sc: &Scenario| sc.trip(trip.from, trip.to, unit.build_distance, unit.speed).0;
+            let bin = if trip.first { 0 } else if beyond <= 0.0 { 1 } else { BINS.iter().position(|b| b.2 > 0.0 && beyond >= b.1 && beyond < b.2).unwrap() };
+            let ratio = on_map.ground.walk(trip.from, trip.to) / buildorder::game::distance(trip.from, trip.to).max(1.0);
+            rows[bin].push([trip.took, predicted(&on_map), predicted(&open), ratio]);
+        }
+    }
+    println!("| way | trips | recorded s (median) | predicted, map's ground | predicted, open ground | median error map / open | walked over straight (median, max) |\n|---|---|---|---|---|---|---|");
+    for ((label, _, _), trips) in BINS.iter().zip(&rows).filter(|(_, t)| !t.is_empty()) {
+        let median = |pick: &dyn Fn(&[f64; 4]) -> f64| { let mut v: Vec<f64> = trips.iter().map(pick).collect(); v.sort_by(f64::total_cmp); v[v.len() / 2] };
+        let longest = trips.iter().map(|t| t[3]).fold(0.0, f64::max);
+        println!("| {label} | {} | {:.1} | {:.1} | {:.1} | {:+.1} / {:+.1} | {:.2}, {:.2} |", trips.len(), median(&|t| t[0]), median(&|t| t[1]), median(&|t| t[2]),
+            median(&|t| t[1] - t[0]), median(&|t| t[2] - t[0]), median(&|t| t[3]), longest);
+    }
+}
+
 fn main() {
     let args = Args(std::env::args().skip(1).collect());
     match args.0.first().map(String::as_str) {
         Some("optimize") => optimize(&args),
         Some("simulate") => run_plan(&args),
         Some("calibrate") => calibrate(&args),
+        Some("walks") => walks(&args),
         _ => die("missing or unknown command"),
     }
 }

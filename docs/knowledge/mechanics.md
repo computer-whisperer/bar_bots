@@ -162,3 +162,15 @@ factory's finish within 0.7 s (mean absolute, 12 games), which also checks K-ope
 (`../studies/data/calibration.md`). Far trips across cliffs are barely sampled.
 **Would be wrong if.** On another map or for far outposts the recorded trip times exceeded this by more than ~20 %.
 **Used by.** `crates/buildorder` (`Scenario::detour`, `mobile_overhead`, `walk_overhead`, `reach_bonus`).
+
+### K-mech-upkeep-has-no-priority
+**Claim.** An extractor's energy upkeep stands in the same queue as construction: with stored energy at zero extractors
+stop (income 22 to 14 with 11 extractors standing), while a build that costs no energy (a solar collector) goes on at
+full speed through the stall.
+**Status.** measured (2026-09-20) for the extractors (8 games); the solar half is the engine's rule as we read it
+(each builder is refused only the resources its own target needs) and fits the recorded recoveries, not isolated.
+**Evidence.** `open-cal2-*` records around 4:30-5:00; `crates/buildorder/src/sim.rs` step 3 models both, and the
+simulator's metal-income bias at minute 5 went from +2.0 / +2.4 metal/s to +1.1 / -1.1 (Quicksilver / Mithril).
+**Would be wrong if.** A cheat-spawned test (extractors, zero energy, no builders) kept paying metal.
+**Used by.** `crates/buildorder` (the opening search's model).
+
