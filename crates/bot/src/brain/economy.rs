@@ -54,6 +54,12 @@ const TURRET_LINE: f32 = 650.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
 const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
+/// Generators before the first lab, counting a wind generator as one and a solar as two.
+const OPENING_GENERATORS: usize = 2;
+/// No orders before this frame: the engine loses them.
+const FIRST_ORDER_FRAME: i32 = 60;
+/// A builder is not judged idle for this long after an order: the order has to reach it first.
+const ORDER_GRACE_FRAMES: i32 = 45;
 /// Frames between ticks (the shim's tick interval).
 const TICK_FRAMES: i32 = 15;
 
@@ -83,11 +89,23 @@ enum Plan {
 impl Brain {
     pub(super) fn run_economy(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
         let own = &tick.snapshot.own_units;
-        self.jobs.retain(|id, _| own.iter().any(|u| u.id == *id && !u.idle));
+        // An order takes a few frames to reach the unit (it travels as a network message, longer at game start), so a
+        // builder just ordered still reads as idle. Treating it as idle re-planned it, and the new order replaced the
+        // old: the opening's two extractors were overwritten by the first generator within 1.5 s in every game.
+        let just_ordered = |id: &bot_protocol::UnitId| self.last_orders.get(id).is_some_and(|(frame, _, _)| tick.frame - frame < ORDER_GRACE_FRAMES);
+        self.jobs.retain(|id, _| own.iter().any(|u| u.id == *id && (!u.idle || just_ordered(id))));
         self.spot_claims.retain(|_, claimed| tick.frame - *claimed < SPOT_CLAIM_FRAMES);
         self.note_unreachable_sites(tick);
 
+        // The engine drops orders given in the first second of the game; the lost extractor order then held its
+        // spot's claim, and the opening went on without it.
+        if tick.frame < FIRST_ORDER_FRAME {
+            return;
+        }
         for unit in own.iter().filter(|u| u.idle && !u.being_built) {
+            if self.last_orders.get(&unit.id).is_some_and(|(frame, _, _)| tick.frame - frame < ORDER_GRACE_FRAMES) {
+                continue;
+            }
             let Some(def) = self.world.def(unit.def) else { continue };
             let (is_builder, is_mobile) = (def.build_speed > 0.0, def.speed > 0.0);
             let stationed_at = self.directives.commander_station.map(|d| self.snap_to_reachable(d.value)).filter(|_| unit.def == kit.commander);
@@ -236,9 +254,10 @@ impl Brain {
         {
             return (Plan::Extractor(spot), "H-ECO-OPENING");
         }
-        // Two solars' worth of energy before the lab; a wind generator counts as half a solar.
+        // One solar's worth of energy before the lab (a wind generator counts as half): the 1000 energy we start with
+        // carries the lab, and four generators first overflowed it and delayed the lab to 0:58 (docs/studies/build-order.md).
         let opening_energy = planned(kit.wind) + 2 * planned(kit.solar);
-        if opening_energy < 4 {
+        if opening_energy < OPENING_GENERATORS {
             return (Plan::Near(small_generator, base), "H-ECO-OPENING");
         }
         if planned(kit.lab) < 1 {

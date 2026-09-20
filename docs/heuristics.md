@@ -7,7 +7,7 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 |---|---|---|---|---|
 | H-COM-LEASH | Commander builds only within 900 elmos of home | `economy.rs` `claim_spot`, `COMMANDER_LEASH` | K-rules-commander-death-ends-game | active |
 | H-COM-RETREAT | Commander under 70% health, just damaged and away from home walks home | `mod.rs` `protect_commander` | K-rules-commander-death-ends-game | active |
-| H-ECO-OPENING | 2 extractors, 2 solars, 1 lab, in that order | `economy.rs` `plan_for` | (convention; unexamined) | active |
+| H-ECO-OPENING | 2 extractors, then one solar's worth of energy (2 wind generators on a windy map), then the lab; no orders in the first 2 s (the engine drops them) and a builder is not re-planned within 45 frames of an order | `economy.rs` `plan_for`, `run_economy` | K-open-sim-* (build-order study), K-rules-early-orders-are-lost | active. Until 2026-09-19 the first extractor order was lost and the second overwritten in every game: first extractor at ~78 s |
 | H-ECO-ENERGY-BY-STORAGE | Build generators when stored energy < 40% of storage; no cap on builders | `economy.rs` `plan_for` | K-eco-judge-energy-by-storage | active |
 | H-ECO-ADV-SOLAR | Advanced solar once energy income > 250 | `economy.rs` `ADVANCED_SOLAR_INCOME` | (unexamined) | active |
 | H-ECO-EXPAND | Constructors take the nearest free metal spot | `economy.rs` `claim_spot` | K-eco-expansion-before-conversion | active |

@@ -84,3 +84,15 @@ found three or four of our own wind generators on it. After the keep-out, SE ext
 **Would be wrong if.** "no site" for extractors reappeared with our own buildings listed at the spot.
 **Used by.** Shim `SPOT_KEEPOUT` (100 elmos).
 
+### K-rules-early-orders-are-lost
+**Claim.** An order given to the commander in the first second of the game (frame 15) is dropped by the engine, and an
+order takes more than one tick to show in the unit's command queue, so a brain that re-plans every "idle" builder each
+tick overwrites its own fresh orders.
+**Status.** supported (2026-09-19)
+**Evidence.** Found by the build-order study replaying our recorded openings, confirmed from
+`run/matches/1789868387-v17-truth-medium/00/record-0.jsonl`: extractor ordered at f=15, another at f=45, a wind generator
+at f=60, each replacing the last; the first extractor was finally built at f=2355. The lost order also held its metal
+spot's claim. With no orders before f=60 and a 45-frame grace after each order, both extractors stand at 1:00.
+**Would be wrong if.** Records showed overlapping build orders for one builder again.
+**Used by.** H-ECO-OPENING (`FIRST_ORDER_FRAME`, `ORDER_GRACE_FRAMES`).
+
