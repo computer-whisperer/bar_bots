@@ -62,6 +62,12 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         s.enemy_commander.as_ref().map_or("has never been seen".to_string(), |(p, ago)| format!("was last seen at {} ({}, {}) {} ago", p.grid, p.x, p.z, clock(*ago))),
         if s.enemy_factories.is_empty() { format!("none, its base is unscouted (the game's guess is {} ({}, {}), often wrong by 500 or more)", briefing.presumed_enemy_start.grid, briefing.presumed_enemy_start.x, briefing.presumed_enemy_start.z) } else { places(&s.enemy_factories) }
     ));
+    if let Some(elsewhere) = &s.guess_disproved {
+        lines.push(format!(
+            "THE GUESS IS WRONG: our soldiers stand at the guessed enemy start and there is no base in sight. A base is always beside metal; the nearest metal spots we have nobody near: {}. Send scouts or the army to look, nearest first",
+            places(elsewhere)
+        ));
+    }
     if !s.raid_targets.is_empty() {
         let list: Vec<String> = s.raid_targets.iter().map(|(p, turrets)| format!("{} ({}, {}){}", p.grid, p.x, p.z, if *turrets > 0 { format!(" turrets {turrets}m") } else { " no turret seen".into() })).collect();
         lines.push(format!("to raid: its extractors seen outside its base, nearest first: {}", list.join("; ")));

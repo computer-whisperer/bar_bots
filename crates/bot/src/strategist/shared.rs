@@ -257,6 +257,9 @@ pub struct Score {
     pub enemy_commander: Option<(Place, i32)>,
     /// Its extractors seen outside its base, nearest to us first, each with the metal of turrets known within 500.
     pub raid_targets: Vec<(Place, u32)>,
+    /// Set when our soldiers stand at the guessed enemy start and no enemy building is known near it: the guess is
+    /// wrong, and these are the nearest metal spots none of our soldiers is near, where a base could be.
+    pub guess_disproved: Option<Vec<Place>>,
 }
 
 #[derive(Clone, Debug, Serialize)]

@@ -251,6 +251,23 @@ impl Brain {
                 .take(6)
                 .map(|t| (self.place(t), self.known_enemy_force(t, 500.0, &[]).turret_metal as u32))
                 .collect(),
+            guess_disproved: {
+                let guess = self.enemy_start;
+                let standing_there = soldiers.iter().any(|u| u.pos.dist2d(guess) < 500.0);
+                let base_known = self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(guess) < 900.0);
+                (standing_there && !base_known).then(|| {
+                    let mut spots: Vec<Vec3> = self
+                        .world
+                        .hello
+                        .metal_spots
+                        .iter()
+                        .filter(|s| self.reachable_on_foot(**s) && !soldiers.iter().any(|u| u.pos.dist2d(**s) < 600.0))
+                        .copied()
+                        .collect();
+                    spots.sort_by(|a, b| a.dist2d(guess).total_cmp(&b.dist2d(guess)));
+                    spots.into_iter().take(4).map(|s| self.place(s)).collect()
+                })
+            },
             enemy_commander: self.enemy_commander_seen.map(|(pos, seen)| (self.place(pos), (tick.frame - seen) / FRAMES_PER_SECOND)),
             enemy_soldiers_seen: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).count(),
             enemy_soldiers_seen_metal: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).map(|(def, _)| self.world.def(*def).map_or(0.0, |d| d.metal_cost)).sum::<f32>() as u32,
