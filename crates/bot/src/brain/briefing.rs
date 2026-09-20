@@ -120,6 +120,9 @@ impl Brain {
         for enemy in &tick.snapshot.enemies {
             let Some(def) = enemy.def else { continue };
             let Some(info) = self.world.def(def) else { continue };
+            if info.name.ends_with("com") && info.speed > 0.0 && info.build_speed > 0.0 {
+                self.enemy_commander_seen = Some((enemy.pos, tick.frame));
+            }
             if info.speed == 0.0 {
                 self.enemy_buildings.insert(enemy.id, (def, enemy.pos, tick.frame));
             } else if info.weapon_count > 0 && info.build_speed == 0.0 {

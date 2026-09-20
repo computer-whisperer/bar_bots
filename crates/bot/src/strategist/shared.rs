@@ -246,6 +246,9 @@ pub struct Score {
     /// are left out: most of its soldiers die where we cannot see, and a count that never forgets only grows.
     pub enemy_soldiers_seen: usize,
     pub enemy_soldiers_seen_metal: u32,
+    /// Its factories seen and not seen destroyed, and its commander's last sighting with its age in seconds.
+    pub enemy_factories: Vec<Place>,
+    pub enemy_commander: Option<(Place, i32)>,
 }
 
 #[derive(Clone, Debug, Serialize)]

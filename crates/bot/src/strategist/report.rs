@@ -55,6 +55,12 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         briefing.metal.current, briefing.metal.income, briefing.metal.usage, briefing.energy.current, briefing.energy.storage,
         briefing.energy.income - briefing.energy.usage, c.extractors, c.constructors, c.labs, c.turrets, c.converters
     ));
+    let places = |list: &[super::shared::Place]| list.iter().map(|p| format!("{} ({}, {})", p.grid, p.x, p.z)).collect::<Vec<_>>().join("; ");
+    lines.push(format!(
+        "to win: its commander {}; its factories seen: {}",
+        s.enemy_commander.as_ref().map_or("has never been seen".to_string(), |(p, ago)| format!("was last seen at {} ({}, {}) {} ago", p.grid, p.x, p.z, clock(*ago))),
+        if s.enemy_factories.is_empty() { format!("none, its base is unscouted (the game's guess is {} ({}, {}), often wrong by 500 or more)", briefing.presumed_enemy_start.grid, briefing.presumed_enemy_start.x, briefing.presumed_enemy_start.z) } else { places(&s.enemy_factories) }
+    ));
     if !s.trend.is_empty() {
         let then = |pick: &dyn Fn(&(i32, usize, f32, u32)) -> String| s.trend.iter().map(|t| format!("{} ({} min ago)", pick(t), t.0)).collect::<Vec<_>>().join(", ");
         lines.push(format!(

@@ -69,7 +69,12 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
 - Keep the army out of the base: 40 soldiers among the buildings on the peninsula jam, and everything they do starts
   with a walk through the neck.
 
-**What earlier commanders did wrong.** [experiments ledger: commander-1 to -4]
+**What earlier commanders did wrong.** [experiments ledger: commander-1 to -5]
+- Game 5: by minute 33 our army was worth 19,400 metal and theirs 2,800, and the game was not ended. The commander
+  believed the lead was 1.4 to 1 (the report's count of enemy soldiers never forgot the ones that died out of sight;
+  fixed), kept 100 soldiers in garrisons on quiet ground, and sent strikes of 8-20 that ground themselves down on
+  turrets. One of them walked to the game's guess of the enemy start and found nothing there. When you are ahead, the
+  whole army goes, together, to where its factories and commander were actually seen.
 - Game 4 also: the bank was spent (three labs by minute 7), but 22 extractors died to raids over the game, mostly to
   Grunts in groups of 3-5; we held 4-6 against 23 from minute 6 on with the army level throughout. Ground taken and
   not held costs the extractor, the constructor's time and the turret beside it.

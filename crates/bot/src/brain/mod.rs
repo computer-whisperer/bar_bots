@@ -65,6 +65,8 @@ pub struct Brain {
     enemy_buildings: HashMap<UnitId, (UnitDefId, Vec3, i32)>,
     /// Every enemy soldier seen and not known dead, with when it was last seen: what we know of their army, a floor.
     enemy_soldiers: HashMap<UnitId, (UnitDefId, i32)>,
+    /// Where and when the enemy commander was last seen: killing it wins the game.
+    enemy_commander_seen: Option<(Vec3, i32)>,
     recent_events: VecDeque<String>,
     /// Our units as last seen, to name what a destroyed-unit event refers to.
     known_units: HashMap<UnitId, (UnitDefId, Vec3)>,
@@ -120,6 +122,7 @@ impl Brain {
             directives: Directives::default(),
             enemy_buildings: HashMap::new(),
             enemy_soldiers: HashMap::new(),
+            enemy_commander_seen: None,
             recent_events: VecDeque::new(),
             known_units: HashMap::new(),
             enemy_defs: HashMap::new(),

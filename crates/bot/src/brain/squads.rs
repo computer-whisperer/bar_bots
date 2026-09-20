@@ -236,6 +236,13 @@ impl Brain {
             trend: [3, 6].into_iter().filter_map(|m| self.minutes_ago(tick.frame, m).map(|(x, income, army)| (m, x, income, army))).collect(),
             extractors_lost_3_min: self.wake.losses.len(),
             enemy_spots_seen: enemy_extractors.len(),
+            enemy_factories: self
+                .enemy_buildings
+                .values()
+                .filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| !d.build_options.is_empty()))
+                .map(|(_, pos, _)| self.place(*pos))
+                .collect(),
+            enemy_commander: self.enemy_commander_seen.map(|(pos, seen)| (self.place(pos), (tick.frame - seen) / FRAMES_PER_SECOND)),
             enemy_soldiers_seen: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).count(),
             enemy_soldiers_seen_metal: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).map(|(def, _)| self.world.def(*def).map_or(0.0, |d| d.metal_cost)).sum::<f32>() as u32,
         };

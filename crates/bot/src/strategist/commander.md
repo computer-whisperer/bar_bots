@@ -52,6 +52,13 @@ has shown) should be using it: escorting constructors to new
 ground, killing the enemy's outlying extractors and forward turret nests, and, when clearly ahead, going for the kill. The
 bot launches waves on its own odds estimate; `set_directives` sets its stance, wave size, station and target. Do not flip
 the stance back and forth: units spend the game walking. Decide, give it minutes, and judge by the score line.
+Ending the game. The game is not won by being ahead; it is won when the enemy commander is dead, and a lead that is
+not used shrinks. When our army is clearly bigger than your honest estimate of theirs, go and kill them: commit the
+army, not a detachment. A fifth of the army loses to the same turrets and soldiers that all of it would walk over, and
+losing it piecemeal is how a won game is thrown away. Leave a home guard sized to the raids you have actually seen,
+gather the rest at one point outside its defences, and send it in together at its factories and commander (the `to
+win` line says where they were last seen; if it says unscouted, scout first). Garrisons on ground nobody is attacking
+are part of that army. Rockets and artillery for its turret lines, line units in front.
 
 Your levers:
 - `squad`: claim soldiers by type into a named squad and give it a **post** (x, z, radius): it stands there, engages any enemy
