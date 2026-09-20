@@ -107,3 +107,23 @@ points, some on the far side of a cliff.
 **Would be wrong if.** With posts snapped to walkable ground and a sound mix, the exchange ratio in our half stayed as bad.
 **Used by.** (none yet) — positioning and mix are the levers meant for the LLM ([[llm-levers]] in project memory).
 
+### K-army-verdicts-v17
+**Claim.** Against BARb medium our losses have two interlocking shapes. (1) Cheap lone raiders (armfav 31 metal, armflash,
+corak) farm extractors and constructors while the home group and the turrets stand in one clump at the lab; the bot
+rebuilds the same spot into the same raider, up to five times. (2) A wave takes the entire army at a target it has not
+weighed, arrives in instalments, dies, and the raid that follows meets nothing at home. Fight quality is secondary:
+in two losses the army metal traded 1:1 and the game was still lost on replacement rate (2 extractors against 26).
+**Status.** supported (2026-09-19): 14 of 14 losses of one batch, each read by an analyst from curves and scenes; three
+claims spot-checked against the raw records by me.
+**Evidence.** `run/tally_verdicts.py run/matches/1789868387-v17-truth-medium`: primary cause expansion_raided_undefended 7,
+blind_wave_into_defence 3, defenders_out_of_position 3, economy_never_grew 1; defenders_out_of_position contributes in
+9 more. Specifics: from the NW start the third and fourth metal spots, (2144,2144) and (2320,2352), lie 963 and 1199
+from home, beyond the base turret line (650) and inside OUTPOST_DISTANCE (1200), so no rule ever gives them a turret;
+they are the spots killed 3-5 times a game (match 18: 2:44, 5:11, 8:11, 11:50). Recall needs 6 intruders, so a single
+raider never triggers it. The wave rule is a head count (20, 25, 30...) that leaves 0 soldiers at home. The
+constructor target (3 + extractors/2, earlier 2 + extractors/4) is lowest exactly when extractors are being lost.
+In every NW loss "they first have 1.5x our army" falls in minute 6-8, even on level extractors.
+**Would be wrong if.** With spots remembered as hot, cover before expansion, a home guard that stays, and a wave gate
+on known enemy value, the same tags still led the tally.
+**Used by.** (next changes)
+
