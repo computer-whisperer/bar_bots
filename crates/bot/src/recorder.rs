@@ -278,6 +278,7 @@ fn header(hello: &Hello, mode: &str) -> Value {
                 "extracts_metal": d.extracts_metal, "metal_make": d.metal_make, "energy_make": d.energy_make,
                 "energy_upkeep": d.energy_upkeep, "wind_cap": d.wind_cap, "metal_storage": d.metal_storage,
                 "energy_storage": d.energy_storage,
+                "radar_range": d.radar_range,
                 "converter": d.converter.map(|c| json!([c.capacity, c.efficiency])),
                 "move": d.move_class.map(|m| json!([format!("{:?}", m.kind).to_lowercase(), m.max_slope, m.depth])),
             })

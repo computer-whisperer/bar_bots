@@ -70,6 +70,14 @@ struct Response {
     ordered_to: Vec3,
 }
 
+/// The price of one of our parties attacking a place: what it kills (soldiers and turrets) less what it loses, with the
+/// same safety on our losses as a contact answer.
+pub(super) struct Assault {
+    pub gain: f32,
+    #[allow(dead_code)]
+    pub verdict: Verdict,
+}
+
 pub(super) struct Contacts {
     rules: Arc<Rules>,
     /// The simulator's unit type for each of the game's, by name; for a unit it lacks, the nearest in metal of the
@@ -163,7 +171,7 @@ impl Brain {
     }
 
     /// What sending `pursuers` after `party` comes to.
-    fn chase_verdict(&mut self, party: &Party, assets: &[(usize, Vec2)], pursuers: &[&OwnUnit]) -> Verdict {
+    fn chase_verdict(&mut self, party: &Party, assets: &[(usize, Vec2)], pursuers: &[&OwnUnit], party_buildings: &[(usize, Vec2)]) -> Verdict {
         // Soldiers of one type standing together are one group of the simulator's.
         let mut groups: HashMap<(usize, i32, i32), (u32, f32, f32)> = HashMap::new();
         for unit in pursuers {
@@ -176,13 +184,52 @@ impl Brain {
         let rules = self.contacts.rules.clone();
         let burns = assets.iter().any(|(def, _)| rules.units.list[*def].reach() == 0.0);
         let intent = if burns { Intent::Raid { then: flat(self.enemy_base(party.at)) } } else { Intent::Fight };
-        let chase = Chase { pursuers, party: party.units.clone(), at: flat(party.at), intent, assets: assets.to_vec(), seconds: SECONDS };
+        let chase = Chase { pursuers, party: party.units.clone(), at: flat(party.at), intent, assets: assets.to_vec(), party_buildings: party_buildings.to_vec(), seconds: SECONDS };
         let started = std::time::Instant::now();
         let verdict = chase.verdict(&rules, REPS);
         let ms = started.elapsed().as_secs_f64() * 1000.0;
         let spent = &mut self.contacts.spent;
         *spent = (spent.0 + 1, spent.1 + ms, spent.2.max(ms));
         verdict
+    }
+
+    /// What `party` of ours attacking `at` comes to, against what is known to stand within `radius` of it: remembered
+    /// armed buildings, and soldiers in sight (radar contacts taken for the enemy's usual soldier). H-ARMY-PRESSURE
+    /// prices its raids by this; the same simulator and the same safety on our losses as the contact response.
+    pub(super) fn assault_verdict(&mut self, party: &[&OwnUnit], at: Vec3, radius: f32, tick: &Tick) -> Assault {
+        if self.contacts.sim_defs.is_empty() {
+            self.survey_sim_defs();
+        }
+        let mut seen: HashMap<UnitDefId, usize> = HashMap::new();
+        self.enemy_soldiers.values().for_each(|(def, _)| *seen.entry(*def).or_default() += 1);
+        let blip = seen.into_iter().max_by_key(|(def, n)| (*n, def.0)).map(|(def, _)| def).or(self.kit.as_ref().map(|k| k.line));
+        let mut theirs: HashMap<usize, u32> = HashMap::new();
+        let mut turrets: Vec<(usize, Vec2)> = Vec::new();
+        let mut metal = 0.0;
+        for (def, pos, _) in self.enemy_buildings.values() {
+            if pos.dist2d(at) < radius
+                && self.world.def(*def).is_some_and(|d| d.weapon_count > 0)
+                && let Some(index) = self.contacts.sim_defs.get(def)
+            {
+                turrets.push((*index, flat(*pos)));
+            }
+        }
+        for enemy in tick.snapshot.enemies.iter().filter(|e| e.pos.dist2d(at) < radius) {
+            let Some(def) = enemy.def.or(blip) else { continue };
+            let Some(d) = self.world.def(def) else { continue };
+            if d.speed > 0.0 && d.weapon_count > 0 && d.move_class.is_some()
+                && let Some(index) = self.contacts.sim_defs.get(&def)
+            {
+                *theirs.entry(*index).or_default() += 1;
+                metal += d.metal_cost;
+            }
+        }
+        let mut units: Vec<(usize, u32)> = theirs.into_iter().collect();
+        units.sort();
+        let their_party = Party { ids: HashSet::new(), units, at, metal };
+        let verdict = self.chase_verdict(&their_party, &[], party, &turrets);
+        let gain = verdict.party_killed - LOSS_SAFETY * verdict.pursuers_lost;
+        Assault { gain, verdict }
     }
 
     /// Answers every party on our ground from `free` (the home group) and returns who is answering one.
@@ -253,7 +300,7 @@ impl Brain {
             let allied: Vec<(usize, Vec2)> = allied.filter_map(|a| Some((*self.contacts.sim_defs.get(&a.def)?, flat(a.pos)))).collect();
             assets.extend(allied.into_iter().take(MAX_ASSETS.saturating_sub(assets.len())));
 
-            let nobody = self.chase_verdict(party, &assets, &[]);
+            let nobody = self.chase_verdict(party, &assets, &[], &[]);
             let gain = |v: &Verdict| (v.party_killed - nobody.party_killed) - LOSS_SAFETY * (v.pursuers_lost - nobody.pursuers_lost) - ASSET_WORTH * (v.assets_lost - nobody.assets_lost);
             // Whoever is on it stays on it: only more, or everybody off.
             let least = members.len().max(1);
@@ -262,7 +309,7 @@ impl Brain {
             sizes.dedup();
             let mut best: Option<(usize, f32, Verdict)> = None;
             for size in sizes {
-                let verdict = self.chase_verdict(party, &assets, &pool[..size]);
+                let verdict = self.chase_verdict(party, &assets, &pool[..size], &[]);
                 let worth = gain(&verdict);
                 if best.is_none_or(|(_, most, _)| worth > most) {
                     best = Some((size, worth, verdict));

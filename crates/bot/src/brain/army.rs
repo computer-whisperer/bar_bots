@@ -417,6 +417,13 @@ impl Brain {
             target = lead;
         }
         self.team_post.target = Some(target);
+        // H-ARMY-KILL: the pressure party stands at the opponent's base with nothing armed in sight; the home group goes
+        // after it at once, at whatever it is aiming for, wave size or no wave size.
+        let kill = self.raid.kill_offered;
+        if let Some(offered) = kill {
+            self.fire("H-ARMY-KILL");
+            target = offered;
+        }
         let stance = self.directives.army_stance.map(|s| s.value);
         self.note_station_failures(tick, kit);
         let rally = self.station(tick, kit);
@@ -468,6 +475,7 @@ impl Brain {
         let own_wave_size = (FIRST_WAVE + WAVE_GROWTH * self.army.waves_sent).min(MAX_WAVE);
         let wave_size = match (stance, self.directives.wave_size) {
             (Some(Stance::Attack), _) => MIN_ORDERED_WAVE,
+            _ if kill.is_some() => MIN_ORDERED_WAVE,
             (_, Some(ordered)) => ordered.value,
             _ => own_wave_size,
         };
@@ -505,7 +513,7 @@ impl Brain {
         }
         let odds = self.odds(&ours, &defenders);
         let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || odds >= WAVE_ADVANTAGE;
-        let ordered_attack = stance == Some(Stance::Attack);
+        let ordered_attack = stance == Some(Stance::Attack) || kill.is_some();
         if may_launch && wave.len() >= wave_size && !ordered_attack && (!quiet || !outweighs) && tick.frame % (30 * FRAMES_PER_SECOND) == 0 {
             eprintln!(
                 "[ai {}] f={} wave held: {} soldiers at odds {odds:.2} against what is known at ({:.0}, {:.0}){}",

@@ -92,6 +92,7 @@ fn unit_table(header: &Value) -> Result<Units, String> {
             wind_cap: number(d, "wind_cap"),
             metal_storage: number(d, "metal_storage"),
             energy_storage: number(d, "energy_storage"),
+            radar_range: number(d, "radar_range"),
             converter: d["converter"].as_array().map(|c| Converter { capacity: c[0].as_f64().unwrap_or(0.0) as f32, efficiency: c[1].as_f64().unwrap_or(0.0) as f32 }),
             weapon_count: d["weapons"].as_i64().unwrap_or(0) as i32,
             build_options: d["builds"].as_array().map(|b| b.iter().filter_map(|id| id.as_i64().map(|id| UnitDefId(id as i32))).collect()).unwrap_or_default(),

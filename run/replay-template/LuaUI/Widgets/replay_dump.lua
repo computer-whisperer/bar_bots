@@ -103,9 +103,15 @@ function widget:Initialize()
 	for _, team in ipairs(teams) do header(team) end
 	headerDone = true
 	Spring.Echo("<replay dump> " .. #teams .. " teams")
-	-- Played at its own pace a demo takes as long as the game did, waiting through the lobby's countdown and every
-	-- pause; the local server's skip reads it as fast as the client simulates. Past the end it just stops skipping.
-	Spring.SendCommands("skip f100000000")
+end
+
+-- Played at its own pace a demo takes as long as the game did, waiting through the lobby's countdown and every pause;
+-- the local server's skip reads it as fast as the client simulates, and past the end just stops skipping. Sent once
+-- the game has started: sent at load, a demo with a long countdown hung the client before its first frame.
+function widget:GameStart()
+	if Spring.IsReplay() then
+		Spring.SendCommands("skip f100000000")
+	end
 end
 
 local function unitRow(unitID, withMax)

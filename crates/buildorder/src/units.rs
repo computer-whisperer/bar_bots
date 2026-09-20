@@ -38,6 +38,7 @@ pub struct Unit {
     pub wind_cap: f64,
     pub metal_storage: f64,
     pub energy_storage: f64,
+    pub radar_range: f64,
     pub conv_capacity: f64,
     pub conv_efficiency: f64,
 }
@@ -82,6 +83,7 @@ impl Units {
                 wind_cap: n.wind_cap as f64,
                 metal_storage: n.metal_storage as f64,
                 energy_storage: n.energy_storage as f64,
+                radar_range: n.radar_range as f64,
                 conv_capacity: n.converter.map_or(0.0, |c| c.capacity as f64),
                 conv_efficiency: n.converter.map_or(0.0, |c| c.efficiency as f64),
             })

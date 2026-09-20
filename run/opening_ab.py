@@ -12,6 +12,7 @@ for m in sorted(glob.glob(d + '/[0-9]*')):
     i = int(m.split('/')[-1])
     arm = 'A (as configured)' if (i // 4) % 2 == 0 else 'B (rule disabled)'
     names, cost, mex, lab, con, army, stalled, inc = None, None, [], None, [], 0.0, 0, {}
+    army_at = {2: 0.0, 3: 0.0}
     for l in open(glob.glob(m + '/record-*.jsonl')[0]):
         try:
             r = json.loads(l)
@@ -26,6 +27,8 @@ for m in sorted(glob.glob(d + '/[0-9]*')):
             if n.endswith('lab') and lab is None: lab = t
             if n.endswith('ck'): con.append(t)
             if t <= 300: army += cost[r['d']]
+            for k in (2, 3):
+                if t <= k * 60: army_at[k] += cost[r['d']]
         elif r.get('t') == 's' and r['f'] <= 9000:
             if r['f'] % 1800 == 0: inc[r['f'] // 1800] = r['m'][1]
             if r['f'] % 30 == 0 and r['f'] > 1800 and r['e'][0] < 1: stalled += 1
@@ -36,6 +39,8 @@ for m in sorted(glob.glob(d + '/[0-9]*')):
     a['lab s'].append(lab or 999)
     a['first con s'].append(con[0] if con else 999)
     a['cons@5'].append(sum(1 for t in con if t <= 300))
+    a['army metal@2'].append(army_at[2])
+    a['army metal@3'].append(army_at[3])
     a['army metal@5'].append(army)
     a['s at zero energy'].append(stalled)
     log = open(m + '/bot.log').read()

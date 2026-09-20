@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use bot_protocol::{OwnUnit, Tick, UnitDefId, UnitId, Vec3};
-use buildorder::anneal::{anneal_within, Objective, Palette, Search};
+use buildorder::anneal::{anneal_within, Contact, Objective, Palette, Search};
 use buildorder::game::{distance, Game, Spot};
 use buildorder::plan::{Item, Plan, Step};
 use buildorder::sim::simulate;
@@ -27,6 +27,14 @@ const SEARCH_BUDGET: std::time::Duration = std::time::Duration::from_millis(500)
 const SEARCH_THREADS: usize = 2;
 /// Constructor queues the search may write.
 const SEARCHED_CONSTRUCTORS: usize = 4;
+/// H-OPEN-CONTACT: the first fight (K-open-early-pawn-pressure-is-standard) is at 2:30 at the opponent's base; a
+/// soldier that can stand there by then is worth this much of its metal on top, falling to nothing over the window.
+/// At 8 the search on Quicksilver's north start builds 10 soldiers by minute 3 and 16 by 5 beside 5 extractors and no constructor, near
+/// the experienced player's 7 / 15 beside 4 / 6 (`docs/design/2026-09-20-rush-benchmark.md`); at 5 it keeps four
+/// constructors and has 6 soldiers at minute 3, at 20 it stalls for soldiers.
+const CONTACT_AT: f64 = 150.0;
+const CONTACT_WEIGHT: f64 = 6.0;
+const CONTACT_WINDOW: f64 = 120.0;
 
 pub(super) struct Opening {
     plan: Plan,
@@ -99,16 +107,22 @@ impl Brain {
             let mut scenario = game.scenario(spots, game.ground());
             scenario.constructors_default_to_extractors = true;
             scenario.commander_leash = super::economy::EARLY_COMMANDER_LEASH as f64;
-            let palette = Palette::new(&game.units, game.commander, lab, false, self.world.hello.unit_defs.iter().position(|d| d.id == kit.turret));
+            let palette = Palette::new(&game.units, game.commander, lab, true, self.world.hello.unit_defs.iter().position(|d| d.id == kit.turret));
             let horizon = (HORIZON_FRAMES / FRAMES_PER_SECOND) as f64;
-            let search = Search { objective: Objective::Tempo { army: 1.0, exposed: 0.3 }, horizon, iterations: 0, seed: 1, factories: 1, constructors: SEARCHED_CONSTRUCTORS, hot: 0.02, start: Some(plan.clone()) };
+            let contact = self.enabled("H-OPEN-CONTACT").then(|| {
+                self.fire("H-OPEN-CONTACT");
+                Contact { at: CONTACT_AT, walk: self.walk_from_home(self.enemy_base(self.home)) as f64, weight: CONTACT_WEIGHT, window: CONTACT_WINDOW }
+            });
+            let search = Search { objective: Objective::Tempo { army: 1.0, exposed: 0.3, contact }, horizon, iterations: 0, seed: 1, factories: 1, constructors: SEARCHED_CONSTRUCTORS, hot: 0.02, start: Some(plan.clone()) };
             let started = std::time::Instant::now();
-            let before = search.objective.score(&simulate(&game.units, &scenario, &plan, horizon), horizon);
-            let found = anneal_within(&game.units, &scenario, &palette, &search, SEARCH_BUDGET, SEARCH_THREADS);
+            let before = search.objective.score(&game.units, &simulate(&game.units, &scenario, &plan, horizon), horizon);
+            // `WITHIN_REASON_SEARCH_MS` overrides the budget, to measure what more of it buys.
+            let budget = std::env::var("WITHIN_REASON_SEARCH_MS").ok().and_then(|ms| ms.parse().ok()).map_or(SEARCH_BUDGET, std::time::Duration::from_millis);
+            let found = anneal_within(&game.units, &scenario, &palette, &search, budget, SEARCH_THREADS);
             let at = |minute: f64| found.outcome.samples.iter().find(|s| s.t == minute * 60.0).map_or((0, 0.0, 0.0), |s| (s.extractors, s.metal_income, s.army_value));
             eprintln!(
-                "[ai {}] f={} opening search: {:.0} ms, score {:.0} from {:.0}; predicted extractors / metal per s / army metal at 2, 3, 5 min: {:?} {:?} {:?}",
-                self.ai(), tick.frame, started.elapsed().as_secs_f64() * 1000.0, found.score, before, at(2.0), at(3.0), at(5.0)
+                "[ai {}] f={} opening search: {:.0} ms, score {:.0} from {:.0}, contact walk {:.0}; predicted extractors / metal per s / army metal at 2, 3, 5 min: {:?} {:?} {:?}",
+                self.ai(), tick.frame, started.elapsed().as_secs_f64() * 1000.0, found.score, before, contact.map_or(0.0, |c| c.walk), at(2.0), at(3.0), at(5.0)
             );
             plan = found.plan;
         }

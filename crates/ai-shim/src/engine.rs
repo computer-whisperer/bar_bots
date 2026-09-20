@@ -198,6 +198,7 @@ impl Engine {
             wind_cap: call!(self, UnitDef_getWindResourceGenerator(id, self.energy)),
             metal_storage: call!(self, UnitDef_getStorage(id, self.metal)),
             energy_storage: call!(self, UnitDef_getStorage(id, self.energy)),
+            radar_range: call!(self, UnitDef_getRadarRadius(id)) as f32,
             converter: self.converter(id),
             weapon_count: call!(self, UnitDef_getWeaponMounts(id)),
             build_options: options.into_iter().map(UnitDefId).collect(),

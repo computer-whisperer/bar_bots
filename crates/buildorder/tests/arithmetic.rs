@@ -156,8 +156,8 @@ fn annealing_is_deterministic_and_beats_its_seed_plan() {
     let (a, b) = (anneal(units, &scenario, &palette, &search), anneal(units, &scenario, &palette, &search));
     assert_eq!(a.plan, b.plan);
     assert_eq!(a.score, b.score);
-    assert!(a.score > Objective::Mix.score(&seed_outcome, 300.0));
+    assert!(a.score > Objective::Mix.score(&game.units, &seed_outcome, 300.0));
     // The plan handed back reproduces its score when simulated afresh.
     let again = simulate(units, &scenario, &a.plan, 300.0);
-    assert!((Objective::Mix.score(&again, 300.0) - a.score).abs() < 1e-9);
+    assert!((Objective::Mix.score(&game.units, &again, 300.0) - a.score).abs() < 1e-9);
 }

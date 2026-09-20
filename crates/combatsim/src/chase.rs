@@ -16,6 +16,9 @@ pub struct Chase {
     pub intent: Intent,
     /// Our unarmed buildings within the party's reach of mischief: unit type and place.
     pub assets: Vec<(usize, Vec2)>,
+    /// The party's own buildings standing with it (its turrets, when the question is our raid on its ground): they
+    /// hold and shoot, and count in what the party loses.
+    pub party_buildings: Vec<(usize, Vec2)>,
     /// How long the question runs.
     pub seconds: f32,
 }
@@ -52,6 +55,11 @@ impl Chase {
             scenario.sides[0].push(Group::new(*def, 1, *place, Vec2::new(1.0, 0.0)));
         }
         let threat = self.pursuers.first().map_or(Vec2::new(self.at.x - 1.0, self.at.z), |p| p.2);
+        for (def, place) in &self.party_buildings {
+            let mut group = Group::new(*def, 1, *place, place.towards(threat));
+            group.hold = true;
+            scenario.sides[1].push(group);
+        }
         for (def, count) in &self.party {
             let mut group = Group::new(*def, *count, self.at, self.at.towards(threat));
             group.intent = self.intent;

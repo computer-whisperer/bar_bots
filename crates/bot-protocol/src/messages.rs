@@ -145,6 +145,8 @@ pub struct UnitDefInfo {
     pub wind_cap: f32,
     pub metal_storage: f32,
     pub energy_storage: f32,
+    /// Radar coverage it gives, in elmos; 0 for a unit with none.
+    pub radar_range: f32,
     /// For an energy converter (the game's `energyconv_*` custom parameters).
     pub converter: Option<Converter>,
     pub weapon_count: i32,

@@ -41,8 +41,32 @@ pub enum Objective {
     /// plus `TEMPO_INCOME_SECONDS` of the income it ends on (what stands at the horizon goes on paying), plus the
     /// army built times `army` per metal, less `TEMPO_STALL_METAL` for every builder-second lost to a stall.
     /// Income from exposed extractors (`Outcome::exposed_income`) counts `exposed` of its worth at the horizon: in
-    /// open-search-2-ab an opening with no turret held 8.8 extractors at minute 6 and 5.8 at minute 10.
-    Tempo { army: f64, exposed: f64 },
+    /// open-search-2-ab an opening with no turret held 8.8 extractors at minute 6 and 5.8 at minute 10. With a
+    /// `contact`, a soldier that can stand at the opponent's base by the first-contact time is worth `contact.weight`
+    /// of its metal on top (`docs/design/2026-09-20-rush-benchmark.md`).
+    Tempo { army: f64, exposed: f64, contact: Option<Contact> },
+}
+
+/// When the first fight is, and how far away: experienced players' raiders are at the opponent's base before 2:30
+/// (K-open-early-pawn-pressure-is-standard). A soldier finished at t with speed v stands there at t + walk / v.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Contact {
+    /// Seconds into the game.
+    pub at: f64,
+    /// Elmos from home to the opponent's base, on foot.
+    pub walk: f64,
+    /// Worth of a soldier there in time, per metal, on top of the plain army weight.
+    pub weight: f64,
+    /// Seconds over which that worth falls to nothing for a soldier that arrives late.
+    pub window: f64,
+}
+
+impl Contact {
+    /// The share of `weight` a soldier of this speed, finished at `t`, earns.
+    pub fn presence(self, t: f64, speed: f64) -> f64 {
+        let arrives = t + self.walk / speed.max(1.0);
+        (1.0 - (arrives - self.at) / self.window).clamp(0.0, 1.0)
+    }
 }
 
 pub const TEMPO_INCOME_SECONDS: f64 = 90.0;
@@ -57,7 +81,7 @@ impl Objective {
             "income" => Some(Objective::Income),
             "army" => Some(Objective::Army),
             "mix" => Some(Objective::Mix),
-            "tempo" => Some(Objective::Tempo { army: 1.0, exposed: 0.3 }),
+            "tempo" => Some(Objective::Tempo { army: 1.0, exposed: 0.3, contact: None }),
             _ => None,
         }
     }
@@ -73,7 +97,7 @@ impl Objective {
 
     /// Higher is better. Small shaping terms (metal put to use, half-built soldiers) give the search a slope on
     /// plateaus; they are three orders of magnitude below the terms that matter.
-    pub fn score(self, outcome: &Outcome, horizon: f64) -> f64 {
+    pub fn score(self, units: &Units, outcome: &Outcome, horizon: f64) -> f64 {
         let income = outcome.mean_metal_income(horizon, 30.0);
         let army = outcome.last().army_value + 0.5 * outcome.army_in_progress;
         let shaping = 1e-3 * outcome.last().metal_spent;
@@ -81,10 +105,14 @@ impl Objective {
             Objective::Income => income + 1e-3 * shaping,
             Objective::Army => army + shaping,
             Objective::Mix => army + MIX_INCOME_SECONDS * income + shaping,
-            Objective::Tempo { army: weight, exposed } => {
+            Objective::Tempo { army: weight, exposed, contact } => {
                 let made: f64 = outcome.samples.iter().map(|s| s.metal_income).sum();
                 let stalled: f64 = outcome.samples.iter().map(|s| 1.0 - s.stall).sum();
-                made + TEMPO_INCOME_SECONDS * (income - (1.0 - exposed) * outcome.exposed_income) + weight * army - TEMPO_STALL_METAL * stalled + shaping
+                let there: f64 = contact.map_or(0.0, |contact| {
+                    let soldiers = outcome.finished.iter().map(|f| &units.list[f.unit]).zip(outcome.finished.iter()).filter(|(u, _)| u.role == Role::Army);
+                    soldiers.map(|(u, f)| contact.weight * u.metal_cost * contact.presence(f.t, u.speed)).sum()
+                });
+                made + TEMPO_INCOME_SECONDS * (income - (1.0 - exposed) * outcome.exposed_income) + weight * army + there - TEMPO_STALL_METAL * stalled + shaping
             }
         }
     }
@@ -121,6 +149,8 @@ impl Palette {
             offer(&|u| plain(u) && u.wind_cap == 0.0 && u.energy_make > 0.0),
             offer(&|u| u.conv_capacity > 0.0),
             offer(&|u| plain(u) && u.energy_storage >= 1000.0),
+            // Eyes: both experienced players' constructors put a radar up by minute 3 (K-open-early-pawn-pressure-is-standard).
+            offer(&|u| plain(u) && u.radar_range > 0.0 && u.energy_make <= 0.0),
             Some(factory),
             offer(&|u| nanos && u.role == Role::Nano),
             turret,
@@ -134,7 +164,9 @@ impl Palette {
         let mut from_factory = vec![Item::Build(constructor)];
         for unit in &units.list[factory].builds {
             let def = &units.list[*unit];
-            if def.role == Role::Army && !NOT_FIGHTERS.iter().any(|s| def.name.ends_with(s)) {
+            // Soldiers, and the mobile builders without a menu (resurrection bots): the players' labs make those too.
+            let mobile_eco = def.role == Role::Eco && def.speed > 0.0;
+            if (def.role == Role::Army || mobile_eco) && !NOT_FIGHTERS.iter().any(|s| def.name.ends_with(s)) {
                 from_factory.push(Item::Build(*unit));
             }
         }
@@ -252,7 +284,7 @@ pub fn anneal(units: &Units, scenario: &Scenario, palette: &Palette, search: &Se
     let mut rng = Rng::new(search.seed);
     let evaluate = |plan: &Plan| {
         let outcome = simulate(units, scenario, plan, search.horizon);
-        (search.objective.score(&outcome, search.horizon), outcome)
+        (search.objective.score(units, &outcome, search.horizon), outcome)
     };
     let mut current = search.start.clone().unwrap_or_else(|| palette.seed_plan(search.factories, search.constructors));
     current.factories.resize(search.factories, Vec::new());
@@ -319,14 +351,23 @@ pub fn anneal_restarts(units: &Units, scenario: &Scenario, palette: &Palette, se
 /// this scenario's simulations take on this machine.
 pub fn anneal_within(units: &Units, scenario: &Scenario, palette: &Palette, search: &Search, budget: std::time::Duration, threads: usize) -> Found {
     let started = std::time::Instant::now();
-    let probe = Search { iterations: 30, ..search.clone() };
-    let first = anneal(units, scenario, palette, &probe);
-    let per_simulation = started.elapsed().as_secs_f64() / 31.0;
-    let left = budget.as_secs_f64() - started.elapsed().as_secs_f64();
-    let iterations = (left / per_simulation.max(1e-6)) as usize;
-    if iterations < 100 {
-        return first;
+    let mut best = anneal(units, scenario, palette, &Search { iterations: 30, ..search.clone() });
+    // Wall time an iteration costs, measured again after every round: the probe's figure carries the first round's
+    // set-up, and a budget spent by it alone used a third of itself (rush-budget-500: 320 ms of 500).
+    let mut per_iteration = started.elapsed().as_secs_f64() / 31.0;
+    for round in 1.. {
+        let left = budget.as_secs_f64() - started.elapsed().as_secs_f64();
+        let iterations = (left / per_iteration.max(1e-6)) as usize;
+        if iterations < 100 {
+            return best;
+        }
+        let began = std::time::Instant::now();
+        let again = Search { iterations, seed: search.seed + round, start: Some(best.plan.clone()), ..search.clone() };
+        let found = anneal_restarts(units, scenario, palette, &again, threads.max(1));
+        per_iteration = began.elapsed().as_secs_f64() / iterations as f64;
+        if found.score > best.score {
+            best = found;
+        }
     }
-    let found = anneal_restarts(units, scenario, palette, &Search { iterations, ..search.clone() }, threads.max(1));
-    if found.score >= first.score { found } else { first }
+    best
 }
