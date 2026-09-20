@@ -164,3 +164,13 @@ quiet-at-home clause of the gate never clears under continuous raiding.
 army, scout, expansion reach) the same tags led the next tally.
 **Used by.** H-ARMY-STATION, H-ARMY-WAVE-GATE, H-ARMY-SCOUT, H-ECO-REACH, H-ECO-OUTPOST-TURRET.
 
+### K-army-won-games-are-recalled
+**Claim.** The south-east timeouts at three to five times the opponent's army were our own retreat rule: it weighed the
+handful of attackers in contact against what they met and, finding them outmatched, sent the whole wave home.
+**Status.** observed (2026-09-20) in the logs; fix (H-ARMY-REGROUP) unmeasured.
+**Evidence.** v26-radar-startguess-ab/03 (timeout, 13,800 v 3,100 army at minute 20): "wave 11: 271 units to (2336,
+3008)" at f=67110, then at f=67140 "retreat: 6 attackers at odds 0.60 ...; everyone home"; the same one second after
+waves 10 and 12, with 4 and 2 attackers. Every retreat is followed by a 90-second ban on waves.
+**Would be wrong if.** With the fix the south-east still times out at the same rate.
+**Used by.** H-ARMY-REGROUP.
+

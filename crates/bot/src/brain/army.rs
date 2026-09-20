@@ -527,7 +527,19 @@ impl Brain {
                 let engaged: Vec<&OwnUnit> = attackers.iter().filter(|u| u.pos.dist2d(contact.pos) < CONTACT_RADIUS).copied().collect();
                 let theirs = self.known_enemy_force(contact.pos, CONTACT_RADIUS, snapshot.enemies.as_slice());
                 let odds = self.odds(&Self::force_of(&engaged), &theirs);
-                if odds < RETREAT_ODDS {
+                // The few in contact are judged as what they are, a few; the wave is judged as a whole. A wave of 271
+                // used to be sent home a second after it left because six of its fastest had met something (v26,
+                // south-east timeouts at four times the opponent's army): if the whole wave wins the fight, the ones
+                // in contact fall back on it and the wave keeps coming.
+                let whole = self.odds(&Self::force_of(&attackers), &theirs);
+                if odds < RETREAT_ODDS && whole >= 1.0 {
+                    if engaged.len() < attackers.len() {
+                        self.fire("H-ARMY-REGROUP");
+                        let n = attackers.len() as f32;
+                        let body = attackers.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / n, y: 0.0, z: sum.z + u.pos.z / n });
+                        commands.extend(engaged.iter().map(|u| Command::Move { unit: u.id, to: body, queue: false }));
+                    }
+                } else if odds < RETREAT_ODDS {
                     self.fire("H-ARMY-RETREAT");
                     eprintln!(
                         "[ai {}] f={} retreat: {} attackers at odds {odds:.2} near ({:.0}, {:.0}); everyone home",
