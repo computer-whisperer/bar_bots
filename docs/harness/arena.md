@@ -57,6 +57,11 @@ With `WITHIN_REASON_OBSERVE=1` the shim also writes `truth-<ai>.jsonl` into the 
 (`[id, name, x, z, health %, being built]`) every two seconds, read through the engine's cheat callbacks switched on for
 that one query. It is for analysis only; the bot never sees it.
 
+Stopping a match by hand: `run/stop_match.py <match or batch dir> [loss|win]` writes a `stop` file the arena's referee
+sees within a second; the match is recorded with that outcome (a timeout when none is given, `called: true`) and the
+engine is ended with `/kill` like any other, so the replay is written. Do not kill the arena or the engine: the replay
+stays at 0 bytes and the record gets no result line (commander-3 and -4 were lost that way).
+
 `run/batch_curves.py <batch dir> [minute ...]` prints a batch's mean curves (extractors, builders, army value, turrets,
 ours/theirs) by A/B arm and start corner: the first thing to read after a batch, before the win count.
 

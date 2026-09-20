@@ -316,6 +316,16 @@ fn referee(
             if options.call_settled && let Some(outcome) = settled.judge(engine_log) {
                 return Ok((outcome, true));
             }
+            // The hand-operated kill switch (`run/stop_match.py`): a file `stop` in the match directory ends the match
+            // the way every other match ends, the engine told to quit and given time to write its replay.
+            if let Ok(verdict) = fs::read_to_string(engine_log.with_file_name("stop")) {
+                let outcome = match verdict.trim() {
+                    "win" => Outcome::Win,
+                    "loss" => Outcome::Loss,
+                    _ => Outcome::Timeout,
+                };
+                return Ok((outcome, true));
+            }
             if frame > last_seen_frame {
                 last_seen_frame = frame;
                 deadline = Instant::now() + stall_allowance;
