@@ -118,3 +118,12 @@ contact response replaces the defend rules (deleted first). 3. Posture replaces 
   front while the enemy picks at it. Suggested: a subagent's review of BARb's own movement logic (`upstream/CircuitAI`)
   and a complete overhaul on our side. Not the near-term priority: the flaw may not show on Quicksilver, where the
   benchmark returns until the players' Comet replays arrive. Belongs to part 3 (posture).
+- 2026-09-20, target priority (the user's correction of the "kill the turret first" rule in 8ffc510): the real
+  decision is between ignoring combatants to kill a key target with expected losses, and focusing combatants before
+  non-combatants; nothing about it is specific to turrets, it is standard micro priority, which we do not model yet.
+  The simulator already has the two halves: `Intent::Fight` (combatants first) and `Intent::Raid` (assets first,
+  fighting only when provoked, then leaving). The rule to build: price the party under both intents against the same
+  scene and take the better gain, and let the chosen intent set the orders (attack-unit on combatants first, or
+  attack-unit on the key target with a move out queued). The interim rule in `raid.rs` and `contact.rs` (a priced-in
+  turret is attacked first by everybody) is one branch of that hard-coded; the user judged it may suffice for now.
+  Belongs to part 3 with the army-movement overhaul.
