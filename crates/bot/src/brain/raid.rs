@@ -66,6 +66,9 @@ pub struct Raid {
     visited: Vec<Vec3>,
     /// Waiting out of reach for reinforcements (logged once).
     waiting: bool,
+    /// The last pricing's verdict, held until the next: between pricings the party was "not outmatched" and went
+    /// back at the target for four seconds, then retreated for four (rush-11 to 13: parties oscillating at the base).
+    outmatched: bool,
 }
 
 impl Raid {
@@ -183,6 +186,7 @@ impl Brain {
             }
             self.raid.members = party.iter().map(|u| u.id).collect();
             self.raid.target = Some(target);
+            self.raid.outmatched = false;
             self.raid.last_order_frame = 0;
             self.raid.priced_at = tick.frame;
             self.fire("H-ARMY-PRESSURE");
@@ -231,14 +235,12 @@ impl Brain {
         let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES;
         let party_metal: f32 = body.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
         let too_small_for_commander = commander_near && party_metal < COMMANDER_PARTY_METAL;
-        let outmatched = if reprice {
-                self.raid.priced_at = tick.frame;
-                let verdict = self.assault_verdict(&body, target.unwrap_or(centre), CONTACT_RADIUS, tick);
-                verdict.gain < GO_GAIN
-            } else {
-                false
-            };
-        let outmatched = outmatched && !too_small_for_commander;
+        if reprice {
+            self.raid.priced_at = tick.frame;
+            let verdict = self.assault_verdict(&body, target.unwrap_or(centre), CONTACT_RADIUS, tick);
+            self.raid.outmatched = verdict.gain < GO_GAIN;
+        }
+        let outmatched = self.raid.outmatched && !too_small_for_commander;
         match target {
             Some(target) if too_small_for_commander && party.len() >= PARTY => {
                 // Too few for the commander: wait for the rest out of its reach, as a player gathers at the edge of a
@@ -282,6 +284,8 @@ impl Brain {
                     self.raid.target = Some(next);
                     self.raid.last_order_frame = tick.frame;
                     self.raid.waiting = false;
+                    self.raid.outmatched = false;
+                    self.raid.priced_at = 0;
                     self.raid.held.clear();
                     commands.extend(party.iter().map(|u| Command::Move { unit: u.id, to: next, queue: false }));
                 } else {
@@ -308,6 +312,7 @@ impl Brain {
                 self.raid.members.clear();
                 self.raid.held.clear();
                 self.raid.waiting = false;
+                self.raid.outmatched = false;
                 self.raid.target = None;
                 self.raid.rest_until = tick.frame + REST_FRAMES;
             }
