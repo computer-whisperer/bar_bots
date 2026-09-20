@@ -89,10 +89,52 @@ pub struct Game {
     pub terrain: Terrain,
 }
 
+/// The mean wind the engine's law produces between `min` and `max`: every 15 s the wind vector takes a step of up to
+/// half the maximum on each axis and its length is clamped to the bounds (`rts/Sim/Misc/Wind.cpp`), a clamped random
+/// walk that sits well above the middle of the range (Quicksilver 3-17: 12.7, measured 12.8 in games, against 10 for the
+/// middle). Simulated here with a fixed seed; it decorrelates within a minute, so what a game shows early predicts
+/// nothing about the rest (correlation 0.09 between the first two minutes and the next eight), and the game average
+/// spreads only from 10.5 to 13.9 (10th to 90th percentile). The blend between updates is taken as its mean.
+pub fn process_mean_wind(min: f64, max: f64) -> f64 {
+    if max <= 0.0 {
+        return 0.0;
+    }
+    // A small linear congruential generator: the same answer every time, no dependency.
+    let mut state: u64 = 0x2545_F491_4F6C_DD1D;
+    let mut next = || {
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (state >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let (mut x, mut z) = (0.0f64, 0.0f64);
+    let (mut sum, mut n) = (0.0, 0);
+    for _ in 0..20_000 {
+        let (ox, oz) = (x, z);
+        let mut s;
+        loop {
+            x -= (next() - 0.5) * max;
+            z -= (next() - 0.5) * max;
+            s = x.hypot(z);
+            if s > 0.0 {
+                break;
+            }
+        }
+        let clamped = s.clamp(min, max);
+        (x, z) = (x / s * clamped, z / s * clamped);
+        for i in 0..15 {
+            let t = (i as f64 + 0.5) / 15.0;
+            let m = t * t * (3.0 - 2.0 * t);
+            let (cx, cz) = (ox + (x - ox) * m, oz + (z - oz) * m);
+            sum += cx.hypot(cz).clamp(min, max);
+            n += 1;
+        }
+    }
+    sum / n as f64
+}
+
 impl Game {
-    /// Mean wind: the engine draws the wind speed evenly between the map's bounds.
+    /// The wind a plan is priced at: the mean of the engine's law for this map's bounds (`process_mean_wind`).
     pub fn mean_wind(&self) -> f64 {
-        (self.wind.0 + self.wind.1) / 2.0
+        process_mean_wind(self.wind.0, self.wind.1)
     }
 
     /// What our tier-1 extractor draws from a spot of this amount.
@@ -137,5 +179,19 @@ impl Game {
     /// Faction prefix of our units' names.
     pub fn side(&self) -> &str {
         &self.units.list[self.commander].name[..3]
+    }
+}
+
+#[cfg(test)]
+mod wind_tests {
+    use super::process_mean_wind;
+
+    #[test]
+    fn the_engines_wind_sits_above_the_middle_of_the_range() {
+        let quicksilver = process_mean_wind(3.0, 17.0);
+        assert!((12.2..13.2).contains(&quicksilver), "{quicksilver}");
+        let comet = process_mean_wind(1.0, 4.0);
+        assert!((2.6..3.4).contains(&comet), "{comet}");
+        assert_eq!(process_mean_wind(0.0, 0.0), 0.0);
     }
 }

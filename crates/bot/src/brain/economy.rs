@@ -53,8 +53,8 @@ const MAX_RADARS: usize = 5;
 const RADAR_MIN_INCOME: f32 = 6.0;
 /// Energy income beyond which solar collectors are too small to keep up.
 const ADVANCED_SOLAR_INCOME: f32 = 250.0;
-/// Average wind speed from which wind generators replace solar collectors (solar: 20 energy for 155 metal; wind: the
-/// wind speed in energy for 40 metal).
+/// Mean wind (the engine's law for the map's bounds, `buildorder::game::process_mean_wind`) from which wind generators
+/// replace solar collectors (solar: 20 energy for 155 metal; wind: the wind speed in energy for 40 metal).
 const WINDY_AVERAGE: f32 = 8.0;
 /// Stored energy, as a fraction of storage, below which nothing that costs energy to build gets started.
 const STALLED_ENERGY: f32 = 0.15;
@@ -385,7 +385,7 @@ impl Brain {
         let can_build = |def: UnitDefId| options.contains(&def);
         // H-ECO-WIND: on a windy map a wind generator gives about twice a solar's energy per metal.
         let map = &self.world.hello.map;
-        let windy = (map.wind_min + map.wind_max) / 2.0 >= WINDY_AVERAGE && self.enabled("H-ECO-WIND");
+        let windy = buildorder::game::process_mean_wind(map.wind_min as f64, map.wind_max as f64) as f32 >= WINDY_AVERAGE && self.enabled("H-ECO-WIND");
         // A wind generator costs energy to build and a solar collector none, so an energy stall is dug out of with solars.
         let stalled = energy.current < energy.storage * STALLED_ENERGY;
         let small_generator = if windy && !stalled && can_build(kit.wind) { kit.wind } else { kit.solar };
