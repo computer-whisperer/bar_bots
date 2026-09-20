@@ -532,7 +532,7 @@ impl Brain {
                 // south-east timeouts at four times the opponent's army): if the whole wave wins the fight, the ones
                 // in contact fall back on it and the wave keeps coming.
                 let whole = self.odds(&Self::force_of(&attackers), &theirs);
-                if odds < RETREAT_ODDS && whole >= 1.0 {
+                if odds < RETREAT_ODDS && whole >= 1.0 && self.enabled("H-ARMY-REGROUP") {
                     if engaged.len() < attackers.len() {
                         self.fire("H-ARMY-REGROUP");
                         let n = attackers.len() as f32;
