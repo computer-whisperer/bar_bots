@@ -96,3 +96,14 @@ medium's small fast groups strip ours.
 raiders die to them. The claim stands as a description; raiding as a remedy is retired.
 **Used by.** (none; H-ARMY-RAID retired)
 
+### K-army-defence-is-positioning-and-mix
+**Claim.** In the first Sonnet commander game the loss was mostly defender positioning and unit mix, with a smaller
+part played by units that huddled at a cliff edge they could not cross.
+**Status.** reported (2026-09-19) by the user from the engine replay (he has StarCraft 2 experience, not BAR).
+**Evidence.** `docs/transcripts/2026-09-19-sonnet-commander-1.md`: posts set reactively, after an extractor cluster was
+already raided; a posted squad drawn out of its radius; light armpw/armrock/armham against corthud/corstorm. The
+huddling predates the terrain work (K-maps-terrain-not-straight-lines): squad posts and orders were straight-line
+points, some on the far side of a cliff.
+**Would be wrong if.** With posts snapped to walkable ground and a sound mix, the exchange ratio in our half stayed as bad.
+**Used by.** (none yet) — positioning and mix are the levers meant for the LLM ([[llm-levers]] in project memory).
+

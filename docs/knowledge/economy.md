@@ -36,3 +36,16 @@ income was not measured, so "not enough" is inference.
 before a tier-1 ceiling could matter; the ceiling may still be real but is not why we lose today.
 **Would be wrong if.** A tier-1 brain with better army handling beat medium, or a tier-2 economy did not change the result.
 **Used by.** (motivates the planned tier-2 work)
+
+### K-eco-nano-turrets-and-reclaim-are-normal-play
+**Claim.** Two staples of ordinary play are missing from the bot: construction turrets (nano turrets) beside the
+factory, which multiply its build power for far less metal than a second lab, and reclaiming wrecks, which returns a
+large share of every dead unit's metal to whoever holds the field after a fight.
+**Status.** reported (2026-09-19) by the user, watching the replay of the first Sonnet commander game; he judged them
+important but possibly not why that game was lost.
+**Evidence.** Consistent with the census: BARb medium plays one lab plus one nano turret all game where we build 3-4
+labs (K-barb-medium-observed-build), and its resurrection bots feed on our wrecks (K-army-dead-waves-are-resurrected).
+We build no nano turrets and never issue a reclaim order (the protocol has no reclaim command).
+**Would be wrong if.** A version with nano turrets and wreck reclaim near home showed no gain in army built by minute 10.
+**Used by.** (none yet)
+
