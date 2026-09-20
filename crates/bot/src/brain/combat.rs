@@ -11,7 +11,9 @@ use bot_protocol::UnitDefId;
 use super::Brain;
 
 /// A turret is worth more in a fight than its metal: it is tough for its cost and does not need to walk anywhere.
-pub const TURRET_WORTH: f32 = 1.5;
+/// Over the decisive engagements of v18 the prediction improved steadily as this rose (right 92 % at 1.5, 93 % at
+/// 2.5, 95 % at 4; correlation 0.86 to 0.91), and waves that passed the gate at 1.5 were wiped 5:1 by turret lines.
+pub const TURRET_WORTH: f32 = 3.0;
 
 /// `margin[(unit, against)]` at equal metal, -1..1, by unit name.
 pub struct Matchups(HashMap<(String, String), f32>);

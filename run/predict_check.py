@@ -6,6 +6,9 @@ For every engagement where both sides had soldiers on the spot: predicted power 
 """
 import csv, glob, json, math, os, subprocess, sys
 
+# How much a turret's metal counts for in a fight; set TURRET_WORTH in the environment to try others.
+TURRET_WORTH = float(os.environ.get("TURRET_WORTH", "1.5"))
+
 def table():
     out = {}
     for name in ("tight", "wide"):
@@ -69,10 +72,10 @@ def main():
                 (ours, our_turrets), (theirs, their_turrets) = participants(match, e, "ours"), participants(match, e, "theirs")
                 if not ours or not theirs:
                     continue
-                po = power(ours, theirs, match.metal) + 1.5 * our_turrets
-                pt = power(theirs, ours, match.metal) + 1.5 * their_turrets
-                plain_o = sum(match.metal(n) * k for n, k in ours.items()) + 1.5 * our_turrets
-                plain_t = sum(match.metal(n) * k for n, k in theirs.items()) + 1.5 * their_turrets
+                po = power(ours, theirs, match.metal) + TURRET_WORTH * our_turrets
+                pt = power(theirs, ours, match.metal) + TURRET_WORTH * their_turrets
+                plain_o = sum(match.metal(n) * k for n, k in ours.items()) + TURRET_WORTH * our_turrets
+                plain_t = sum(match.metal(n) * k for n, k in theirs.items()) + TURRET_WORTH * their_turrets
                 # A decisive fight: somebody with a real force on the spot lost at least half of it. The outcome is who
                 # lost the larger share of what they brought.
                 share_o, share_t = lost_o / max(plain_o, 1), lost_t / max(plain_t, 1)
