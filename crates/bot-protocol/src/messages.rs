@@ -173,6 +173,11 @@ pub enum Command {
     Fight { unit: UnitId, to: Vec3, queue: bool },
     Stop { unit: UnitId },
     SetRepeat { unit: UnitId, repeat: bool },
+    /// Cheat: a finished unit of type `def` appears at `at`, owned by this AI's team. For the duel harness
+    /// (`docs/harness/duels.md`); the engine honours it only in a game hosted locally with a single player.
+    GiveUnit { def: UnitDefId, at: Vec3 },
+    /// Starts the unit's self-destruct countdown (a second order cancels it).
+    SelfDestruct { unit: UnitId },
 }
 
 /// The shim resolves this to the closest legal build position, since only it can query the map.

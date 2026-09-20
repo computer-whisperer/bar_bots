@@ -189,6 +189,8 @@ impl Recorder {
                 Command::Fight { unit, to, .. } => json!(["fight", unit.0, to.x as i32, to.z as i32]),
                 Command::Stop { unit } => json!(["stop", unit.0]),
                 Command::SetRepeat { unit, repeat } => json!(["repeat", unit.0, repeat as i32]),
+                Command::GiveUnit { def, at } => json!(["give", self.def(Some(def)), at.x as i32, at.z as i32]),
+                Command::SelfDestruct { unit } => json!(["selfdestruct", unit.0]),
             })
             .collect();
         self.line(&json!({ "t": "cmd", "f": frame, "c": list }));
