@@ -52,6 +52,13 @@ has shown) should be using it: escorting constructors to new
 ground, killing the enemy's outlying extractors and forward turret nests, and, when clearly ahead, going for the kill. The
 bot launches waves on its own odds estimate; `set_directives` sets its stance, wave size, station and target. Do not flip
 the stance back and forth: units spend the game walking. Decide, give it minutes, and judge by the score line.
+Raiding. The opponent's economy is a target from the first minutes, not only at the end: every extractor it holds
+outside its base is income it should not have, and it takes ground in the middle of the map the whole game. The `to
+raid` line lists the ones we have seen, nearest first, with the turrets known beside them. A party of four to six
+line units (`armham`; rockets if there is a turret) beats a lone light turret and the extractor behind it; send it with
+a `fight` order, move it to the next, bring it home when its army shows up. Keep one running whenever the army is not
+otherwise committed: an army standing at its post while the enemy's extractors multiply is losing the economy curve.
+
 Ending the game. The game is not won by being ahead; it is won when the enemy commander is dead, and a lead that is
 not used shrinks. When our army is clearly bigger than your honest estimate of theirs, go and kill them: commit the
 army, not a detachment. A fifth of the army loses to the same turrets and soldiers that all of it would walk over, and

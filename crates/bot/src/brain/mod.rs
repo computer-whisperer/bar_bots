@@ -9,6 +9,7 @@ mod briefing;
 mod combat;
 mod economy;
 pub mod journal;
+mod raid;
 mod squads;
 mod wake;
 mod roster;
@@ -54,6 +55,7 @@ pub struct Brain {
     /// The commander's unit mix (unit name to weight); empty means the heuristic batch.
     production_weights: std::collections::BTreeMap<String, u32>,
     /// Turrets the commander asked for, oldest first.
+    raid: raid::Raid,
     turret_requests: Vec<Vec3>,
     /// D-EXPANSION-PLAN: the commander's spots to take first, in order, and spots to leave alone (indices into the map's list).
     spot_priority: Vec<usize>,
@@ -119,6 +121,7 @@ impl Brain {
             squads: Default::default(),
             wake: Default::default(),
             production_weights: Default::default(),
+            raid: raid::Raid::default(),
             turret_requests: Vec::new(),
             spot_priority: Vec::new(),
             spot_avoid: Vec::new(),

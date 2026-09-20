@@ -255,6 +255,8 @@ pub struct Score {
     /// Its factories seen and not seen destroyed, and its commander's last sighting with its age in seconds.
     pub enemy_factories: Vec<Place>,
     pub enemy_commander: Option<(Place, i32)>,
+    /// Its extractors seen outside its base, nearest to us first, each with the metal of turrets known within 500.
+    pub raid_targets: Vec<(Place, u32)>,
 }
 
 #[derive(Clone, Debug, Serialize)]

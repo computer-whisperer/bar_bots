@@ -46,7 +46,7 @@ const RETREAT_ODDS: f32 = 0.6;
 /// After breaking off, the army masses for this long before it may go again.
 const AFTER_RETREAT_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 const RETREAT_CHECK_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
-const CONTACT_RADIUS: f32 = 1000.0;
+pub(super) const CONTACT_RADIUS: f32 = 1000.0;
 /// Responders are added until the odds against the raiders reach this.
 const RESPONSE_ODDS: f32 = 1.5;
 /// Known defenders are the remembered armed buildings and the soldiers in sight this close to the target.
@@ -216,7 +216,7 @@ impl Brain {
 
     /// What we know stands within `radius` of `place`: remembered armed buildings, soldiers in sight, and the enemy
     /// commander if this is its base. A floor: what we have not seen is not counted.
-    fn known_enemy_force(&self, place: Vec3, radius: f32, visible: &[EnemyUnit]) -> Force {
+    pub(super) fn known_enemy_force(&self, place: Vec3, radius: f32, visible: &[EnemyUnit]) -> Force {
         let mut force = Force::default();
         for (def, pos, _) in self.enemy_buildings.values() {
             if pos.dist2d(place) < radius
@@ -237,7 +237,7 @@ impl Brain {
         force
     }
 
-    fn force_of(units: &[&OwnUnit]) -> Force {
+    pub(super) fn force_of(units: &[&OwnUnit]) -> Force {
         let mut force = Force::default();
         for unit in units {
             force.add(unit.def);
@@ -259,7 +259,9 @@ impl Brain {
         let every_soldier: Vec<&OwnUnit> =
             snapshot.own_units.iter().filter(|u| !u.being_built && self.is_army(u, kit)).collect();
         self.run_squads(tick, kit, &every_soldier, commands);
-        let soldiers: Vec<&OwnUnit> = every_soldier.into_iter().filter(|u| !self.squads.contains(u.id)).collect();
+        let unclaimed: Vec<&OwnUnit> = every_soldier.into_iter().filter(|u| !self.squads.contains(u.id)).collect();
+        self.run_raid(tick, kit, &unclaimed, commands);
+        let soldiers: Vec<&OwnUnit> = unclaimed.into_iter().filter(|u| !self.raid.contains(u.id)).collect();
 
         for event in &tick.events {
             let bot_protocol::Event::UnitMoveFailed { unit } = event else { continue };
