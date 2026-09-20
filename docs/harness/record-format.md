@@ -70,7 +70,7 @@ markers and as the "theirs" series. Census positions are the mean of all units o
 extractors sits between them.
 
 ## Viewer
-`run/view_match.py run/matches/<batch>/<NN>` serves `viewer/` and the match directory on 127.0.0.1 and opens the browser.
+`run/view_match.py run/matches/<batch>/<NN>` serves `viewer/` and the match directory and opens the browser. It listens on `::` (every interface, IPv6 and IPv4) so another machine on the network can open it; `--bind 127.0.0.1` keeps it to this machine.
 Plain HTML, CSS and JS, no build step, nothing fetched from outside. `viewer/record.js` is the parser and model (also
 runs under node), `viewer/app.js` the page. URL parameters: `t=<seconds>` start position, `record=<file>`, `bg=<image URL>`.
 Terrain: an image at `viewer/maps/<map name>.png` (whole map, north up) is drawn under the map when present; none ship.
