@@ -104,3 +104,20 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   party goes for another extractor it is priced to win at, or waits out of reach for reinforcements; home only with
   nobody left (`target-harass`, rush-11). Still open behind it: Pawns per minute 0 / 3 / 5 / 4 / 2 against Matt's
   5 / 7 / 6 / 8.
+- 2026-09-20, the Quicksilver series (placed arms, per game by minute 10; BARb medium mirrored; the players' layout):
+
+  | batch | change | Pawns built | Pawns lost | BARb extractors killed | ours lost | first building seen | result |
+  |---|---|---|---|---|---|---|---|
+  | rush-10 | lab anchor clear of the extractor | 18.1 | 17.3 | 1.4 | 8.9 | 2.2 min | 0-11-1 |
+  | rush-11 | outmatched: wait, not home | 17.9 | 17.1 | 2.2 | 11.2 | 2.0 | 0-12 |
+  | rush-12 | the base's extractors tried too | 16.9 | 16.2 | 1.3 | 13.9 | 2.0 | 1-10-1 |
+  | rush-13 | unseen spots tried too | 18.7 | 18.2 | 1.9 | 11.5 | 2.2 | 0-12 |
+  | rush-14 | verdict held between pricings | 17.9 | 16.7 | 2.3 | 10.1 | 2.1 | 0-11-1 |
+  | rush-15 | scouting system | 18.7 | 17.8 | 2.2 | 10.8 | 2.1 | 1-10-1 |
+
+  Matt by minute 5: 26 Pawns built, 15 lost, BARb's lab dead at 3:30 and its commander at 4:45. The six raid-rule
+  changes moved nothing the table measures: the party arrives on the players' schedule and trades one Pawn for one
+  Pawn while BARb's Fleas and Pawns take ten of our extractors. What decides these games is not where the party goes
+  but how much comes behind it and what happens at home: production (18 Pawns by minute 10 against 26 by minute 5)
+  and the home answer to Fleas. The user's scouting system is in and stays (the map is known now; it is a
+  precondition for anything better), but the next lever is production posture, a decision for the user.
