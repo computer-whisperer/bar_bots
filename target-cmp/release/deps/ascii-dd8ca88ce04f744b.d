@@ -1,0 +1,11 @@
+/home/christian/workspace/playground/bar_bots/target-cmp/release/deps/ascii-dd8ca88ce04f744b.d: /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/lib.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_char.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_str.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_string.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/free_functions.rs
+
+/home/christian/workspace/playground/bar_bots/target-cmp/release/deps/libascii-dd8ca88ce04f744b.rlib: /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/lib.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_char.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_str.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_string.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/free_functions.rs
+
+/home/christian/workspace/playground/bar_bots/target-cmp/release/deps/libascii-dd8ca88ce04f744b.rmeta: /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/lib.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_char.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_str.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_string.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/free_functions.rs
+
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/lib.rs:
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_char.rs:
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_str.rs:
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/ascii_string.rs:
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ascii-1.1.0/src/free_functions.rs:

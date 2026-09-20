@@ -1,0 +1,14 @@
+/home/christian/workspace/playground/bar_bots/target-cmp/release/deps/thiserror-1806430362b31761.d: /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/lib.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/aserror.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/display.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/var.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/private.rs /home/christian/workspace/playground/bar_bots/target-cmp/release/build/thiserror-f07d7e1a5bf3f5fd/out/private.rs
+
+/home/christian/workspace/playground/bar_bots/target-cmp/release/deps/libthiserror-1806430362b31761.rlib: /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/lib.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/aserror.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/display.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/var.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/private.rs /home/christian/workspace/playground/bar_bots/target-cmp/release/build/thiserror-f07d7e1a5bf3f5fd/out/private.rs
+
+/home/christian/workspace/playground/bar_bots/target-cmp/release/deps/libthiserror-1806430362b31761.rmeta: /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/lib.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/aserror.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/display.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/var.rs /home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/private.rs /home/christian/workspace/playground/bar_bots/target-cmp/release/build/thiserror-f07d7e1a5bf3f5fd/out/private.rs
+
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/lib.rs:
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/aserror.rs:
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/display.rs:
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/var.rs:
+/home/christian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.20/src/private.rs:
+/home/christian/workspace/playground/bar_bots/target-cmp/release/build/thiserror-f07d7e1a5bf3f5fd/out/private.rs:
+
+# env-dep:OUT_DIR=/home/christian/workspace/playground/bar_bots/target-cmp/release/build/thiserror-f07d7e1a5bf3f5fd/out
