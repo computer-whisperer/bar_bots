@@ -4,10 +4,10 @@
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
 //!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out]
-//!              [--side armada|cortex] [--corner nw|se]   (default: alternate; `nw` is the first start box, whatever --boxes says)
+//!              [--side armada|cortex] [--corner nw|se]   (default: alternate; `nw` is the first start box of the layout, W on Comet)
 //!              [--ours N] [--allies N] [--enemies N] [--ffa]   (seats of ours, allied BARb seats, enemy BARb seats, default 1 0 1;
 //!                                                               --ffa: every enemy seat is its own team)
-//!              [--boxes corners|north-south|west-east]   (where the ally teams start; default corners)
+//!              [--boxes standard|corners|north-south|west-east]   (where the ally teams start; default the lobby's boxes for the map)
 //!              [--bot PATH]   (bot binary from another build, for A/B runs)
 //!              [--disable H-ID,H-ID]   (ablation: switch heuristics off by registry ID)
 //!              [--ab-disable H-ID,H-ID]   (interleaved A/B: arm B also switches these off; blocks of four matches)
@@ -109,7 +109,7 @@ struct MatchResult {
     arm: &'static str,
     outcome: Outcome,
     our_side: &'static str,
-    our_corner: &'static str,
+    our_corner: String,
     game_minutes: f32,
     wall_seconds: f32,
     /// The referee ended the game because it was settled (`Win` or `Loss` then says for whom), not the engine.
@@ -167,7 +167,7 @@ fn main() -> io::Result<()> {
                     let Some(index) = queue.lock().unwrap().pop() else { break };
                     let result = run_match(&repo, &batch_dir, &options, index).unwrap_or_else(|e| {
                         eprintln!("match {index}: {e}");
-                        MatchResult { index, arm: "", outcome: Outcome::Aborted, our_side: "?", our_corner: "?", game_minutes: 0.0, wall_seconds: 0.0, called: false, seed: 0, opponent_first_factory: String::new() }
+                        MatchResult { index, arm: "", outcome: Outcome::Aborted, our_side: "?", our_corner: "?".into(), game_minutes: 0.0, wall_seconds: 0.0, called: false, seed: 0, opponent_first_factory: String::new() }
                     });
                     println!(
                         "match {:>2}: {:<7} {} {} {:>5.1} game-min in {:>4.0}s",
@@ -541,7 +541,7 @@ fn parse_args() -> Options {
         allies: 0,
         enemies: 1,
         free_for_all: false,
-        boxes: Boxes::Corners,
+        boxes: Boxes::Standard,
         bot: None,
         disable: String::new(),
         ab_disable: None,
@@ -630,10 +630,11 @@ fn parse_args() -> Options {
             "--enemies" => options.enemies = value().parse().ok().filter(|n| *n >= 1).unwrap_or_else(|| usage("--enemies takes 1 or more")),
             "--boxes" => {
                 options.boxes = match value().as_str() {
+                    "standard" => Boxes::Standard,
                     "corners" => Boxes::Corners,
                     "north-south" => Boxes::NorthSouth,
                     "west-east" => Boxes::WestEast,
-                    _ => usage("--boxes takes corners, north-south or west-east"),
+                    _ => usage("--boxes takes standard, corners, north-south or west-east"),
                 }
             }
             "--map" => options.map = value(),
@@ -641,14 +642,15 @@ fn parse_args() -> Options {
             _ => usage(&format!("unknown argument {flag}")),
         }
     }
-    if options.free_for_all && 1 + options.enemies > options.boxes.capacity() {
-        usage("--ffa needs a start box per enemy seat: at most 3 enemies, with --boxes corners");
+    let ally_teams = 1 + if options.free_for_all { options.enemies } else { 1 };
+    if options.boxes.rects(&options.map, ally_teams).is_none() {
+        usage(&format!("no start boxes for {ally_teams} ally teams on {} with --boxes {:?}: the lobby has none saved for that count, or the layout has no room (--ffa takes at most 3 enemies, with corners)", options.map, options.boxes));
     }
     options
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes standard|corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
     std::process::exit(2)
 }
 

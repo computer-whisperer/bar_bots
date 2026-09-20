@@ -30,6 +30,7 @@ name = "arena"
 version = "0.1.0"
 dependencies = [
  "bot-protocol",
+ "buildorder",
  "flate2",
  "serde",
  "serde_json",

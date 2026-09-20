@@ -43,3 +43,12 @@ do not re-enter. Any future synchronous engine call (other cheats, Lua calls) ne
 ## Mass self-destruct is cancelled twice per team
 
 See `duels.md`, "Clearing": BAR cancels self-destruct orders covering 95% of a team's units, two times per team per game.
+
+## Start boxes are the lobby's, per map
+
+Until 2026-09-20 the arena's default boxes were 30 % corner squares of its own, which is not any map's layout in the
+lobby: Comet Catcher is played W against E in full-height 20 % strips, Quicksilver N against S in full-width strips.
+Results on the corners are balanced (BARb had the same handicap) but not the players' game: the corners leave out most
+of a strip's extractor clusters. `--boxes standard` (the default) reads the lobby's saved boxes from
+`crates/arena/startboxes.dat`; a map missing there fails at argument parsing, so copy its line from BYAR-Chobby's
+`savedBoxes.dat` (or `mapDetails.lua`'s `StartboxesSet`, zlib and base64) rather than falling back to `corners`.

@@ -64,4 +64,12 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   party before minute 8 (a 60 s window made the term unreachable). Presence is now whole to the contact time, falling
   over 240 s, times the square of speed over a raider's; offline at weight 6 the plan is ck then six Pawns (7 soldiers
   and 2 constructors by minute 3), at 10 twelve Pawns and nothing else. rush-5-comet-ab running.
-
+- 2026-09-20, start position and boxes: `buildorder::start` chooses the start inside our box when the arena may place
+  us (`--place`, StartPosType 3); a human's placement is planned from as it stands, no walk added (the user's
+  ruling). rush-5-comet-ab: pressure 3-4-5 against 1-8-3, wins at 30-36 min, no kill; a party of one was sent home as
+  too few (fixed). rush-6 (placed 0-7-5, unplaced 1-10-1): no better. The user then noticed the arena's boxes were not
+  the players': every batch so far ran on 30 % corner squares, while the lobby plays Comet Catcher as two full-height
+  20 % strips (W against E) and Quicksilver as full-width strips, so neither side had the strip's extractor clusters
+  (7 of a Comet strip's 14 spots lie outside the corner) and the searched start had no pair of spots within reach.
+  The arena's default is now the lobby's boxes (`Boxes::Standard`, `crates/arena/startboxes.dat`); in Comet's strips the
+  game spawns AIs diagonally, SW against NE. rush-7-comet-std-{place,noplace} running on them.
