@@ -161,6 +161,17 @@ impl Brain {
         (!batch.is_empty()).then_some(batch)
     }
 
+    /// A step given to `builder` as a queued build that the engine never started: back to it.
+    pub(super) fn unqueue_step(&mut self, builder: UnitId) {
+        if let Some(opening) = self.opening.as_mut()
+            && let Some(queue) = opening.queue_of.get(&builder).copied()
+            && opening.next[queue] > 0
+        {
+            opening.next[queue] -= 1;
+            opening.last.remove(&builder);
+        }
+    }
+
     /// The next step of `builder`'s queue, if the plan is on and has one for it.
     pub(super) fn opening_step(&mut self, builder: &OwnUnit, tick: &Tick, kit: &Kit) -> Option<Planned> {
         self.start_opening(tick, kit);

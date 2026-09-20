@@ -132,6 +132,17 @@ impl Brain {
         let jobs = &self.jobs;
         self.upgrade_claims.retain(|id, _| jobs.contains_key(id));
         self.note_unreachable_sites(tick);
+        // A queued build the engine has started is the builder's job now.
+        for event in &tick.events {
+            let bot_protocol::Event::UnitCreated { unit, builder: Some(builder) } = event else { continue };
+            let Some((def, near, _)) = self.queued.get(builder).copied() else { continue };
+            if own.iter().any(|u| u.id == *unit && u.def == def) {
+                self.queued.remove(builder);
+                self.jobs.insert(*builder, def);
+                self.last_orders.insert(*builder, (tick.frame, def, near));
+            }
+        }
+        self.queued.retain(|id, _| own.iter().any(|u| u.id == *id));
 
         // The engine drops orders given in the first second of the game; the lost extractor order then held its
         // spot's claim, and the opening went on without it.
@@ -141,9 +152,20 @@ impl Brain {
         for (bot, raised) in std::mem::take(&mut self.reclaim.to_mend) {
             commands.push(Command::Repair { unit: bot, target: raised, queue: false });
         }
+        self.queue_next_steps(tick, kit, commands);
         for unit in own.iter().filter(|u| u.idle && !u.being_built) {
             if self.last_orders.get(&unit.id).is_some_and(|(frame, _, _)| tick.frame - frame < ORDER_GRACE_FRAMES) {
                 continue;
+            }
+            // Idle with a queued build still pending: the engine never started it. Back to that plan step.
+            if let Some((def, near, since)) = self.queued.remove(&unit.id) {
+                eprintln!("[ai {}] f={} queued {} near ({:.0}, {:.0}) never started ({}s ago); the plan takes it again", self.ai(), tick.frame, self.name(def), near.x, near.z, (tick.frame - since) / FRAMES_PER_SECOND);
+                if def == kit.extractor
+                    && let Some((i, _)) = self.world.hello.metal_spots.iter().enumerate().find(|(_, s)| s.dist2d(near) < 1.0)
+                {
+                    self.spot_claims.remove(&i);
+                }
+                self.unqueue_step(unit.id);
             }
             let Some(def) = self.world.def(unit.def) else { continue };
             let (is_builder, is_mobile) = (def.build_speed > 0.0, def.speed > 0.0);
@@ -332,12 +354,69 @@ impl Brain {
             Vec3 { x: builder.pos.x + angle.cos() * reach, y: 0.0, z: builder.pos.z + angle.sin() * reach }
         };
         let standing = |p: Vec3| own.iter().any(|u| u.id != builder.id && self.world.def(u.def).is_some_and(|d| d.speed == 0.0) && u.pos.dist2d(p) < clearance);
-        let started = |p: Vec3| self.last_orders.iter().any(|(id, (_, _, near))| *id != builder.id && self.jobs.contains_key(id) && near.dist2d(p) < clearance);
+        let started = |p: Vec3| {
+            self.last_orders.iter().any(|(id, (_, _, near))| *id != builder.id && self.jobs.contains_key(id) && near.dist2d(p) < clearance)
+                || self.queued.iter().any(|(id, (_, near, _))| *id != builder.id && near.dist2d(p) < clearance)
+        };
         [0.0, 45.0, -45.0, 90.0, -90.0, 135.0, -135.0, 180.0]
             .into_iter()
             .map(at)
             .find(|p| !standing(*p) && !started(*p))
             .unwrap_or_else(|| at(0.0))
+    }
+
+    /// H-OPEN-QUEUE: a mobile builder on the plan that is busy with a confirmed order and has nothing queued takes its
+    /// next plan step now, as a queued build, so the engine starts it the frame the current one finishes. Without it
+    /// each building cost about 2.5 s of idle builder: the tick after the last finished, then the engine's start
+    /// (rush-16: a median 2.0 s from order to nanoframe even within reach; Matt's queued builds: 0.2-0.6 s).
+    fn queue_next_steps(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
+        if !self.enabled("H-OPEN-QUEUE") {
+            return;
+        }
+        let own = &tick.snapshot.own_units;
+        let stationed = self.directives.commander_station.is_some();
+        let busy: Vec<OwnUnit> = own
+            .iter()
+            .filter(|u| !u.idle && !u.being_built && (u.def == kit.commander || u.def == kit.constructor))
+            .filter(|u| !(u.def == kit.commander && stationed))
+            .filter(|u| self.jobs.contains_key(&u.id) && !self.queued.contains_key(&u.id))
+            .filter(|u| self.last_orders.get(&u.id).is_some_and(|(frame, _, _)| tick.frame - frame >= ORDER_GRACE_FRAMES))
+            .cloned()
+            .collect();
+        for unit in &busy {
+            let Some(planned) = self.opening_step(unit, tick, kit) else { continue };
+            let plan = match planned {
+                Planned::Extractor(spot) => Plan::Extractor(spot),
+                Planned::Building(def_id, Some(site)) => Plan::Near(def_id, site),
+                Planned::Building(def_id, None) => self.place_planned(def_id, unit, own, kit),
+            };
+            let Some((def_id, site)) = self.build_site_for(&plan, unit, kit) else { continue };
+            self.fire("H-OPEN-QUEUE");
+            self.queued.insert(unit.id, (def_id, site.near, tick.frame));
+            commands.push(Command::Build { unit: unit.id, def: def_id, site: Some(site), queue: true });
+        }
+    }
+
+    /// What a plan builds and where the engine is asked to put it. None when the builder cannot build it.
+    fn build_site_for(&self, plan: &Plan, unit: &OwnUnit, kit: &Kit) -> Option<(UnitDefId, BuildSite)> {
+        let planned_def = match plan {
+            Plan::Extractor(_) => kit.extractor,
+            Plan::Near(def_id, _) | Plan::Beside(def_id, _) => *def_id,
+            Plan::Reclaim(_) | Plan::Repair(_) => return None,
+        };
+        if !self.world.def(unit.def).is_some_and(|d| d.build_options.contains(&planned_def)) {
+            return None;
+        }
+        Some(match *plan {
+            // The game rejects an extractor that is not exactly on its spot (cmd_mex_denier.lua), and the shim
+            // places extractors exactly at `near`, searching nowhere.
+            Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: 0.0, min_dist: 0 }),
+            // Where the builder stands is reachable by definition; fall back to it when the usual anchor is not.
+            Plan::Near(def_id, anchor) if self.is_unreachable(anchor) => (def_id, BuildSite { near: unit.pos, search_radius: 500.0, min_dist: self.gap_around(def_id, kit) }),
+            Plan::Near(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: self.gap_around(def_id, kit) }),
+            Plan::Beside(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: NANO_REACH, min_dist: 2 }),
+            Plan::Reclaim(_) | Plan::Repair(_) => return None,
+        })
     }
 
     /// A builder whose move failed could not reach its site. Remember that, or it is sent there again at once,
@@ -369,7 +448,7 @@ impl Brain {
         let is_commander = builder.def == kit.commander;
         // H-ECO-JOBS: existing (finished or not) plus what other builders are already on their way to build.
         let mut counts: HashMap<UnitDefId, usize> = HashMap::new();
-        let others_jobs = self.jobs.iter().filter(|(id, _)| **id != builder.id).map(|(_, job)| *job);
+        let others_jobs = self.jobs.iter().filter(|(id, _)| **id != builder.id).map(|(_, job)| *job).chain(self.queued.iter().filter(|(id, _)| **id != builder.id).map(|(_, (def, _, _))| *def));
         for def in snapshot.own_units.iter().map(|u| u.def).chain(others_jobs) {
             *counts.entry(def).or_default() += 1;
         }

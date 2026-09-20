@@ -123,6 +123,9 @@ pub struct Brain {
     last_station: Vec3,
     /// Each builder's latest order: frame, what, and near where. For spotting orders that never start.
     last_orders: HashMap<UnitId, (i32, UnitDefId, Vec3)>,
+    /// A plan step given to a busy builder as a queued build, until the engine starts it (its job then) or the builder
+    /// goes idle without it (wound back): what, near where, since when.
+    queued: HashMap<UnitId, (UnitDefId, Vec3, i32)>,
     dropped_orders: u32,
     move_failures: u32,
     /// Places a builder failed to walk to, with the frame until which to avoid them.
@@ -191,6 +194,7 @@ impl Brain {
             extractor_losses: VecDeque::new(),
             last_station: Vec3::default(),
             last_orders: HashMap::new(),
+            queued: HashMap::new(),
             dropped_orders: 0,
             move_failures: 0,
             unreachable: Vec::new(),

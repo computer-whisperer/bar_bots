@@ -120,4 +120,16 @@ time lost to walking, by minute, across settings of the knobs in arena batches; 
   script as the spawn). The LLM commander's `build_priorities` gets the point as a lever when that tool is built.
   Not built yet; the arena needs the map's spots and boxes before the engine runs, which the bot can leave behind
   from an earlier game on the map.
-
+- 2026-09-20, queued orders (the user: "we should consider build order queueing"). Measured in rush-16: the bot's next
+  order goes out one tick after a building finishes, and the nanoframe follows a median 2.0 s later even for a site
+  within reach, so each building costs about 2.5 s of idle commander against 0.2-0.6 s in Matt's replay, where the
+  next build is queued behind the last; over the first three minutes that is the lab at 41 s against 34. Design: a
+  mobile builder on the plan that is busy (its current order confirmed in progress) and has no order queued takes its
+  next plan step now, its site chosen from where the builder stands (an extractor on its spot; a generator beside the
+  builder, clear of what stands or is started, including the builder's own nanoframe), and is given it as a queued
+  build. `Brain.queued` remembers it per builder so it is not given twice, other builders' anchors keep clear of it,
+  and the job counts see it. When the queued build starts (the engine's created event for that builder and type) it
+  becomes the builder's job; when the builder goes idle with the order still pending, the engine never started it,
+  the plan's queue is wound back one step (and the extractor's spot claim released) and the idle path plans as before.
+  A stationed commander is not queued. Heuristic fallbacks (`plan_for`) stay unqueued: they depend on the state at the
+  moment. Measure: the finished-to-next-nanoframe gap, lab time, Pawns by minute 3 (rush-18).
