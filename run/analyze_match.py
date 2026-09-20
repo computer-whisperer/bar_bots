@@ -140,8 +140,13 @@ class Match:
             for t in self.truth:
                 current = {u[0]: u for u in t["enemy"]}
                 for uid, u in previous.items():
-                    # Gone from a complete list: dead (a unit still under construction that vanishes was cancelled or killed).
-                    if uid not in current and not u[5]:
+                    # Gone from a complete list: dead, unless nothing of ours was near and it was unhurt, which is the
+                    # opponent reclaiming or upgrading its own building (it once credited us with 36 generators).
+                    if uid in current or u[5]:
+                        continue
+                    ours_near = any(math.dist((o[2], o[3]), (u[2], u[3])) < 1000 and self.cls(o[1]) in ("army", "commander", "turret")
+                                    for o in self.ours_at(t["f"]))
+                    if ours_near or u[4] < 100:
                         out.append((t["f"], "theirs", u[1], u[2], u[3], self.metal(u[1]), None))
                 previous = current
         else:
@@ -216,7 +221,10 @@ def engagements(match):
         cx, cz = c["centre"]
         near = lambda units: [u for u in units if math.dist((u[2], u[3]), (cx, cz)) < PRESENT_RADIUS]
         ours, theirs = near(match.ours_at(before)), near(match.theirs_at(before))
-        fighters = lambda units: [u for u in units if match.cls(u[1]) in ("army", "commander")]
+        # Soldiers only: a commander is 2700 metal that mostly does not fight, and would double our "value on the spot" at home.
+        fighters = lambda units: [u for u in units if match.cls(u[1]) == "army"]
+        turret_value = lambda units: round(sum(match.metal(u[1]) for u in units if match.cls(u[1]) == "turret"))
+        commander_there = lambda units: any(match.cls(u[1]) == "commander" for u in units)
         our_fighters, their_fighters = fighters(ours), fighters(theirs)
         spread = 0.0
         if len(our_fighters) > 1:
@@ -229,7 +237,9 @@ def engagements(match):
             "killers_of_ours": dict(killers.most_common(5)),
             "present_before": {
                 "our_fighters": dict(Counter(u[1] for u in our_fighters)), "our_fighter_value": round(sum(match.metal(u[1]) for u in our_fighters)),
-                "our_turrets": sum(1 for u in ours if match.cls(u[1]) == "turret"),
+                "our_turrets": sum(1 for u in ours if match.cls(u[1]) == "turret"), "our_turret_value": turret_value(ours),
+                "our_commander_present": commander_there(ours), "their_commander_present": commander_there(theirs),
+                "their_turret_value": turret_value(theirs),
                 "their_fighters": dict(Counter(u[1] for u in their_fighters)), "their_fighter_value": round(sum(match.metal(u[1]) for u in their_fighters)),
                 "their_turrets": sum(1 for u in theirs if match.cls(u[1]) == "turret"),
                 "our_fighters_spread": round(spread),
@@ -270,10 +280,11 @@ def causes(match, curve, fights):
         i = fights.index(worst)
         out.append(f"worst engagement: #{i} at {clock(worst['start'])} {worst['grid']} ({worst['where']}): we lost "
                    f"{worst['value_lost']['ours']} metal, they lost {worst['value_lost']['theirs']}; before it we had "
-                   f"{worst['present_before']['our_fighter_value']} of fighters there against {worst['present_before']['their_fighter_value']}, "
+                   f"{worst['present_before']['our_fighter_value']} of soldiers there against {worst['present_before']['their_fighter_value']}, "
                    f"our fighters spread over {worst['present_before']['our_fighters_spread']} elmos, our turrets there {worst['present_before']['our_turrets']}")
-        uphill = [e for e in fights if e["present_before"]["their_fighter_value"] > 1.5 * max(e["present_before"]["our_fighter_value"], 1)]
-        out.append(f"{len(uphill)} of {len(fights)} engagements began with them at over 1.5x our fighter value on the spot; "
+        strength = lambda p, side: p[f"{side}_fighter_value"] + p[f"{side}_turret_value"]
+        uphill = [e for e in fights if strength(e["present_before"], "their") > 1.5 * max(strength(e["present_before"], "our"), 1)]
+        out.append(f"{len(uphill)} of {len(fights)} engagements began with them at over 1.5x our soldiers-plus-turrets value on the spot; "
                    f"{sum(1 for e in fights if e['where'] in ('in their half', 'at their base'))} were on their side of the map")
     commander = [d for d in deaths if d[1] == "ours" and match.cls(d[2]) == "commander"]
     if commander:
@@ -327,8 +338,9 @@ def scene(match, frame, x, z, radius=900, size=30):
             health[u[1]].append(u[4])
         side = "ours (lower case)" if mine else "theirs (UPPER CASE)"
         parts = [f"{glyph(n, mine)}={n} x{k} ({match.cls(n)}, {round(sum(health[n]) / len(health[n]))}% health)" for n, k in counts.most_common()]
-        value = sum(match.metal(u[1]) for u in units if match.cls(u[1]) in ("army", "commander", "turret"))
-        lines.append(f"{side}: {', '.join(parts) or 'nothing'}; fighting value {value:.0f} metal")
+        soldiers = sum(match.metal(u[1]) for u in units if match.cls(u[1]) == "army")
+        turrets = sum(match.metal(u[1]) for u in units if match.cls(u[1]) == "turret")
+        lines.append(f"{side}: {', '.join(parts) or 'nothing'}; soldiers {soldiers:.0f} metal, turrets {turrets:.0f} metal")
     if ours:
         flags = Counter("squad" if u[5] & 8 else "attack wave" if u[5] & 4 else "home group" for u in ours if match.cls(u[1]) == "army")
         lines.append(f"our soldiers by role: {dict(flags)}")
@@ -354,8 +366,9 @@ def report(match):
     for i, e in enumerate(fights):
         p = e["present_before"]
         out.append(f"#{i} {clock(e['start'])}-{clock(e['end'])} {e['grid']} {e['where']}: we lost {e['value_lost']['ours']} ({e['lost']['ours']}), "
-                   f"they lost {e['value_lost']['theirs']} ({e['lost']['theirs']}); on the spot before: ours {p['our_fighter_value']} + {p['our_turrets']} turrets "
-                   f"vs theirs {p['their_fighter_value']} + {p['their_turrets']} turrets; our spread {p['our_fighters_spread']}")
+                   f"they lost {e['value_lost']['theirs']} ({e['lost']['theirs']}); on the spot before (soldiers' metal + turrets' metal): ours {p['our_fighter_value']} + {p['our_turret_value']}"
+                   f"{' + commander' if p['our_commander_present'] else ''} vs theirs {p['their_fighter_value']} + {p['their_turret_value']}"
+                   f"{' + commander' if p['their_commander_present'] else ''}; our spread {p['our_fighters_spread']}")
     return "\n".join(out), {"curve": curve, "engagements": fights, "causes": causes(match, curve, fights)}
 
 
