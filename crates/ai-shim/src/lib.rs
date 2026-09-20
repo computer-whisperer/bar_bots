@@ -171,6 +171,7 @@ impl Instance {
                 let (Command::Build { unit, .. }
                 | Command::Move { unit, .. }
                 | Command::Fight { unit, .. }
+                | Command::Attack { unit, .. }
                 | Command::Stop { unit }
                 | Command::SetRepeat { unit, .. }
                 | Command::Guard { unit, .. }

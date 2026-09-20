@@ -513,6 +513,13 @@ impl Engine {
                     toPos_posF3: pos.as_mut_ptr(),
                 })
             }
+            Command::Attack { unit, target, queue } => self.handle(sys::COMMAND_UNIT_ATTACK, &mut sys::SAttackUnitCommand {
+                unitId: unit.0,
+                groupId: NO_GROUP,
+                options: options(queue),
+                timeOut: NO_TIMEOUT,
+                toAttackUnitId: target.0,
+            }),
             Command::Say { ref text } => {
                 // The engine takes an AI's text only as a slash command (`CGame::ProcessCommandText`); `/say` is chat
                 // from the AI's host player. `{name}` becomes the name the game gave this AI (`ai_namer.lua` puts it

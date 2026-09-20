@@ -68,12 +68,19 @@ struct Response {
     misses: u32,
     last_seen: i32,
     ordered_to: Vec3,
+    /// Their turrets the answer was priced against, nearest the party first: the answer kills them first.
+    turrets: Vec<UnitId>,
+    /// How many armed buildings of theirs were known within reach of the party at the last pricing: a new one
+    /// means a new price now, not in four seconds.
+    turrets_known: usize,
 }
 
 /// The price of one of our parties attacking a place: what it kills (soldiers and turrets) less what it loses, with the
 /// same safety on our losses as a contact answer.
 pub(super) struct Assault {
     pub gain: f32,
+    /// Their turrets priced in, nearest the party first: what the party kills first.
+    pub turrets: Vec<UnitId>,
     #[allow(dead_code)]
     pub verdict: Verdict,
 }
@@ -97,6 +104,17 @@ impl Default for Contacts {
 fn flat(pos: Vec3) -> Vec2 {
     Vec2::new(pos.x, pos.z)
 }
+
+/// Distance from `p` to the segment `a`-`b`.
+fn to_segment(p: Vec3, a: Vec3, b: Vec3) -> f32 {
+    let (dx, dz) = (b.x - a.x, b.z - a.z);
+    let len2 = dx * dx + dz * dz;
+    let t = if len2 <= 0.0 { 0.0 } else { (((p.x - a.x) * dx + (p.z - a.z) * dz) / len2).clamp(0.0, 1.0) };
+    (p.x - (a.x + t * dx)).hypot(p.z - (a.z + t * dz))
+}
+
+/// A turret has this much beyond its range for the approach: a unit walking past at the edge of its range is shot.
+const TURRET_MARGIN: f32 = 100.0;
 
 impl Brain {
     pub(super) fn survey_sim_defs(&mut self) {
@@ -193,6 +211,28 @@ impl Brain {
         verdict
     }
 
+    /// Their armed buildings that bear on `at` (within `radius` of it) or on the way there from `from` (within their
+    /// own range and a margin of the line), with their simulator index, nearest `from` first. Only the ones we have
+    /// seen: BARb puts a turret beside nearly every extractor, and an unseen one is priced the moment it is seen.
+    pub(super) fn turrets_bearing(&self, from: Vec3, at: Vec3, radius: f32) -> Vec<(UnitId, usize, Vec3)> {
+        let rules = &self.contacts.rules;
+        let mut turrets: Vec<(UnitId, usize, Vec3)> = self
+            .enemy_buildings
+            .iter()
+            .filter_map(|(id, (def, pos, _))| {
+                let d = self.world.def(*def)?;
+                if d.weapon_count == 0 {
+                    return None;
+                }
+                let index = *self.contacts.sim_defs.get(def)?;
+                let reach = rules.units.list[index].reach();
+                (pos.dist2d(at) < radius || to_segment(*pos, from, at) < reach + TURRET_MARGIN).then_some((*id, index, *pos))
+            })
+            .collect();
+        turrets.sort_by(|a, b| a.2.dist2d(from).total_cmp(&b.2.dist2d(from)));
+        turrets
+    }
+
     /// What `party` of ours attacking `at` comes to, against what is known to stand within `radius` of it: remembered
     /// armed buildings, and soldiers in sight (radar contacts taken for the enemy's usual soldier). H-ARMY-PRESSURE
     /// prices its raids by this; the same simulator and the same safety on our losses as the contact response.
@@ -204,16 +244,10 @@ impl Brain {
         self.enemy_soldiers.values().for_each(|(def, _)| *seen.entry(*def).or_default() += 1);
         let blip = seen.into_iter().max_by_key(|(def, n)| (*n, def.0)).map(|(def, _)| def).or(self.kit.as_ref().map(|k| k.line));
         let mut theirs: HashMap<usize, u32> = HashMap::new();
-        let mut turrets: Vec<(usize, Vec2)> = Vec::new();
+        let from = party.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / party.len().max(1) as f32, y: 0.0, z: sum.z + u.pos.z / party.len().max(1) as f32 });
+        let bearing = self.turrets_bearing(from, at, radius);
+        let turrets: Vec<(usize, Vec2)> = bearing.iter().map(|(_, index, pos)| (*index, flat(*pos))).collect();
         let mut metal = 0.0;
-        for (def, pos, _) in self.enemy_buildings.values() {
-            if pos.dist2d(at) < radius
-                && self.world.def(*def).is_some_and(|d| d.weapon_count > 0)
-                && let Some(index) = self.contacts.sim_defs.get(def)
-            {
-                turrets.push((*index, flat(*pos)));
-            }
-        }
         for enemy in tick.snapshot.enemies.iter().filter(|e| e.pos.dist2d(at) < radius) {
             let Some(def) = enemy.def.or(blip) else { continue };
             let Some(d) = self.world.def(def) else { continue };
@@ -229,7 +263,7 @@ impl Brain {
         let their_party = Party { ids: HashSet::new(), units, at, metal };
         let verdict = self.chase_verdict(&their_party, &[], party, &turrets);
         let gain = verdict.party_killed - LOSS_SAFETY * verdict.pursuers_lost;
-        Assault { gain, verdict }
+        Assault { gain, turrets: bearing.into_iter().map(|(id, _, _)| id).collect(), verdict }
     }
 
     /// Answers every party on our ground from `free` (the home group) and returns who is answering one.
@@ -257,7 +291,7 @@ impl Brain {
             let by_place = || (0..previous.len()).filter(|i| previous[*i].at.dist2d(party.at) < PARTY_RADIUS).min_by(|a, b| previous[*a].at.dist2d(party.at).total_cmp(&previous[*b].at.dist2d(party.at)));
             let mut response = match by_units.or_else(by_place) {
                 Some(index) => previous.swap_remove(index),
-                None => Response { party: HashSet::new(), at: party.at, members: Vec::new(), priced_at: i32::MIN / 2, misses: 0, last_seen: tick.frame, ordered_to: Vec3::default() },
+                None => Response { party: HashSet::new(), at: party.at, members: Vec::new(), priced_at: i32::MIN / 2, misses: 0, last_seen: tick.frame, ordered_to: Vec3::default(), turrets: Vec::new(), turrets_known: 0 },
             };
             (response.party, response.at, response.last_seen) = (party.ids.clone(), party.at, tick.frame);
             response.members.retain(|id| free.iter().any(|u| u.id == *id));
@@ -275,7 +309,9 @@ impl Brain {
 
         // The parties due a price, the dearest first; the rest wait a tick.
         let stake = |index: usize| parties.get(index).map_or(0.0, |p| p.metal);
-        let mut due: Vec<usize> = (0..parties.len()).filter(|i| tick.frame - responses[*i].priced_at >= REPRICE_FRAMES).collect();
+        // Due: four seconds since the last price, or a turret of theirs newly seen bearing on the party.
+        let turrets_known: Vec<usize> = parties.iter().map(|p| self.turrets_bearing(p.at, p.at, 0.0).len()).collect();
+        let mut due: Vec<usize> = (0..parties.len()).filter(|i| tick.frame - responses[*i].priced_at >= REPRICE_FRAMES || turrets_known[*i] != responses[*i].turrets_known).collect();
         due.sort_by(|a, b| stake(*b).total_cmp(&stake(*a)));
         for index in due.into_iter().take(PRICED_PER_TICK) {
             let party = &parties[index];
@@ -300,7 +336,10 @@ impl Brain {
             let allied: Vec<(usize, Vec2)> = allied.filter_map(|a| Some((*self.contacts.sim_defs.get(&a.def)?, flat(a.pos)))).collect();
             assets.extend(allied.into_iter().take(MAX_ASSETS.saturating_sub(assets.len())));
 
-            let nobody = self.chase_verdict(party, &assets, &[], &[]);
+            // Their turrets whose range covers the party: an answer under them is priced under them, and kills them first.
+            let bearing = self.turrets_bearing(party.at, party.at, 0.0);
+            let their_turrets: Vec<(usize, Vec2)> = bearing.iter().map(|(_, index, pos)| (*index, flat(*pos))).collect();
+            let nobody = self.chase_verdict(party, &assets, &[], &their_turrets);
             let gain = |v: &Verdict| (v.party_killed - nobody.party_killed) - LOSS_SAFETY * (v.pursuers_lost - nobody.pursuers_lost) - ASSET_WORTH * (v.assets_lost - nobody.assets_lost);
             // Whoever is on it stays on it: only more, or everybody off.
             let least = members.len().max(1);
@@ -309,7 +348,7 @@ impl Brain {
             sizes.dedup();
             let mut best: Option<(usize, f32, Verdict)> = None;
             for size in sizes {
-                let verdict = self.chase_verdict(party, &assets, &pool[..size], &[]);
+                let verdict = self.chase_verdict(party, &assets, &pool[..size], &their_turrets);
                 let worth = gain(&verdict);
                 if best.is_none_or(|(_, most, _)| worth > most) {
                     best = Some((size, worth, verdict));
@@ -348,12 +387,22 @@ impl Brain {
             }
             let response = &mut responses[index];
             (response.members, response.priced_at, response.misses, response.ordered_to) = (sent, tick.frame, misses, Vec3::default());
+            (response.turrets, response.turrets_known) = (bearing.iter().map(|(id, _, _)| *id).collect(), turrets_known[index]);
         }
 
         for response in &mut responses {
             let moved = response.ordered_to.dist2d(response.at) > REORDER_DISTANCE;
             let orders = free.iter().filter(|u| response.members.contains(&u.id) && (moved || u.idle));
-            commands.extend(orders.map(|u| Command::Fight { unit: u.id, to: response.at, queue: false }));
+            // A turret over the party is killed first, deliberately, then the party.
+            let turret = response.turrets.iter().find(|id| self.enemy_buildings.contains_key(id)).copied();
+            for u in orders {
+                if let Some(turret) = turret {
+                    commands.push(Command::Attack { unit: u.id, target: turret, queue: false });
+                    commands.push(Command::Fight { unit: u.id, to: response.at, queue: true });
+                } else {
+                    commands.push(Command::Fight { unit: u.id, to: response.at, queue: false });
+                }
+            }
             if moved {
                 response.ordered_to = response.at;
             }

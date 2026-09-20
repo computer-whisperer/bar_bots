@@ -79,6 +79,10 @@ pub struct Raid {
     /// What the party was doing last tick; a change means new orders at once, not at the next 4 s slot (rush-16:
     /// the first Pawn kept its fight order for 3 s after sighting the commander and died).
     mode: Mode,
+    /// Their turrets the last pricing included, nearest first: the party kills them first, deliberately.
+    turrets: Vec<UnitId>,
+    /// Armed buildings of theirs known to bear on the target at the last pricing: a new one means a price now.
+    turrets_known: usize,
     /// The last pricing's verdict, held until the next: between pricings the party was "not outmatched" and went
     /// back at the target for four seconds, then retreated for four (rush-11 to 13: parties oscillating at the base).
     pub(super) outmatched: bool,
@@ -252,13 +256,16 @@ impl Brain {
         let armed_in_sight_at: Vec<Vec3> = in_sight.iter().filter(|e| armed(e)).map(|e| e.pos).collect();
         // In sight at all is near enough: the first sighting comes at 200-300 elmos (rush-16), inside its laser.
         let commander_near = commander_at.is_some();
-        let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES;
+        let turrets_known = target.map_or(0, |t| self.turrets_bearing(centre, t, CONTACT_RADIUS).len());
+        let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES || turrets_known != self.raid.turrets_known;
         let party_metal: f32 = body.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
         let too_small_for_commander = commander_near && party_metal < COMMANDER_PARTY_METAL;
         if reprice {
             self.raid.priced_at = tick.frame;
             let verdict = self.assault_verdict(&body, target.unwrap_or(centre), CONTACT_RADIUS, tick);
             self.raid.outmatched = verdict.gain < GO_GAIN;
+            self.raid.turrets = verdict.turrets;
+            self.raid.turrets_known = turrets_known;
         }
         let outmatched = self.raid.outmatched && !too_small_for_commander;
         let mode = match target {
@@ -303,7 +310,16 @@ impl Brain {
                 let mut held = std::mem::take(&mut self.raid.held);
                 if tick.frame - self.raid.last_order_frame >= REPRICE_FRAMES {
                     self.raid.last_order_frame = tick.frame;
-                    commands.extend(party.iter().filter(|u| !held.contains(&u.id)).map(|u| Command::Fight { unit: u.id, to: target, queue: false }));
+                    // A turret priced in is killed first, deliberately, by everybody; then the target.
+                    let turret = self.raid.turrets.iter().find(|id| self.enemy_buildings.contains_key(id)).copied();
+                    for u in party.iter().filter(|u| !held.contains(&u.id)) {
+                        if let Some(turret) = turret {
+                            commands.push(Command::Attack { unit: u.id, target: turret, queue: false });
+                            commands.push(Command::Fight { unit: u.id, to: target, queue: true });
+                        } else {
+                            commands.push(Command::Fight { unit: u.id, to: target, queue: false });
+                        }
+                    }
                 }
                 commands.extend(self.march(&mut held, &body, target, tick.snapshot.enemies.as_slice()));
                 self.raid.held = held;

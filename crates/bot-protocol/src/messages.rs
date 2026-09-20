@@ -277,6 +277,8 @@ pub enum Command {
     GiveUnit { def: UnitDefId, at: Vec3 },
     /// Starts the unit's self-destruct countdown (a second order cancels it).
     SelfDestruct { unit: UnitId },
+    /// Attack one unit of theirs: the turret first, deliberately, when a raid or an answer is priced against it.
+    Attack { unit: UnitId, target: UnitId, queue: bool },
     /// A line in the game chat, to everyone: the bot names itself at the start (the game gives AIs random names;
     /// `{name}` in the text becomes the one given to this AI).
     Say { text: String },
