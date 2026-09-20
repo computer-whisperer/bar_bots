@@ -51,3 +51,21 @@ counts, mean positions). It switches the engine's cheat callbacks on for the len
 view stays fair. `run/compare_census.py run/matches/<batch>/<NN> [--detail MINUTE]` prints the two sides beside each other.
 `--corner nw|se` fixes our start; `--swap-corners` puts team 0 in the south-east.
 
+## Post-game analysis
+
+With `WITHIN_REASON_OBSERVE=1` the shim also writes `truth-<ai>.jsonl` into the match directory: every enemy unit
+(`[id, name, x, z, health %, being built]`) every two seconds, read through the engine's cheat callbacks switched on for
+that one query. It is for analysis only; the bot never sees it.
+
+`run/analyze_match.py <match dir>` turns a recorded match into what a reader needs to say why it was lost:
+- curves for both sides per minute (extractors, builders, army and turret value, factories, our bank and income);
+- candidate causes with their numbers (army lead and when it opened, extractor peak and collapse, idle metal and energy
+  stalls, metal lost by place, raids, the worst engagement, how many engagements began outnumbered, the commander's death);
+- engagements: deaths on both sides clustered in space and time (900 elmos, 20 s), with losses by type and value, where,
+  and what each side had on the spot five seconds before, including how spread out our fighters were and turrets present;
+- `--engagement N` or `--scene MM:SS X Z`: scene reports, a character map of the ground (water, cliffs) with both sides'
+  units as letters (ours lower case, theirs upper case), recent deaths marked, and a legend with counts, classes, health,
+  fighting value and our soldiers' roles (home group, attack wave, squad).
+Without a truth file the opponent is only what our units saw, and the report says so. The verdict itself is left to
+the reader: the tool gives numbers and scenes, not conclusions.
+

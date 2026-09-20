@@ -247,6 +247,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         // The commander takes its turns with the game held still: the shim waits for each of the bot's answers.
         .envs(options.commander.then_some(("WITHIN_REASON_LOCKSTEP", "1")))
         .env("WITHIN_REASON_TRACE_BUILDS", "1")
+        .env("WITHIN_REASON_TRUTH_DIR", &dir)
         .env("WITHIN_REASON_SOCKET", &socket)
         .stdout(log.try_clone()?)
         .stderr(log)

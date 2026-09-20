@@ -25,6 +25,8 @@ const RECONNECT_INTERVAL: i32 = 30;
 const HEARTBEAT_INTERVAL: i32 = 30 * 30;
 /// Frames between census lines (`WITHIN_REASON_OBSERVE`): what the opponent owns, for studying how it plays.
 const CENSUS_INTERVAL: i32 = 60 * 30;
+/// Frames between ground-truth samples of the opponent's units (`WITHIN_REASON_OBSERVE` with `WITHIN_REASON_TRUTH_DIR`).
+const TRUTH_INTERVAL: i32 = 2 * 30;
 
 struct Instance {
     ai_id: c_int,
@@ -33,6 +35,8 @@ struct Instance {
     /// The bot has answered the previous message, so it may be sent another.
     has_credit: bool,
     lockstep: bool,
+    /// Where the opponent's true state is written for post-game analysis; the bot never sees it.
+    truth: Option<std::io::BufWriter<std::fs::File>>,
     events: Vec<Event>,
 }
 
@@ -56,6 +60,11 @@ impl Instance {
     fn update(&mut self, frame: i32) {
         if frame % HEARTBEAT_INTERVAL == 0 {
             self.log(format_args!("heartbeat f={frame}"));
+        }
+        if frame % TRUTH_INTERVAL == 0 && let Some(truth) = &mut self.truth {
+            use std::io::Write;
+            let units = self.engine.enemy_truth();
+            let _ = writeln!(truth, "{{\"f\":{frame},\"enemy\":{units}}}").and_then(|()| truth.flush());
         }
         if frame % CENSUS_INTERVAL == 0 && std::env::var_os("WITHIN_REASON_OBSERVE").is_some() {
             let census = self.engine.enemy_census();
@@ -214,6 +223,10 @@ pub unsafe extern "C" fn init(skirmish_ai_id: c_int, callback: *const sys::SSkir
             link: None,
             has_credit: false,
             lockstep: std::env::var_os("WITHIN_REASON_LOCKSTEP").is_some(),
+            truth: std::env::var_os("WITHIN_REASON_OBSERVE")
+                .and(std::env::var_os("WITHIN_REASON_TRUTH_DIR"))
+                .and_then(|dir| std::fs::File::create(std::path::Path::new(&dir).join(format!("truth-{skirmish_ai_id}.jsonl"))).ok())
+                .map(std::io::BufWriter::new),
             events: Vec::new(),
         };
         instance.log("init");

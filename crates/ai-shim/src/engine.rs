@@ -233,6 +233,28 @@ impl Engine {
         census
     }
 
+    /// Every enemy unit as `[id, "name", x, z, health percent, being built]`: ground truth for post-game analysis,
+    /// never the brain's input. Cheat access is on for the length of this call only.
+    pub fn enemy_truth(&mut self) -> String {
+        call!(self, Cheats_setEnabled(true));
+        let max = self.id_buf.len() as c_int;
+        let count = call!(self, getEnemyUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        let mut rows = Vec::with_capacity(count);
+        for &id in &self.id_buf[..count] {
+            let def = call!(self, Unit_getDef(id));
+            if def < 0 {
+                continue;
+            }
+            let name = self.string(call!(self, UnitDef_getName(def)));
+            let pos = self.unit_pos(id);
+            let (health, max_health) = (call!(self, Unit_getHealth(id)), call!(self, Unit_getMaxHealth(id)));
+            let percent = if max_health > 0.0 { (health / max_health * 100.0).round() as i32 } else { 0 };
+            rows.push(format!("[{id},\"{name}\",{:.0},{:.0},{percent},{}]", pos.x, pos.z, call!(self, Unit_isBeingBuilt(id)) as i32));
+        }
+        call!(self, Cheats_setEnabled(false));
+        format!("[{}]", rows.join(","))
+    }
+
     /// Our own units in the census format, for setting beside the enemy's.
     pub fn own_census(&mut self) -> String {
         let max = self.id_buf.len() as c_int;
