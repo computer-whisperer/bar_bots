@@ -22,9 +22,13 @@ const REST: i32 = 2 * FPS;
 /// Wrecks are blown up by crawling bombs on a grid this fine; the blast (the small one, since neighbours set each
 /// other off) reaches 140 elmos.
 const SWEEP_SPACING: f32 = 200.0;
+/// A self-destruct order still not carried out after this long was cancelled and is given again. (The countdown is
+/// 5 s. BAR's "Self-Destruct Resign" gadget cancels the first two attempts of a team to destroy 95% of its units at
+/// once, which a big surviving army beside one commander is.)
+const DESTRUCT_RETRY: i32 = 8 * FPS;
 const SWEEP_BOMBS: [&str; 2] = ["corroach", "armvader"];
-/// Self-destruct takes a few seconds; a site still not clear by now is abandoned.
-const CLEANUP_ALLOWANCE: i32 = 60 * FPS;
+/// Self-destruct takes a few seconds, retries and bombing a few more; a site still not clear by now is abandoned.
+const CLEANUP_ALLOWANCE: i32 = 120 * FPS;
 /// A spawned army stands within this distance of its front rank's centre.
 const CLAIM_RADIUS: f32 = 600.0;
 
@@ -72,7 +76,7 @@ struct Army {
     front: Vec3,
     faces_east: bool,
     spawn_ordered: bool,
-    destruct_ordered: bool,
+    destruct_ordered: Option<i32>,
     units: HashSet<UnitId>,
     /// Health as a fraction, per living unit, as of `reported`.
     alive: HashMap<UnitId, f32>,
@@ -100,7 +104,7 @@ enum Phase {
 /// `waves_left` times, then the field rests.
 enum Sweep {
     Survivors,
-    Bombs { waves_left: u32, spawned_at: Option<i32>, set_off: HashSet<UnitId> },
+    Bombs { waves_left: u32, spawned_at: Option<i32>, set_off: HashMap<UnitId, i32> },
     Rest { since: i32 },
     Done,
 }
@@ -259,7 +263,7 @@ impl Director {
             front: field.site.end(west),
             faces_east: west,
             spawn_ordered: false,
-            destruct_ordered: false,
+            destruct_ordered: None,
             units: HashSet::new(),
             alive: HashMap::new(),
             seen_at: HashMap::new(),
@@ -376,9 +380,9 @@ fn advance(
             Some(conclude(duel, advance_at, frame, first_damage, reason))
         }
         Phase::Clearing { sweep: stage, .. } => {
-            if !army.destruct_ordered {
-                // Once only: a second self-destruct order cancels the first.
-                army.destruct_ordered = true;
+            // Not again while the countdown may be running: a second self-destruct order cancels the first.
+            if army.destruct_ordered.is_none_or(|at| frame - at >= DESTRUCT_RETRY) {
+                army.destruct_ordered = Some(frame);
                 commands.extend(army.alive.keys().map(|&unit| Command::SelfDestruct { unit }));
             }
             // The bombs belong to the first army's team, so only its ticks move the sweep along.
@@ -386,9 +390,9 @@ fn advance(
             let front = duel.armies[0].front;
             match stage {
                 Sweep::Survivors => {
-                    if duel.armies.iter().all(|a| a.destruct_ordered && a.alive.is_empty() && a.reported == frame) {
+                    if duel.armies.iter().all(|a| a.destruct_ordered.is_some() && a.alive.is_empty() && a.reported == frame) {
                         *stage = match (sweep, duel.wreckage) {
-                            (Some((_, waves @ 1..)), Some(_)) => Sweep::Bombs { waves_left: waves, spawned_at: None, set_off: HashSet::new() },
+                            (Some((_, waves @ 1..)), Some(_)) => Sweep::Bombs { waves_left: waves, spawned_at: None, set_off: HashMap::new() },
                             _ => Sweep::Rest { since: frame },
                         };
                     }
@@ -410,9 +414,16 @@ fn advance(
                             }
                         }
                         Some(spawned) => {
-                            let fresh: Vec<UnitId> = bombs.map(|u| u.id).filter(|id| set_off.insert(*id)).collect();
-                            let all_gone = fresh.is_empty() && frame - spawned >= FPS;
-                            commands.extend(fresh.into_iter().map(|unit| Command::SelfDestruct { unit }));
+                            // Bombs go off at once, so one still standing after the retry time had its order cancelled.
+                            let mut standing = 0;
+                            for bomb in bombs {
+                                standing += 1;
+                                if set_off.get(&bomb.id).is_none_or(|at| frame - at >= DESTRUCT_RETRY) {
+                                    set_off.insert(bomb.id, frame);
+                                    commands.push(Command::SelfDestruct { unit: bomb.id });
+                                }
+                            }
+                            let all_gone = standing == 0 && frame - spawned >= FPS;
                             if all_gone {
                                 *waves_left -= 1;
                                 *spawned_at = None;
