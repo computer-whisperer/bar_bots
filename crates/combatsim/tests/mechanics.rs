@@ -136,6 +136,19 @@ fn units_arriving_late_lose_a_fight_their_value_should_win() {
 }
 
 #[test]
+fn a_force_placed_on_top_of_itself_still_gets_moving() {
+    // Two groups on the same point is how a mixed force arrives from a caller that does not lay it out. Until
+    // a unit could step out of one it already overlaps, every deflection landed inside the neighbour as well
+    // and the whole side froze on the spot for the duel's whole four minutes.
+    let rules = rules();
+    let mut scenario = Scenario::new();
+    scenario.sides[0] = vec![blob(&rules, "armpw", 8, 0.0, 1.0), blob(&rules, "armrock", 8, 0.0, 1.0)];
+    scenario.sides[1] = vec![blob(&rules, "armlab", 1, duels::APART, -1.0)];
+    let outcome = simulate(&rules, &scenario, 0);
+    assert_eq!(outcome.winner, Some(0), "stacked groups should reach the target, ended {:?}", outcome.reason);
+}
+
+#[test]
 fn collision_saturates_a_short_range_blob() {
     // Sixty-four Pawns cannot all stand within 180 elmos of one building; long-ranged Rocketeers can.
     let scale = |name: &str, collide: bool| {

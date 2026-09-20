@@ -17,6 +17,8 @@ combatsim validate [--spacing 56|100|both] [--reps 4] [--worst 15] [--no-collide
 combatsim speed [--reps 200]
 
 Unit names are the game's internal ones (armham, corllt). Side A stands in the west, B in the east.
+A side's types are laid out front to back in the order listed, so `--b corllt:12,corthud:20` is a tower line
+with the army behind it, and `--a armham:10,armrock:6` is Rocketeers screened by Maces.
 --terrain reads the bot's terrain-<ai>.bin (width and height in 16-elmo cells, from the record header);
 --from and --at then place A and B on it instead of the default west-east line.";
 
@@ -76,21 +78,29 @@ impl Flags {
     }
 }
 
+/// The groups of one side, laid out one behind the other: the first listed type stands at the front and each
+/// later one falls in a formation-depth further back. Stacking them on the same spot instead would put a
+/// screen inside the unit it is meant to screen, so a mixed force is written front-to-back, `armham:10,armrock:6`
+/// being Maces with Rocketeers behind them.
 fn force(rules: &Rules, spec: &str, front: Vec2, facing: Vec2, flags: &Flags, side: &str) -> Vec<Group> {
-    spec.split(',')
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            // `armham:6@12` is six Maces turning up twelve seconds in.
-            let (part, late) = part.split_once('@').unwrap_or((part, ""));
-            let (name, count) = part.split_once(':').unwrap_or((part, "1"));
-            let def = rules.units.index(name).unwrap_or_else(|| panic!("unknown unit {name}"));
-            let mut group = Group::new(def, count.parse().expect("count"), front, facing);
-            group.spacing = flags.num("spacing", 56.0);
-            group.delay = late.parse().unwrap_or_else(|_| flags.num(&format!("delay-{side}"), 0.0));
-            group.hold = flags.has(&format!("hold-{side}"));
-            group
-        })
-        .collect()
+    let spacing = flags.num("spacing", 56.0);
+    let back = Vec2::default().towards(facing) * -spacing;
+    let mut depth = 0.0;
+    let mut groups = Vec::new();
+    for part in spec.split(',').filter(|part| !part.is_empty()) {
+        // `armham:6@12` is six Maces turning up twelve seconds in.
+        let (part, late) = part.split_once('@').unwrap_or((part, ""));
+        let (name, count) = part.split_once(':').unwrap_or((part, "1"));
+        let def = rules.units.index(name).unwrap_or_else(|| panic!("unknown unit {name}"));
+        let count: u32 = count.parse().expect("count");
+        let mut group = Group::new(def, count, front + back * depth, facing);
+        group.spacing = spacing;
+        group.delay = late.parse().unwrap_or_else(|_| flags.num(&format!("delay-{side}"), 0.0));
+        group.hold = flags.has(&format!("hold-{side}"));
+        depth += count.div_ceil(group.per_rank) as f32;
+        groups.push(group);
+    }
+    groups
 }
 
 fn query(rules: &Rules, flags: &Flags) {
