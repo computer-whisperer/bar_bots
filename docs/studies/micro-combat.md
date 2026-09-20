@@ -222,8 +222,9 @@ targets given up as unreachable 0.00 against 0.04.
 
 Two measurements say why the rule did not show, and the second is the interesting one.
 
-**Exposure.** The rule acted in 15 of the 24 arm-A games, 7 orders a game on average
-(0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 3, 3, 5, 6, 7, 7, 8, 12, 13, 23, 24, 43, 51). The nine games where it never fired
+**Exposure.** The rule acted in 15 of the 24 arm-A games — 9 orders a game over the arm, 14 over the games it
+fired in at all, against a median game of 19 minutes: firings were
+0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 3, 3, 5, 6, 7, 7, 8, 12, 13, 23, 24, 43, 51. The nine games where it never fired
 are the nine where no wave ever launched — the wave gate held the army at home for the whole game, and those nine
 went 0-9. So the rule only reaches the games we were winning anyway.
 
