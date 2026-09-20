@@ -252,8 +252,8 @@ pub struct Score {
     /// in the whole game. Kills out of our sight are not counted.
     pub traded_3_min: (u32, u32),
     pub traded: (u32, u32),
-    /// Game seconds since the commander's previous turn began.
-    pub seconds_since_turn: i32,
+    /// Game seconds since the commander's previous turn began; `None` before its first.
+    pub seconds_since_turn: Option<i32>,
     /// Where a factory of the opponent's has been seen, standing or not.
     pub enemy_base_found: Option<Place>,
     /// The opponent's soldiers seen in the last three minutes and not seen to die, and their metal. Older sightings

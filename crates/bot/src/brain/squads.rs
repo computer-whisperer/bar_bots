@@ -279,7 +279,7 @@ impl Brain {
             extractors_lost_3_min: self.wake.losses.len(),
             traded_3_min: traded(&|frame| recent(&frame)),
             traded: traded(&|_| true),
-            seconds_since_turn: (tick.frame - self.wake.last_turn_frame) / FRAMES_PER_SECOND,
+            seconds_since_turn: (self.wake.last_turn_frame > 0).then(|| (tick.frame - self.wake.last_turn_frame) / FRAMES_PER_SECOND),
             enemy_base_found: self.enemy_base_found.map(|pos| self.place(pos)),
             enemy_spots_seen: enemy_extractors.len(),
             enemy_factories: self

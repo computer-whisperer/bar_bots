@@ -52,8 +52,9 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         s.enemy_soldiers_seen_metal
     ));
     lines.push(format!(
-        "traded: in the last 3 min we lost {} metal of units and buildings and destroyed {} of theirs that we saw die; whole game {} lost, {} destroyed | {} of game time since your last turn began",
-        s.traded_3_min.0, s.traded_3_min.1, s.traded.0, s.traded.1, clock(s.seconds_since_turn)
+        "traded: in the last 3 min we lost {} metal of units and buildings and destroyed {} of theirs that we saw die; whole game {} lost, {} destroyed{}",
+        s.traded_3_min.0, s.traded_3_min.1, s.traded.0, s.traded.1,
+        s.seconds_since_turn.map_or(String::new(), |t| format!(" | {} of game time since your last turn began", clock(t)))
     ));
     lines.push(format!(
         "eco: metal {:.0} ({:+.1}/-{:.1}), energy {:.0}/{:.0} ({:+.0}) | extractors {} constructors {} labs {} turrets {} converters {}",
