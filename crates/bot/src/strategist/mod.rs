@@ -239,6 +239,7 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
         turns_this_session += 1;
         let started = Instant::now();
         launch.transcript.record(json!({ "kind": "turn", "frame": frame, "prompt": prompt }));
+        shared.turn_over.store(false, Ordering::Relaxed);
         let line = json!({ "type": "user", "message": { "role": "user", "content": prompt } });
         let sent = writeln!(session.stdin, "{line}").and_then(|()| session.stdin.flush()).is_ok();
         let finished = sent

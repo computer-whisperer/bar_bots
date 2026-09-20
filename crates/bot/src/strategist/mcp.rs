@@ -70,7 +70,13 @@ fn handle(call: &Value, shared: &Shared, transcript: &Transcript) -> Option<Valu
         "tools/call" => {
             let name = call["params"]["name"].as_str().unwrap_or_default();
             let arguments = &call["params"]["arguments"];
-            let outcome = if name == "orders" { orders(arguments, shared) } else { call_tool(name, arguments, shared) };
+            let outcome = if shared.turn_over.load(Ordering::Relaxed) {
+                Err("Your turn is over and the game is running. Stop now: call nothing more and write nothing more. You will be woken with a new report.".to_string())
+            } else if name == "orders" {
+                orders(arguments, shared)
+            } else {
+                call_tool(name, arguments, shared)
+            };
             // Full results, briefings included: they are what the strategist decided on, and the
             // labelled state for evaluating faster models against its decisions.
             let recorded = outcome.as_ref().map_or_else(
@@ -219,11 +225,11 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, S
             if let Some(pool) = arguments["pool_reaches"].as_object() {
                 wake.pool_reaches = pool.iter().map(|(name, n)| (name.clone(), n.as_u64().unwrap_or(1) as usize)).collect();
             }
-            let reply = format!("turn ended, the game is running. In force until you change them: {}", serde_json::to_string(&*wake).map_err(|e| e.to_string())?);
+            let reply = format!("Turn over: the game is running and you will be woken with a new report. Stop now, call nothing more and write nothing more. Wake conditions in force until you change them: {}", serde_json::to_string(&*wake).map_err(|e| e.to_string())?);
             drop(wake);
             // The turn is over here, not when the model has finished its closing sentence: that sentence is one more
             // request to the model, a second or two with the game held (a third of a median turn, commander game 9).
-            shared.end_turn();
+            shared.end_turn_at_wait();
             Ok(reply)
         }
         "situation" => serde_json::to_string(&*shared.field.lock().unwrap()).map_err(|e| e.to_string()),

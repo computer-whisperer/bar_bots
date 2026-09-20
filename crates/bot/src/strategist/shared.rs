@@ -331,6 +331,10 @@ pub struct Gate {
 /// State shared between the brain's thread, the MCP server and the strategist driver.
 #[derive(Default)]
 pub struct Shared {
+    /// The commander ended its turn with `wait` and has not been given its next report yet: it may order nothing.
+    /// (Given an immediate answer to `wait`, it took the wait to be over and went on polling and ordering on the
+    /// running game, in one endless response: commander game 10, first attempt.)
+    pub turn_over: std::sync::atomic::AtomicBool,
     pub briefing: Mutex<Briefing>,
     pub directives: Mutex<Directives>,
     /// Things worth waking the strategist for, drained by the driver.
@@ -423,6 +427,12 @@ impl Shared {
     /// Driver side: whether the brain is still held for the turn in hand.
     pub fn turn_in_progress(&self) -> bool {
         self.gate.lock().unwrap().in_progress
+    }
+
+    /// MCP side, at the commander's `wait`: the game runs on and the rest of this response is refused.
+    pub fn end_turn_at_wait(&self) {
+        self.turn_over.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.end_turn();
     }
 
     pub fn end_turn(&self) {
