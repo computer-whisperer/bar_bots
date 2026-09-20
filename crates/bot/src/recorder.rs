@@ -1,0 +1,268 @@
+//! Match record: what the bot saw and decided, as JSON Lines, for `viewer/` (`docs/harness/record-format.md`).
+//!
+//! Switched on with `WITHIN_REASON_RECORD=1`; writes `record-<ai_id>.jsonl` into the log directory. The file is
+//! append-only and flushed every tick, so a match that is killed is viewable up to its last tick.
+
+use std::collections::{BTreeMap, HashMap};
+use std::fmt::Write as _;
+use std::fs::{File, OpenOptions};
+use std::io::{self, Write};
+use std::path::Path;
+
+use bot_protocol::{Command, Event, Hello, Resource, Tick, UnitDefId, UnitId, Vec3};
+use serde_json::{Value, json};
+
+use crate::brain::journal::{Intent, Journal};
+
+pub const FORMAT_VERSION: u32 = 1;
+/// A state sample once a game second: the viewer interpolates between samples, and a 40-minute game stays
+/// around ten megabytes (measured; see the format document).
+const SAMPLE_FRAMES: i32 = 30;
+
+const FLAG_BEING_BUILT: u8 = 1;
+const FLAG_IDLE: u8 = 2;
+/// The brain's role bits (`journal::ROLE_*`) sit above the unit's own.
+const ROLE_SHIFT: u8 = 2;
+
+pub struct Recorder {
+    out: File,
+    /// The line being assembled; one write per tick.
+    buffer: String,
+    /// Engine definition id to index in the header's table.
+    def_index: HashMap<UnitDefId, usize>,
+    header: Option<Value>,
+    /// Units of either side as last seen, so an event about a unit that is gone still has a type and a place.
+    known: HashMap<UnitId, (Option<UnitDefId>, Vec3)>,
+    next_sample: i32,
+    /// Since the last sample: heuristic firings, damage taken per unit, slowest `decide`.
+    rules: BTreeMap<&'static str, u32>,
+    damage: BTreeMap<UnitId, f32>,
+    slowest_decide_ms: f32,
+    intent: Option<Intent>,
+}
+
+impl Recorder {
+    /// `None` unless `WITHIN_REASON_RECORD` is set to something other than `0`.
+    pub fn from_env(dir: &Path, hello: &Hello, mode: &str) -> Option<Recorder> {
+        if std::env::var("WITHIN_REASON_RECORD").map_or(true, |v| v.is_empty() || v == "0") {
+            return None;
+        }
+        let path = dir.join(format!("record-{}.jsonl", hello.ai_id));
+        // Appending: a bot restarted mid-match continues the same record with a second header line.
+        match OpenOptions::new().create(true).append(true).open(&path) {
+            Ok(out) => Some(Recorder {
+                out,
+                buffer: String::new(),
+                def_index: hello.unit_defs.iter().enumerate().map(|(i, d)| (d.id, i)).collect(),
+                header: Some(header(hello, mode)),
+                known: HashMap::new(),
+                next_sample: 0,
+                rules: BTreeMap::new(),
+                damage: BTreeMap::new(),
+                slowest_decide_ms: 0.0,
+                intent: None,
+            }),
+            Err(e) => {
+                eprintln!("[ai {}] no match record: {}: {e}", hello.ai_id, path.display());
+                None
+            }
+        }
+    }
+
+    /// Records one tick: the events, the brain's journal, the commands it answered with, and a sample when due.
+    pub fn tick(&mut self, tick: &Tick, journal: Journal, role: impl Fn(UnitId) -> u8, commands: &[Command], decide_ms: f32) -> io::Result<()> {
+        if let Some(mut header) = self.header.take() {
+            // The header waits for the first tick because only a unit tells which faction we play.
+            let first = tick.snapshot.own_units.first().and_then(|u| self.def_index.get(&u.def));
+            let side = first.and_then(|&i| header["unit_defs"][i]["name"].as_str()).and_then(|name| name.get(..3)).map(str::to_string);
+            header["side"] = json!(side);
+            header["first_tick_frame"] = json!(tick.frame);
+            self.line(&header);
+        }
+        for unit in &tick.snapshot.own_units {
+            self.known.insert(unit.id, (Some(unit.def), unit.pos));
+        }
+        for enemy in &tick.snapshot.enemies {
+            let def = enemy.def.or_else(|| self.known.get(&enemy.id).and_then(|k| k.0));
+            self.known.insert(enemy.id, (def, enemy.pos));
+        }
+        for event in &tick.events {
+            self.event(tick.frame, event);
+        }
+        for (rule, n) in journal.rules {
+            *self.rules.entry(rule).or_default() += n;
+        }
+        for note in journal.notes {
+            self.line(&json!({ "t": "d", "f": note.frame, "source": note.source, "kind": note.kind, "inputs": note.inputs, "outputs": note.outputs }));
+        }
+        if self.intent != Some(journal.intent) {
+            self.intent = Some(journal.intent);
+            let at = |p: Vec3| json!([p.x as i32, p.z as i32]);
+            let i = journal.intent;
+            self.line(&json!({
+                "t": "intent", "f": tick.frame, "home": at(i.home), "enemy_start": at(i.enemy_start), "station": at(i.station),
+                "target": i.target.map(at), "staging": i.staging.map(at),
+            }));
+        }
+        self.commands(tick.frame, commands);
+        self.slowest_decide_ms = self.slowest_decide_ms.max(decide_ms);
+        if tick.frame >= self.next_sample {
+            self.next_sample = tick.frame - tick.frame % SAMPLE_FRAMES + SAMPLE_FRAMES;
+            self.sample(tick, role);
+        }
+        self.out.write_all(self.buffer.as_bytes())?;
+        self.buffer.clear();
+        Ok(())
+    }
+
+    fn line(&mut self, value: &Value) {
+        let _ = writeln!(self.buffer, "{value}");
+    }
+
+    fn def(&self, def: Option<UnitDefId>) -> i64 {
+        def.and_then(|d| self.def_index.get(&d)).map_or(-1, |&i| i as i64)
+    }
+
+    fn event(&mut self, frame: i32, event: &Event) {
+        // `who` is the unit the event is about, with its type and last known place.
+        let about = |this: &Self, kind: &str, who: UnitId| {
+            let (def, pos) = this.known.get(&who).copied().unwrap_or_default();
+            json!({ "t": "ev", "f": frame, "k": kind, "u": who.0, "d": this.def(def), "x": pos.x as i32, "z": pos.z as i32 })
+        };
+        let record = match *event {
+            // Idle is a unit flag in the samples; damage is summed into the next sample.
+            Event::UnitIdle { .. } => return,
+            Event::UnitDamaged { unit, damage, .. } => {
+                *self.damage.entry(unit).or_default() += damage;
+                return;
+            }
+            Event::UnitCreated { unit, builder } => {
+                let mut r = about(self, "created", unit);
+                r["by"] = json!(builder.map(|b| b.0));
+                r
+            }
+            Event::UnitFinished { unit } => about(self, "finished", unit),
+            Event::UnitMoveFailed { unit } => about(self, "move_failed", unit),
+            Event::UnitDestroyed { unit, attacker } => {
+                let mut r = about(self, "destroyed", unit);
+                r["by"] = json!(attacker.map(|a| a.0));
+                r["by_d"] = json!(self.def(attacker.and_then(|a| self.known.get(&a)).and_then(|k| k.0)));
+                self.known.remove(&unit);
+                r
+            }
+            Event::EnemyEnterLos { enemy } => about(self, "enemy_seen", enemy),
+            Event::EnemyLeaveLos { enemy } => about(self, "enemy_lost", enemy),
+            Event::EnemyDestroyed { enemy } => {
+                let r = about(self, "enemy_destroyed", enemy);
+                self.known.remove(&enemy);
+                r
+            }
+            Event::BuildSiteNotFound { unit, def } => {
+                let mut r = about(self, "no_site", unit);
+                r["what"] = json!(self.def(Some(def)));
+                r
+            }
+            Event::CommandRejected { unit, code } => {
+                let mut r = about(self, "rejected", unit);
+                r["code"] = json!(code);
+                r
+            }
+        };
+        self.line(&record);
+    }
+
+    fn commands(&mut self, frame: i32, commands: &[Command]) {
+        if commands.is_empty() {
+            return;
+        }
+        let list: Vec<Value> = commands
+            .iter()
+            .map(|command| match *command {
+                Command::Build { unit, def, site, .. } => match site {
+                    Some(site) => json!(["build", unit.0, self.def(Some(def)), site.near.x as i32, site.near.z as i32]),
+                    None => json!(["build", unit.0, self.def(Some(def))]),
+                },
+                Command::Move { unit, to, .. } => json!(["move", unit.0, to.x as i32, to.z as i32]),
+                Command::Fight { unit, to, .. } => json!(["fight", unit.0, to.x as i32, to.z as i32]),
+                Command::Stop { unit } => json!(["stop", unit.0]),
+                Command::SetRepeat { unit, repeat } => json!(["repeat", unit.0, repeat as i32]),
+            })
+            .collect();
+        self.line(&json!({ "t": "cmd", "f": frame, "c": list }));
+    }
+
+    /// Written by hand: this is nine tenths of the file, and `[id,def,x,z,health%,flags]` rows keep it small.
+    fn sample(&mut self, tick: &Tick, role: impl Fn(UnitId) -> u8) {
+        let s = &tick.snapshot;
+        let resource = |r: Resource| format!("[{:.0},{:.1},{:.1},{:.0}]", r.current, r.income, r.usage, r.storage);
+        let _ = write!(self.buffer, "{{\"t\":\"s\",\"f\":{},\"m\":{},\"e\":{},\"own\":[", tick.frame, resource(s.metal), resource(s.energy));
+        for (i, u) in s.own_units.iter().enumerate() {
+            let flags = u8::from(u.being_built) * FLAG_BEING_BUILT | u8::from(u.idle) * FLAG_IDLE | role(u.id) << ROLE_SHIFT;
+            let health = (u.health / u.max_health.max(1.0) * 100.0).round() as i32;
+            let comma = if i == 0 { "" } else { "," };
+            let _ = write!(self.buffer, "{comma}[{},{},{},{},{health},{flags}]", u.id.0, self.def(Some(u.def)), u.pos.x as i32, u.pos.z as i32);
+        }
+        self.buffer.push_str("],\"en\":[");
+        for (i, e) in s.enemies.iter().enumerate() {
+            let comma = if i == 0 { "" } else { "," };
+            let def = self.def(self.known.get(&e.id).and_then(|k| k.0));
+            let _ = write!(self.buffer, "{comma}[{},{def},{},{},{:.0}]", e.id.0, e.pos.x as i32, e.pos.z as i32, e.health);
+        }
+        self.buffer.push_str("],\"dmg\":[");
+        for (i, (unit, damage)) in std::mem::take(&mut self.damage).into_iter().enumerate() {
+            let comma = if i == 0 { "" } else { "," };
+            let _ = write!(self.buffer, "{comma}[{},{damage:.0}]", unit.0);
+        }
+        let _ = writeln!(self.buffer, "],\"ms\":{:.2}}}", std::mem::take(&mut self.slowest_decide_ms));
+        if !self.rules.is_empty() {
+            let rules = std::mem::take(&mut self.rules);
+            self.line(&json!({ "t": "d", "f": tick.frame, "source": "heuristic", "kind": "rules", "inputs": null, "outputs": rules }));
+        }
+    }
+}
+
+fn header(hello: &Hello, mode: &str) -> Value {
+    let defs: Vec<Value> = hello
+        .unit_defs
+        .iter()
+        .map(|d| {
+            json!({
+                "id": d.id.0, "name": d.name, "class": class(d), "metal": d.metal_cost, "energy": d.energy_cost,
+                "speed": d.speed, "weapons": d.weapon_count,
+            })
+        })
+        .collect();
+    let spots: Vec<Value> = hello.metal_spots.iter().map(|s| json!([s.x as i32, s.z as i32])).collect();
+    let map = &hello.map;
+    // The Claude Code session beside the brain keeps its own transcript (`strategist/transcript.rs`).
+    let decision_logs: Vec<String> = (mode != "heuristic").then(|| format!("strategist-{}.jsonl", hello.ai_id)).into_iter().collect();
+    json!({
+        "t": "header", "format": "within-reason-record", "version": FORMAT_VERSION,
+        "ai_id": hello.ai_id, "team": hello.team, "ally_team": hello.ally_team, "start_frame": hello.frame,
+        "frames_per_second": 30, "sample_frames": SAMPLE_FRAMES, "mode": mode,
+        "wall_start": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
+        "map": { "name": map.name, "width": map.width, "height": map.height, "wind_min": map.wind_min, "wind_max": map.wind_max },
+        "grid": { "columns": 8, "rows": 8 },
+        "metal_spots": spots,
+        "unit_defs": defs,
+        "siblings": {
+            "bot_log": "bot.log", "engine_log": "engine.log", "replay": "demos/*.sdfz",
+            "decision_logs": decision_logs,
+        },
+    })
+}
+
+/// A coarse class from the definition's numbers alone, so it holds for every faction and for enemy units too.
+fn class(d: &bot_protocol::UnitDefInfo) -> &'static str {
+    let mobile = d.speed > 0.0;
+    match () {
+        _ if d.name.ends_with("com") && mobile && d.build_speed > 0.0 => "commander",
+        _ if d.extracts_metal > 0.0 => "extractor",
+        _ if !mobile && !d.build_options.is_empty() => "factory",
+        _ if !mobile && d.weapon_count > 0 => "turret",
+        _ if !mobile => "building",
+        _ if d.build_speed > 0.0 => "builder",
+        _ if d.weapon_count > 0 => "army",
+        _ => "other",
+    }
+}

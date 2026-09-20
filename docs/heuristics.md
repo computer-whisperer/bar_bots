@@ -20,7 +20,7 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 | H-ECO-JOBS | Builders count each other's in-progress jobs before choosing | `economy.rs` `plan_for`, `Brain::jobs` | (mechanical) | active |
 | H-PROD-BATCH | Factory batch: raider, raider, constructor-or-artillery, skirmisher, skirmisher; constructors wanted = 2 + extractors/4, max 6 | `economy.rs` `production_batch` | K-army-fighters-before-constructors | active |
 | H-ARMY-DEFEND | Enemy within 1400 of home: home group fights it, no wave leaves | `army.rs` `run_army` | (unexamined) | active |
-| H-ARMY-WAVES | Home group of 8 (+4 per wave, max 40) is committed as attackers | `army.rs` `run_army` | K-army-crowds-are-never-idle | active |
+| H-ARMY-WAVES | Home group of 20 (+5 per wave, max 40; `FIRST_WAVE`, `WAVE_GROWTH`) is committed as attackers | `army.rs` `run_army` | K-army-crowds-are-never-idle | active |
 | H-ARMY-TARGET | Attack remembered enemy buildings, the one nearest to us first; else the presumed enemy start. Buildings our soldiers stand next to and cannot see are forgotten | `army.rs` `run_army`, `forget_razed_buildings` | K-army-waves-chased-raiders | active (untested) |
 | H-ECO-WIND | Average map wind >= 8: wind generators instead of solars (4 in the opening instead of 2) | `economy.rs` `plan_for`, `WINDY_AVERAGE` | K-maps/K-mechanics wind entries (reported) | active (untested) |
 | H-ARMY-STATION | Home group waits 250 ahead of our most exposed outpost extractor | `army.rs` `station` | K-army-home-defence-does-not-protect-outposts | active; effect unknown (ablations were noise) |

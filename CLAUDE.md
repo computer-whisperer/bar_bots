@@ -7,6 +7,7 @@ and an arena that runs headless batches against the stock BARb AI.
 - `docs/README.md` — how knowledge is organised and the observe -> claim -> exploit -> verify -> retire loop. **Follow it:**
   every brain change registers its heuristic in `docs/heuristics.md` and the claim it rests on in `docs/knowledge/`;
   every arena batch gets a line in `docs/experiments.md`.
+- `docs/harness/record-format.md` — the per-match record the bot writes; `run/view_match.py <match dir>` replays it in `viewer/`.
 - `docs/harness/pitfalls.md` — read before running engines or installing the AI.
 - `upstream/`, `run/engines/`, `run/data/`, `run/matches/` are git-ignored working data.
 

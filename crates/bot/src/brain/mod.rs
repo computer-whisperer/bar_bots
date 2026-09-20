@@ -7,6 +7,7 @@
 mod army;
 mod briefing;
 mod economy;
+pub mod journal;
 mod squads;
 mod wake;
 mod roster;
@@ -70,6 +71,8 @@ pub struct Brain {
     /// Heuristic IDs switched off for an ablation run (`WITHIN_REASON_DISABLE=H-A,H-B`).
     disabled: Vec<String>,
     last_trigger_frame: HashMap<&'static str, i32>,
+    /// Decisions since `main` last collected them for the match record.
+    journal: journal::Journal,
 }
 
 impl Brain {
@@ -108,6 +111,7 @@ impl Brain {
             unreachable: Vec::new(),
             disabled: std::env::var("WITHIN_REASON_DISABLE").map_or_else(|_| Vec::new(), |ids| ids.split(',').map(str::to_string).collect()),
             last_trigger_frame: HashMap::new(),
+            journal: Default::default(),
         }
     }
 
@@ -123,6 +127,7 @@ impl Brain {
         self.protect_commander(tick, &kit, &mut commands);
         self.run_economy(tick, &kit, &mut commands);
         self.run_army(tick, &kit, &mut commands);
+        self.journal_intent();
         self.report(tick, &kit);
         self.publish_briefing(tick, &kit);
         self.wake_commander_if_due(tick, &kit);
@@ -155,6 +160,7 @@ impl Brain {
 
     fn fire(&mut self, rule: &'static str) {
         *self.fired.entry(rule).or_default() += 1;
+        self.journal.rule(rule);
     }
 
     /// A point `distance` elmos from home towards the enemy.
