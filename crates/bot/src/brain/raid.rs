@@ -131,19 +131,23 @@ impl Brain {
         self.reachable_on_foot(base).then_some(base)
     }
 
-    /// Outmatched at `target`: another extractor of theirs the body is priced to win at, nearest first and clear of
-    /// what is armed in sight. The experienced players' Pawns meet BARb's commander out front and go round it to the
-    /// extractors it is not standing on; ours went home and rested a minute (rush-10-qs-place 08).
+    /// Outmatched at `target`: another extractor of theirs, in its base or out of it, that nothing armed and mobile
+    /// stands at (within 600) and the body is priced to win at against what stands that close, nearest first. The
+    /// experienced players' Pawns meet BARb's commander out front and go round it to the extractors it is not standing
+    /// on (it is slow); ours went home and rested a minute (rush-10-qs-place 08). On Quicksilver every extractor of
+    /// BARb's lies within 1400 of its start, so the raid list of extractors outside the base is empty there.
     fn harass_elsewhere(&mut self, body: &[&OwnUnit], target: Vec3, centre: Vec3, tick: &Tick) -> Option<Vec3> {
         let armed: Vec<Vec3> = tick.snapshot.enemies.iter()
             .filter(|e| e.def.is_none_or(|d| self.world.def(d).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0)))
             .map(|e| e.pos)
             .collect();
-        let mut candidates: Vec<Vec3> = self.raid_targets().into_iter()
-            .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < CONTACT_RADIUS))
+        let mut candidates: Vec<Vec3> = self.enemy_buildings.values()
+            .filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0))
+            .map(|(_, pos, _)| *pos)
+            .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && self.reachable_on_foot(*t))
             .collect();
         candidates.sort_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)));
-        candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.assault_verdict(body, *t, CONTACT_RADIUS, tick).gain >= GO_GAIN)
+        candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.assault_verdict(body, *t, TARGET_RADIUS, tick).gain >= GO_GAIN)
     }
 
     /// `soldiers`: finished soldiers no squad has claimed. Returns with the party's orders pushed.
