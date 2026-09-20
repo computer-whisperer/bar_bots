@@ -186,7 +186,9 @@ to believe.** Recorded in `combat-sim.md` under *Where it is wrong*.
 
 Details and why:
 - **110 elmos** clears the blasts being dodged (36 and 48, measured to the collision volume's surface, and a
-  tier-1 bot's radius is 11-15) with room for the engine's own jostling.
+  tier-1 bot's radius is 11-15) with room for the engine's own jostling. Swept in the simulator, the gain is
+  +0.093 at a 60-elmo gap, +0.155 at 100 and +0.154 at 140: it saturates once a neighbour is out of one blast,
+  and going wider only costs against raiders (spread=160 is worse than spread=100 in the table above).
 - **A block, not a line.** The first probe used a line, which for 24 units is 2500 elmos of front. That is fine on
   a duel site and absurd on a map. The block is `ceil(sqrt(2n))` files, so twice as wide as deep, capped at 8
   files: 40 attackers stand 770 x 440.
