@@ -11,6 +11,8 @@ use super::{Brain, FRAMES_PER_SECOND};
 /// Turns are at least this far apart in game time, however many conditions fire.
 const MIN_GAP_FRAMES: i32 = 5 * FRAMES_PER_SECOND;
 const THREAT_RADIUS: f32 = 600.0;
+/// The commander is woken when our extractor count has made no new high for this long, and again this long after.
+const STAGNATION_FRAMES: i32 = 4 * 60 * FRAMES_PER_SECOND;
 
 #[derive(Default)]
 pub struct WakeState {
@@ -18,11 +20,23 @@ pub struct WakeState {
     threatened_extractors: usize,
     squads_engaged: usize,
     pool_met: bool,
+    /// The most extractors we have held, and when we first held that many.
+    pub(super) extractor_peak: usize,
+    pub(super) growth_frame: i32,
+    last_stagnation_wake: i32,
     /// Reasons that fired while a turn could not be taken yet.
     pending: Vec<String>,
 }
 
 impl Brain {
+    pub(super) fn track_growth(&mut self, tick: &Tick, kit: &Kit) {
+        let extractors = tick.snapshot.own_units.iter().filter(|u| u.def == kit.extractor && !u.being_built).count();
+        if extractors > self.wake.extractor_peak {
+            self.wake.extractor_peak = extractors;
+            self.wake.growth_frame = tick.frame;
+        }
+    }
+
     pub(super) fn wake_commander_if_due(&mut self, tick: &Tick, kit: &Kit) {
         let Some(shared) = self.strategist.clone() else { return };
         if !shared.lockstep.load(Ordering::Relaxed) {
@@ -54,6 +68,18 @@ impl Brain {
             reasons.push("the unassigned soldiers you were waiting for are ready".into());
         }
         self.wake.pool_met = pool_met;
+        // Not the commander's to switch off: every other condition is a threat, and a commander woken only by threats
+        // defends four extractors for half an hour.
+        let stagnant = tick.frame - self.wake.growth_frame.max(self.wake.last_stagnation_wake);
+        if stagnant >= STAGNATION_FRAMES && field.score.free_spots_ours > 0 {
+            self.wake.last_stagnation_wake = tick.frame;
+            reasons.push(format!(
+                "no growth: we have not held more than {} extractors for {} min, with {} free spots on our side of the map",
+                self.wake.extractor_peak,
+                (tick.frame - self.wake.growth_frame) / (60 * FRAMES_PER_SECOND),
+                field.score.free_spots_ours
+            ));
+        }
 
         let since = tick.frame - self.wake.last_turn_frame;
         if reasons.is_empty() && since >= wake.max_seconds as i32 * FRAMES_PER_SECOND {

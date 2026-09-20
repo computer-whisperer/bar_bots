@@ -219,6 +219,26 @@ pub struct Field {
     pub buildable: Vec<(String, u32)>,
     pub production_weights: Vec<(String, u32)>,
     pub turret_requests_pending: usize,
+    pub score: Score,
+}
+
+/// How the game stands, in every report: a commander shown only threats plays only defence.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct Score {
+    pub extractors: usize,
+    pub extractor_peak: usize,
+    /// Game seconds since our extractor count last reached a new high.
+    pub seconds_since_growth: i32,
+    /// Free metal spots nearer to us than to the opponent on foot, and how many of them lie within 2500 of home.
+    pub free_spots_ours: usize,
+    pub free_spots_near: usize,
+    pub soldiers: usize,
+    pub army_metal: u32,
+    pub soldiers_near_home: usize,
+    /// Opponent extractors seen and not known to be dead: a floor, since we see little of their side.
+    pub enemy_extractors_seen: usize,
+    /// The biggest opponent army seen in one look lately, in metal, and how many seconds ago.
+    pub enemy_army_seen: Option<(u32, i32)>,
 }
 
 #[derive(Clone, Debug, Serialize)]

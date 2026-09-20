@@ -7,7 +7,7 @@ use bot_protocol::{Command, OwnUnit, Tick, UnitId, Vec3};
 
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
-use crate::strategist::shared::{ExtractorStatus, Field, OrderKind, Post, SquadStatus};
+use crate::strategist::shared::{ExtractorStatus, Field, OrderKind, Post, Score, SquadStatus};
 
 /// A squad's standing orders are re-issued no more often than this.
 const REORDER_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
@@ -133,6 +133,7 @@ impl Brain {
         if !self.squads.posts.is_empty() {
             self.fire("D-SQUAD-POST");
         }
+        self.track_growth(tick, kit);
         self.publish_field(tick, kit, soldiers, &shared);
     }
 
@@ -203,7 +204,29 @@ impl Brain {
                     .collect()
             })
             .unwrap_or_default();
+        let free: Vec<Vec3> = self
+            .world
+            .hello
+            .metal_spots
+            .iter()
+            .filter(|s| self.spot_is_ours(**s) && !own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(**s) < 100.0))
+            .copied()
+            .collect();
+        let metal = |u: &&OwnUnit| self.world.def(u.def).map_or(0.0, |d| d.metal_cost);
+        let score = Score {
+            extractors: own.iter().filter(|u| u.def == kit.extractor && !u.being_built).count(),
+            extractor_peak: self.wake.extractor_peak,
+            seconds_since_growth: (tick.frame - self.wake.growth_frame) / FRAMES_PER_SECOND,
+            free_spots_ours: free.len(),
+            free_spots_near: free.iter().filter(|s| self.walk_from_home(**s) < SCORE_NEAR).count(),
+            soldiers: soldiers.len(),
+            army_metal: soldiers.iter().map(metal).sum::<f32>() as u32,
+            soldiers_near_home: soldiers.iter().filter(|u| u.pos.dist2d(self.home) < SCORE_AT_HOME).count(),
+            enemy_extractors_seen: self.enemy_buildings.values().filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0)).count(),
+            enemy_army_seen: self.enemy_army_seen_metal(tick.frame),
+        };
         *shared.field.lock().unwrap() = Field {
+            score,
             unassigned: composition(&pool),
             unassigned_centre: centre_of(&pool).map(|c| self.place(c)),
             squads,
@@ -215,6 +238,10 @@ impl Brain {
         };
     }
 }
+
+/// The scoreboard's "near": free spots within this walk of home, soldiers within this of the start point.
+const SCORE_NEAR: f32 = 2500.0;
+const SCORE_AT_HOME: f32 = 800.0;
 
 fn centre_of(units: &[&&OwnUnit]) -> Option<Vec3> {
     if units.is_empty() {

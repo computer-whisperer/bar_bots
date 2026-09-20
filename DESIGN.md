@@ -133,8 +133,18 @@ unit mix look like (the heuristic home group is "F2 a-move": one blob charging e
 LLM levers belong. BARb is the reference for economy and army hoarding, not for defence.
 
 - **Division of labour.** The heuristic brain keeps the economy, the opening and every soldier the commander has not
-  claimed (home group, waves). The commander owns squads, the unit mix and turret requests. A silent commander costs
-  nothing: squads keep their standing posts, everything else is heuristic.
+  claimed (home group, waves). The commander's levers are squads, the unit mix, turret requests and the directives. A
+  silent commander costs nothing: squads keep their standing posts, everything else is heuristic.
+- **Responsibility (revised 2026-09-19 after the second game).** The first prompt made the commander a defence officer
+  ("you own defence, the unit mix and where turrets go"; the word "win" did not occur), and it played that faithfully:
+  60 of 90 posts on its own lab yard, `expansion_radius` 900, economy focus "defence", 2-5 extractors against 20 for 33
+  minutes. Asked cold about the same position it named the missing map control 6 times in 6
+  (`docs/studies/perception.md`). Now the commander is the player and the bot its staff: the prompt states how the game
+  is won and what a healthy extractor curve is, every report opens with a `score` line (extractors and time since they
+  last grew, free spots, army size and how much of it stands at home, what is known of the opponent), and the
+  commander is woken when extractors have not grown for four minutes, a condition it cannot switch off. Rejected:
+  keeping the narrow remit and fixing expansion in the heuristics, because the commander already had the directives
+  that starved it and used them for defence.
 - **Squads, not unit ids.** `squad {name, take: {type: count}, near?, post?, order?, release?}`. `take` draws from the
   unassigned pool (nearest to `near`, else to the post). A **post** `{x, z, radius}` is the defender primitive: stand
   there, engage enemies that come inside the radius, go back. An **order** `{kind: move|fight, x, z}` is a one-off.

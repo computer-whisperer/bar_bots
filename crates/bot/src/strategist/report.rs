@@ -33,6 +33,22 @@ fn squad_line(s: &SquadStatus) -> String {
 pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[String], full: bool) -> String {
     let mut lines = Vec::new();
     let c = &briefing.counts;
+    // In every report, changed or not: what is not shown is not weighed.
+    let s = &field.score;
+    let clock = |seconds: i32| format!("{}:{:02}", seconds / 60, seconds % 60);
+    lines.push(format!(
+        "score: extractors {} (most held {}, no new high for {}; free spots on our side {}, {} of them within 2500 walk of home) | army {} soldiers worth {} metal, {} of them within 800 of our start | opponent, as far as seen: {} extractors, {}",
+        s.extractors,
+        s.extractor_peak,
+        clock(s.seconds_since_growth),
+        s.free_spots_ours,
+        s.free_spots_near,
+        s.soldiers,
+        s.army_metal,
+        s.soldiers_near_home,
+        s.enemy_extractors_seen,
+        s.enemy_army_seen.map_or("no army seen in the last 2 min".to_string(), |(metal, ago)| format!("army worth {metal} metal seen {} ago", clock(ago)))
+    ));
     lines.push(format!(
         "eco: metal {:.0} ({:+.1}/-{:.1}), energy {:.0}/{:.0} ({:+.0}) | extractors {} constructors {} labs {} turrets {} converters {}",
         briefing.metal.current, briefing.metal.income, briefing.metal.usage, briefing.energy.current, briefing.energy.storage,
@@ -103,7 +119,7 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     seen.turrets = field.turrets.len();
 
     let production = if field.production_weights.is_empty() {
-        "bot default (2 raiders, 1 constructor-or-artillery, 2 skirmishers)".to_string()
+        "bot default (constructors while it wants them, then line units with one raider a batch)".to_string()
     } else {
         field.production_weights.iter().map(|(n, w)| format!("{n} {w}")).collect::<Vec<_>>().join(", ")
     };
