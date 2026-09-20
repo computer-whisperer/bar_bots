@@ -32,7 +32,7 @@ def main(argv):
             r = json.loads(line)
             results[r["index"]] = r
 
-    rows = []
+    rows, aborted = [], []
     for index, result in sorted(results.items()):
         directory = batch / f"{index:02d}"
         if not directory.is_dir():
@@ -49,9 +49,14 @@ def main(argv):
                 lost += metal
             else:
                 killed += metal
+        if result["outcome"] == "Aborted":
+            # An engine run that never finished has partial deaths and no game time: it would drag the per-game
+            # means and the median down while not appearing in the W-L-T count.
+            aborted.append(index)
+            continue
         rows.append({
             "index": index,
-            "arm": result["arm"] or "-",
+            "arm": result.get("arm") or "-",
             "corner": result["our_corner"],
             "outcome": result["outcome"],
             "minutes": result["game_minutes"],
@@ -60,6 +65,8 @@ def main(argv):
             "truth": bool(match.truth),
         })
 
+    if aborted:
+        print(f"matches {aborted} were aborted and are left out\n")
     missing = [r["index"] for r in rows if not r["truth"]]
     if missing:
         print(f"no truth file in matches {missing}: their 'killed' is only what our units saw\n")

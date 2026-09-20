@@ -306,24 +306,28 @@ struct Shape {
     spread: f32,
 }
 
-/// How much wider than deep the loose block is; the same number as the bot's `WIDTH_BIAS`.
+/// How much wider than deep the loose block is, and the cap on its width: the same numbers as the bot's
+/// `WIDTH_BIAS` and `MAX_FILES`.
 const WIDTH_BIAS: f32 = 2.0;
+const MAX_FILES: usize = 8;
 
 /// Where each of `units` is sent when the army advances spread out: a block around the enemy, `spread` elmos
-/// between neighbours, files across the approach and ranks behind it. Units keep their left-to-right order, so
+/// between neighbours, files across the approach and ranks in depth. Units keep their left-to-right order, so
 /// nobody crosses anybody's path.
 ///
 /// A second copy of the bot's `brain::micro::loose_block`, deliberately: the duel harness has to issue the orders
 /// the bot issues for the check to mean anything, and the two crates share no geometry. Change both together.
 fn loose_block(units: &mut [(UnitId, Vec3)], from: Vec3, to: Vec3, spread: f32) -> Vec<(UnitId, Vec3)> {
-    let n = units.len().max(1);
+    let n = units.len();
     let (dx, dz) = (to.x - from.x, to.z - from.z);
     let len = dx.hypot(dz).max(1.0);
     let (ahead, across) = ((dx / len, dz / len), (-dz / len, dx / len));
     let sideways = |p: &Vec3| p.x * across.0 + p.z * across.1;
     units.sort_by(|a, b| sideways(&a.1).total_cmp(&sideways(&b.1)));
-    let files = ((n as f32 * WIDTH_BIAS).sqrt().ceil() as usize).clamp(1, n);
-    let ranks = n.div_ceil(files);
+    // Width asked for, then taken back from the depth, then centred on what is actually filled: see the bot's copy.
+    let wanted = ((n as f32 * WIDTH_BIAS).sqrt().ceil() as usize).clamp(1, MAX_FILES);
+    let ranks = n.div_ceil(wanted).max(1);
+    let files = n.div_ceil(ranks).max(1);
     (units.iter().enumerate())
         .map(|(place, (id, _))| {
             let (file, rank) = (place / ranks, place % ranks);

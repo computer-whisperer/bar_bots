@@ -13,8 +13,6 @@
 //!
 //! Measured in `docs/studies/micro-combat.md`.
 
-use std::collections::HashMap;
-
 use bot_protocol::{Command, Tick, UnitId, Vec3};
 
 use super::Brain;
@@ -37,16 +35,31 @@ const MAX_FILES: usize = 8;
 impl Brain {
     /// Re-aims the attack orders of committed attackers at their own place in a loose block. Called on the whole
     /// tick's commands, so it catches every path the army takes to a `Fight` order without a hook in each.
+    ///
+    /// The block is laid out over **every** committed attacker, not only over the ones being ordered this tick,
+    /// and then the orders that exist are re-aimed at their own slot in it. That is what keeps the formation: the
+    /// army is re-ordered a few units at a time as they fall idle, and a block laid over those few alone would
+    /// send them back to one point and undo itself. It is also what the duel harness does, so what was measured
+    /// there (`docs/studies/micro-combat.md`) is what runs here.
+    ///
+    /// Only committed attackers. The home group's defence orders, a squad's orders and H-ARMY-DETACH's posts are
+    /// all left alone — a detachment's whole job is to stand on a spot, and its soldiers never join a wave.
     pub(super) fn spread_attack_orders(&mut self, tick: &Tick, commands: &mut [Command]) {
         if !self.enabled("H-MICRO-SPREAD") {
             return;
         }
-        let at: HashMap<UnitId, Vec3> = tick.snapshot.own_units.iter().map(|u| (u.id, u.pos)).collect();
+        let body: Vec<(UnitId, Vec3)> = (tick.snapshot.own_units.iter())
+            .filter(|u| self.army.is_attacker(u.id))
+            .map(|u| (u.id, u.pos))
+            .collect();
+        if body.len() < MIN_GROUP {
+            return;
+        }
         // Which commands this rule may touch, and where each is aimed.
         let mut wanted: Vec<(usize, UnitId, Vec3)> = Vec::new();
         for (index, command) in commands.iter().enumerate() {
             let Command::Fight { unit, to, .. } = command else { continue };
-            if self.army.is_attacker(*unit) && at.contains_key(unit) {
+            if body.iter().any(|(id, _)| id == unit) {
                 wanted.push((index, *unit, *to));
             }
         }
@@ -62,17 +75,19 @@ impl Brain {
         // H-ARMY-STAGE counts an attacker as gathered by its distance to the staging point itself: a wave told to
         // stand in a block around it would never reach its quorum and would wait out the whole 150 s of patience.
         let staging = self.army.staging_point();
+        let from = centre(&body);
         for (place, members) in groups {
-            if members.len() < MIN_GROUP || staging.is_some_and(|point| point.dist2d(place) < SAME_PLACE) {
+            if staging.is_some_and(|point| point.dist2d(place) < SAME_PLACE) {
                 continue;
             }
             self.fire("H-MICRO-SPREAD");
-            let positions: Vec<(UnitId, Vec3)> = members.iter().map(|(_, unit)| (*unit, at[unit])).collect();
-            let from = centre(&positions);
-            for ((index, unit), point) in members.iter().zip(loose_block(&positions, from, place, GAP)) {
-                let point = if self.reachable_on_foot(point) { point } else { self.snap_to_reachable(point) };
-                debug_assert!(matches!(commands[*index], Command::Fight { unit: u, .. } if u == *unit));
-                if let Command::Fight { to, .. } = &mut commands[*index] {
+            let slots: Vec<(UnitId, Vec3)> =
+                (body.iter().map(|(id, _)| *id)).zip(loose_block(&body, from, place, GAP)).collect();
+            for (index, unit) in members {
+                let Some((_, point)) = slots.iter().find(|(id, _)| *id == unit) else { continue };
+                let point = if self.reachable_on_foot(*point) { *point } else { self.snap_to_reachable(*point) };
+                debug_assert!(matches!(commands[index], Command::Fight { unit: u, .. } if u == unit));
+                if let Command::Fight { to, .. } = &mut commands[index] {
                     *to = point;
                 }
             }
@@ -86,16 +101,20 @@ fn centre(units: &[(UnitId, Vec3)]) -> Vec3 {
 }
 
 /// Where each unit is sent so that the group stands in a block around `to` instead of on it: files across the
-/// approach from `from`, ranks behind. Units keep their left-to-right order, so nobody crosses anybody's path.
-/// Returned in the order `units` was given in.
+/// approach from `from`, ranks in depth, the whole block centred on `to`. Units keep their left-to-right order,
+/// so nobody crosses anybody's path. Returned in the order `units` was given in; an empty group gets no points.
 fn loose_block(units: &[(UnitId, Vec3)], from: Vec3, to: Vec3, gap: f32) -> Vec<Vec3> {
     let n = units.len();
     let (dx, dz) = (to.x - from.x, to.z - from.z);
     let len = dx.hypot(dz).max(1.0);
     let ahead = (dx / len, dz / len);
     let across = (-ahead.1, ahead.0);
-    let files = ((n as f32 * WIDTH_BIAS).sqrt().ceil() as usize).clamp(1, n.min(MAX_FILES));
-    let ranks = n.div_ceil(files);
+    // Ask for a block twice as wide as deep, then take the width back from the depth: filling file by file, the
+    // last file is short and one fewer file may be filled than was asked for (11 units in 5 files of 3 fill 4).
+    // Centring on the width asked for rather than the width used would shift the whole block half a gap sideways.
+    let wanted = ((n as f32 * WIDTH_BIAS).sqrt().ceil() as usize).clamp(1, MAX_FILES);
+    let ranks = n.div_ceil(wanted).max(1);
+    let files = n.div_ceil(ranks).max(1);
     // Left to right: the leftmost `ranks` units fill the leftmost file, and so on.
     let mut order: Vec<usize> = (0..n).collect();
     let sideways = |i: &usize| units[*i].1.x * across.0 + units[*i].1.z * across.1;
@@ -120,6 +139,23 @@ mod tests {
 
     fn at(x: f32, z: f32) -> Vec3 {
         Vec3 { x, y: 0.0, z }
+    }
+
+    #[test]
+    fn a_block_is_centred_on_what_it_occupies_whatever_the_count() {
+        // Filling file by file leaves the last file short, and for many counts one fewer file is filled than was
+        // asked for. Centring on the asked-for width would push every one of those blocks half a gap sideways.
+        for n in 1..44 {
+            let units: Vec<(UnitId, Vec3)> = (0..n).map(|i| (UnitId(i), at(i as f32 * 7.0, 0.0))).collect();
+            let points = loose_block(&units, at(0.0, 0.0), at(2000.0, 0.0), 100.0);
+            let across: Vec<f32> = points.iter().map(|p| p.z).collect();
+            let middle = (across.iter().copied().fold(f32::MIN, f32::max)
+                + across.iter().copied().fold(f32::MAX, f32::min))
+                / 2.0;
+            assert!(middle.abs() < 1.0, "{n} units are centred at {middle}, not on the destination");
+        }
+        // And nothing panics on the degenerate counts.
+        assert!(loose_block(&[], at(0.0, 0.0), at(1.0, 0.0), 100.0).is_empty());
     }
 
     #[test]

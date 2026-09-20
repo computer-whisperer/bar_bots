@@ -149,11 +149,6 @@ pub struct Micro {
     pub no_chase: bool,
 }
 
-impl Micro {
-    pub fn is_default(&self) -> bool {
-        self.spread == 0.0 && self.withdraw_below == 0.0 && !self.kite && self.focus == Focus::Nearest && !self.no_chase
-    }
-}
 
 #[derive(Clone, Debug, Default)]
 pub struct Scenario {

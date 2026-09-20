@@ -23,18 +23,24 @@ def tally(rs):
     margin = [float(r["value_left_x"]) - float(r["value_left_y"]) for r in rs]
     killed = sum((1 - float(r["value_left_y"])) * float(r["metal_y"]) for r in rs)
     lost = sum((1 - float(r["value_left_x"])) * float(r["metal_x"]) for r in rs)
-    spread = [statistics.mean(float(r[c]) for r in rs) for c in ("spread_x", "spread_y")]
+    # Batches recorded before the dispersion probe have no spread columns; report them as unknown, not as zero.
+    spread = [statistics.mean(float(r[c]) for r in rs) if all(r.get(c) for r in rs) else float("nan") for c in ("spread_x", "spread_y")]
     error = statistics.stdev(margin) / len(margin) ** 0.5 if len(margin) > 1 else 0.0
     return len(margin), statistics.mean(margin), error, killed, lost, spread
 
 
 def main(argv):
-    args = [a for a in argv if not a.startswith("--")]
+    by_them = "--by-them" in argv
+    floor, skip = 1, set()
+    if "--min-duels" in argv:
+        i = argv.index("--min-duels")
+        floor, skip = int(argv[i + 1]), {i + 1}
+    elif any(a.startswith("--min-duels=") for a in argv):
+        floor = int(next(a for a in argv if a.startswith("--min-duels=")).split("=")[1])
+    args = [a for i, a in enumerate(argv) if not a.startswith("--") and i not in skip]
     if len(args) != 2:
         print(__doc__)
         return 1
-    by_them = "--by-them" in argv
-    floor = next((int(a.split("=")[1]) for a in argv if a.startswith("--min-duels=")), 1)
     without, with_it = rows(args[0]), rows(args[1])
     keys = sorted({(r["x"], r["y"]) for r in without} | {(r["x"], r["y"]) for r in with_it})
     if by_them:
