@@ -270,7 +270,19 @@ impl Brain {
             extractor_peak: self.wake.extractor_peak,
             seconds_since_growth: (tick.frame - self.wake.growth_frame) / FRAMES_PER_SECOND,
             free_spots: free.len(),
-            free_spots_near: free.iter().filter(|s| self.walk_from_home(**s) < SCORE_NEAR).count(),
+            next_free: {
+                let mut nearest: Vec<(usize, Vec3, f32)> = self
+                    .world
+                    .hello
+                    .metal_spots
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| free.iter().any(|f| f.dist2d(**s) < 1.0))
+                    .map(|(n, s)| (n, *s, self.walk_from_home(*s)))
+                    .collect();
+                nearest.sort_by(|a, b| a.2.total_cmp(&b.2));
+                nearest.into_iter().take(NEXT_FREE).map(|(n, s, walk)| (n, self.place(s), walk as u32)).collect()
+            },
             soldiers: soldiers.len(),
             army_metal: soldiers.iter().map(metal).sum::<f32>() as u32,
             soldiers_near_home: soldiers.iter().filter(|u| u.pos.dist2d(self.home) < SCORE_AT_HOME).count(),
@@ -345,8 +357,9 @@ impl Brain {
     }
 }
 
-/// The scoreboard's "near": free spots within this walk of home, soldiers within this of the start point.
-const SCORE_NEAR: f32 = 2500.0;
+/// How many of the nearest free spots the score line names.
+const NEXT_FREE: usize = 5;
+/// Soldiers within this of the start point are "at home" on the score line.
 const SCORE_AT_HOME: f32 = 800.0;
 /// A planned spot with a soldier or turret of ours this close has something of ours near.
 const PLAN_COVER: f32 = 800.0;

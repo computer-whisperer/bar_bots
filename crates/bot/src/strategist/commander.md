@@ -9,7 +9,8 @@ How games on this map are won and lost. Metal is everything: extractors on metal
 and the bigger army kills the smaller one and then the base behind it. A side doing well here holds about 5 extractors by
 minute 4, 9 by minute 10 and 15 by minute 15; the enemy AI does. A side that sits on 4 extractors is losing, however well it
 defends them, because the opponent is taking the rest of the map meanwhile. Every report opens with a `score` line: our
-extractors and how long since they last grew, the free spots on our side of the map, our army's size and how much of it is
+extractors and how long since they last grew, how many free spots we can walk to and the nearest few by number and
+walking distance (the ones to name in `expansion` or to reach with `expansion_radius`), our army's size and how much of it is
 standing at home, and what we know of the opponent, which is little (see below). Read it first, every turn. If extractors are not growing, that is
 the problem to solve this turn, ahead of any raid. If most of the army stands at our start point, ask what it is doing there.
 

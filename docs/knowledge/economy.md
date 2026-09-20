@@ -84,3 +84,27 @@ the map's metal and never crosses it, because the soldier count it depends on fa
 **Evidence.** Quicksilver from the north-west start: spots at 211, 428, 1097, 1376, 1929, 1961 and 2108 on foot, the
 next eight at 2697-3400, which needs 24-38 soldiers alive at once. `run/spot_regret.py` over 48 NW games: those eight
 held by us 1 minute a game, by the opponent 70, quiet and usable 78. NW games plateau at 5-7 extractors.
+
+### K-eco-expansion-comes-last
+**Claim.** In the default step order expansion comes after reclaiming and outpost turrets, and once raids begin both of
+those always have work, so constructors stop taking metal spots exactly when the opponent is taking them fastest.
+**Status.** observed once in detail (2026-09-20, Opus analyst on commander game 9 north-west; step order and rule counts
+confirmed from the code and bot.log); consistent with every north-west batch.
+**Evidence.** Minutes 0-15: constructors placed 26 light turrets and 9 extractors; 1105 metal stood in turrets against 400
+in extractors; rule firings in those minutes H-ECO-RECLAIM 96, H-ECO-OUTPOST-TURRET 66, H-ECO-EXPAND 25 +
+H-ECO-EARLY-EXPAND 22; no extractor started 7:19-12:02 nor 12:02-15:36. Constructor time 59 % walking, 13 s idle. 18
+walkable free spots unattempted at minute 15, 13 of them with no armed enemy within 600 for 13 of the 15 minutes. The
+opponent starting from the same corner in the sister game also sat at 5-6 extractors from minute 8 to 16: the corner
+is poor, and we made it poorer. Full account: `run/matches/1789886040-commander-9-nw-low/00/postmortem.md`.
+**Would be wrong if.** With expansion first below 9 extractors the north-west count at minutes 10-15 did not rise, or
+rose and the constructors died for it.
+**Used by.** H-ECO-EXPAND-FIRST.
+
+### K-eco-straight-line-fallback-claims-islets
+**Claim.** `walk_from_home` answers with the straight-line distance for ground we cannot walk to; any rule that reads it
+as nearness without asking `reachable_on_foot` will send builders to islets and ledges.
+**Status.** observed (2026-09-20), fixed for `claim_spot` and the outpost-turret step.
+**Evidence.** Commander game 9 north-west: the commander built an extractor on the islet D1 (3224, 520) at 4:48 (engine
+log: `wanted=(3224,520) placed=(3224,520)`; the map lists that spot with `walk_from_home: null`); the analyst counts six
+turret orders for it and one constructor walking 321 of its first 422 seconds round the shore. The engine returns a long
+path, not `move_failed`, so `note_unreachable_sites` never learns.

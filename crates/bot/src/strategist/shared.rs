@@ -241,9 +241,11 @@ pub struct Score {
     pub extractor_peak: usize,
     /// Game seconds since our extractor count last reached a new high.
     pub seconds_since_growth: i32,
-    /// Metal spots we can walk to that nobody is known to hold: all of them, and those within 2500 walk of home.
+    /// Metal spots we can walk to that nobody is known to hold: how many, and the nearest few on foot with their
+    /// number in the map's list and walking distance. (A count of those "within 2500" read 0 from minute 6 of commander
+    /// game 9 while 18 lay at 2700-5400, and the commander made no expansion call for ten minutes.)
     pub free_spots: usize,
-    pub free_spots_near: usize,
+    pub next_free: Vec<(usize, Place, u32)>,
     /// Spots the opponent is known to hold (its extractors seen and not seen dead).
     pub enemy_spots_seen: usize,
     pub soldiers: usize,

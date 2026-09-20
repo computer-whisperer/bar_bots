@@ -82,6 +82,8 @@ const EXPANSION_REACH: f32 = 1500.0;
 const EXPANSION_REACH_PER_SOLDIER: f32 = 50.0;
 /// H-ECO-FRONTIER: a spot this close to an extractor or turret of ours is the next step outward, however far from home.
 const FRONTIER_STEP: f32 = 1200.0;
+/// H-ECO-EXPAND-FIRST: below this many extractors a constructor's first thought is the next metal spot.
+const EXPAND_FIRST_EXTRACTORS: usize = 9;
 /// Metal spots within this walking distance of the start are built before anything else; farther ones after the lab.
 const OPENING_REACH: f32 = 300.0;
 /// Generators before the first lab, counting a wind generator as one and a solar as two.
@@ -94,6 +96,7 @@ const ORDER_GRACE_FRAMES: i32 = 45;
 const TICK_FRAMES: i32 = 15;
 
 /// The rules a builder tries once the opening stands and energy is not short.
+#[derive(Clone, Copy)]
 enum Step {
     Repair,
     Reclaim,
@@ -415,9 +418,19 @@ impl Brain {
         if focus.is_some() {
             self.fire("D-ECONOMY-FOCUS");
         }
+        // H-ECO-EXPAND-FIRST: left to the default order, expansion came eighth, behind reclaiming and outpost turrets,
+        // both of which always have something to do once raids begin: in commander game 9 (north-west) constructors
+        // placed 26 turrets and 9 extractors in fifteen minutes, started no extractor for two stretches of four minutes,
+        // and 13 quiet free spots were never walked to. A commander's focus is its own business.
+        let order: Vec<Step> = if focus.is_none() && planned_extractors < EXPAND_FIRST_EXTRACTORS && self.enabled("H-ECO-EXPAND-FIRST") {
+            let rest = order.iter().copied().filter(|step| !matches!(step, Step::Repair | Step::Expand));
+            [Step::Repair, Step::Expand].into_iter().chain(rest).collect()
+        } else {
+            order.to_vec()
+        };
         // A production focus spends on labs as soon as any metal is banked.
         let floating = if focus == Some(Focus::Production) { FLOATING_METAL / 3.0 } else { FLOATING_METAL };
-        for step in order {
+        for step in &order {
             match step {
                 Step::Repair if !is_commander && self.enabled("H-ECO-REPAIR") => {
                     if let Some(target) = self.claim_repair(builder, snapshot.own_units.as_slice(), kit, tick.frame) {
@@ -499,7 +512,12 @@ impl Brain {
         }
         let soldiers = own.iter().filter(|u| self.is_army(u, kit)).count();
         let reachable = |spot: Vec3| {
-            if is_commander {
+            // `walk_from_home` answers with the straight line for ground we cannot walk to, and the commander's leash
+            // took that for nearness: an extractor went onto an islet, and a constructor spent three quarters of its
+            // life walking round the shore to put a turret beside it (commander game 9, north-west, spot D1).
+            if !self.reachable_on_foot(spot) {
+                false
+            } else if is_commander {
                 match commander_station {
                     Some(station) => spot.dist2d(station) < COMMANDER_STATION_REACH,
                     None => {
@@ -632,7 +650,7 @@ impl Brain {
             .filter(|u| kit.is_extractor(u.def))
             .map(|u| u.pos)
             .chain(hot)
-            .filter(|pos| pos.dist2d(self.home) > OUTPOST_DISTANCE && !guarded(*pos))
+            .filter(|pos| pos.dist2d(self.home) > OUTPOST_DISTANCE && !guarded(*pos) && self.reachable_on_foot(*pos))
             .min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
     }
 
