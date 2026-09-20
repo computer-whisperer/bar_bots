@@ -13,6 +13,7 @@ use std::collections::HashSet;
 use bot_protocol::{Command, OwnUnit, Tick, UnitId, Vec3};
 
 use super::army::CONTACT_RADIUS;
+use super::scout::{BASE_VICINITY, LIKELY_BASE, LIKELY_BOX, TURRET_BERTH};
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
 
@@ -34,6 +35,11 @@ const REST_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 const ELSEWHERE_TRIES: usize = 3;
 /// How far from the nearest threat the party waits for reinforcements when nothing is worth attacking.
 const WAIT_OFF: f32 = 1000.0;
+/// With nothing of theirs known worth going for, the party feels round the base's perimeter for unguarded
+/// structures: points on a ring this far from the presumed base, each remembered as probed for this long.
+const PERIMETER: f32 = 900.0;
+const PERIMETER_POINTS: usize = 8;
+const PROBE_MEMORY: i32 = 120 * FRAMES_PER_SECOND;
 /// H-ARMY-KILL: the party at the opponent's base with no enemy soldier in sight this close offers the kill.
 const KILL_RADIUS: f32 = 1000.0;
 /// An extractor this close to the enemy's base is the base's business, not a raid's.
@@ -83,6 +89,10 @@ pub struct Raid {
     turrets: Vec<UnitId>,
     /// Armed buildings of theirs known to bear on the target at the last pricing: a new one means a price now.
     turrets_known: usize,
+    /// Perimeter points the party has stood at, with when (`perimeter_probe`).
+    probed: Vec<(Vec3, i32)>,
+    /// The wait point in force while waiting: chosen once, moved only when the threat comes within reach of it.
+    wait_at: Option<Vec3>,
     /// The last pricing's verdict, held until the next: between pricings the party was "not outmatched" and went
     /// back at the target for four seconds, then retreated for four (rush-11 to 13: parties oscillating at the base).
     pub(super) outmatched: bool,
@@ -113,7 +123,12 @@ impl Brain {
     /// in Comet Catcher's strips BARb spawns at an end, 2000 elmos from the centre, and the party of rush-7 stood
     /// at an empty spot for five minutes while the home group was committed to it.
     fn unscouted_box_spots(&self, from: Vec3, frame: i32) -> Vec<Vec3> {
-        let mut spots = self.spots_to_look_at(from, frame, 0.0, 1.0);
+        // Round the presumed base; the rest of the box only when nothing round the base is left to look at (the
+        // far clusters are the scouts' business: rush-20, the whole party thrashing between two clusters).
+        let mut spots = self.spots_to_look_at(from, frame, 0.0, LIKELY_BASE);
+        if spots.is_empty() {
+            spots = self.spots_to_look_at(from, frame, 0.0, LIKELY_BOX);
+        }
         // Not within a small party's death of the commander where it was last seen (its laser reaches 300 and its
         // D-gun kills a Pawn a shot; rush-16: five of eight first Pawns died within six seconds of sighting it).
         spots.retain(|s| !self.commander_ground(*s));
@@ -170,8 +185,11 @@ impl Brain {
             .filter(|e| e.def.is_none_or(|d| self.world.def(d).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0)))
             .map(|e| e.pos)
             .collect();
+        // Any structure of theirs round the base is a target when unguarded (the user: feel round the perimeter
+        // for unguarded structures), the extractors and the rest alike; then spots round the base nobody has looked at.
+        let base = self.enemy_base(centre);
         let mut candidates: Vec<Vec3> = self.enemy_buildings.values()
-            .filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0))
+            .filter(|(def, pos, _)| self.world.def(*def).is_some_and(|d| d.weapon_count == 0) && pos.dist2d(base) < BASE_VICINITY)
             .map(|(_, pos, _)| *pos)
             .chain(self.unscouted_box_spots(centre, tick.frame))
             .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && !self.commander_ground(*t) && self.reachable_on_foot(*t))
@@ -179,7 +197,24 @@ impl Brain {
         candidates.sort_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)));
         // Priced as the party's target will be, over the same radius (rush-16: a target priced won at 600 and lost at
         // 1000 had the party go and retreat every four seconds under a turret).
-        candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.assault_verdict(body, *t, CONTACT_RADIUS, tick).gain >= GO_GAIN)
+        let found = candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.assault_verdict(body, *t, CONTACT_RADIUS, tick).gain >= GO_GAIN);
+        found.or_else(|| self.perimeter_probe(centre, tick.frame))
+    }
+
+    /// The nearest point on a ring round the presumed base the party has not stood at lately, off known turrets'
+    /// ground and the commander's: walking it shows what stands round the base and where it is unguarded.
+    fn perimeter_probe(&mut self, centre: Vec3, frame: i32) -> Option<Vec3> {
+        self.raid.probed.retain(|(_, at)| frame - at < PROBE_MEMORY);
+        let base = self.enemy_base(centre);
+        let armed: Vec<Vec3> = self.enemy_buildings.values().filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.weapon_count > 0)).map(|(_, pos, _)| *pos).collect();
+        (0..PERIMETER_POINTS)
+            .map(|k| {
+                let angle = k as f32 / PERIMETER_POINTS as f32 * std::f32::consts::TAU;
+                Vec3 { x: base.x + angle.cos() * PERIMETER, y: 0.0, z: base.z + angle.sin() * PERIMETER }
+            })
+            .filter(|p| self.reachable_on_foot(*p) && !self.commander_ground(*p) && !armed.iter().any(|a| a.dist2d(*p) < TURRET_BERTH))
+            .filter(|p| !self.raid.probed.iter().any(|(q, _)| q.dist2d(*p) < 1.0))
+            .min_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)))
     }
 
     /// `soldiers`: finished soldiers no squad has claimed. Returns with the party's orders pushed.
@@ -243,6 +278,9 @@ impl Brain {
         // The target is gone when we no longer remember an extractor there (seen destroyed, or found missing), or when
         // the party stands on it and sees nothing. A box spot the party reaches is scouted, whatever it found.
         let arrived = self.raid.target.is_some_and(|t| centre.dist2d(t) < TARGET_RADIUS);
+        if arrived && let Some(t) = self.raid.target && t.dist2d(self.enemy_base(t)) > PERIMETER - 1.0 && t.dist2d(self.enemy_base(t)) < PERIMETER + 1.0 {
+            self.raid.probed.push((t, tick.frame));
+        }
         let unscouted = self.raid.target.is_some_and(|t| self.is_unscouted(t, tick.frame));
         let still_there = self.raid.target.is_some_and(|t| self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(t) < 100.0) || (!arrived && (unscouted || t.dist2d(self.enemy_base(t)) < BASE_RADIUS)));
         let target = if still_there { self.raid.target } else { self.pressure_target(centre, tick) };
@@ -277,6 +315,9 @@ impl Brain {
         if mode != self.raid.mode {
             self.raid.mode = mode;
             self.raid.last_order_frame = 0;
+            if mode != Mode::Waiting {
+                self.raid.wait_at = None;
+            }
         }
         match target {
             Some(target) if too_small_for_commander && party.len() >= PARTY => {
@@ -343,9 +384,19 @@ impl Brain {
                     let threats = armed_in_sight_at.iter().copied()
                         .chain(self.enemy_buildings.values().filter(|(def, pos, _)| pos.dist2d(target) < CONTACT_RADIUS && self.world.def(*def).is_some_and(|d| d.weapon_count > 0)).map(|(_, pos, _)| *pos));
                     let threat = threats.min_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre))).unwrap_or(target);
-                    let (dx, dz) = (centre.x - threat.x, centre.z - threat.z);
-                    let len = dx.hypot(dz).max(1.0);
-                    let wait = Vec3 { x: threat.x + dx / len * WAIT_OFF, y: 0.0, z: threat.z + dz / len * WAIT_OFF };
+                    // Held where the party first fell back to; moved only when the threat comes within reach of it
+                    // (rush-20: a wait point recomputed as their Pawns advanced walked the party home).
+                    let wait = match self.raid.wait_at {
+                        Some(at) if at.dist2d(threat) > COMMANDER_REACH => at,
+                        _ => {
+                            let (dx, dz) = (centre.x - threat.x, centre.z - threat.z);
+                            let len = dx.hypot(dz).max(1.0);
+                            let at = Vec3 { x: threat.x + dx / len * WAIT_OFF, y: 0.0, z: threat.z + dz / len * WAIT_OFF };
+                            self.raid.wait_at = Some(at);
+                            self.raid.last_order_frame = 0;
+                            at
+                        }
+                    };
                     if !self.raid.waiting {
                         eprintln!("[ai {}] f={} pressure: party of {} outmatched at ({:.0}, {:.0}), waits at ({:.0}, {:.0}) for more", self.ai(), tick.frame, body.len(), target.x, target.z, wait.x, wait.z);
                         self.raid.waiting = true;

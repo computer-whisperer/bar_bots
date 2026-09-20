@@ -17,10 +17,10 @@ const FRESH_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 /// A spot never seen counts as this stale.
 const NEVER_SEEN_FRAMES: i32 = 600 * FRAMES_PER_SECOND;
 /// Round a live enemy base its extractors are likely: this far from the base's point.
-const BASE_VICINITY: f32 = 1800.0;
+pub(super) const BASE_VICINITY: f32 = 1800.0;
 /// Likelihood of something of theirs at a spot: round a base, in an enemy start box, anywhere else.
-const LIKELY_BASE: f32 = 3.0;
-const LIKELY_BOX: f32 = 1.0;
+pub(super) const LIKELY_BASE: f32 = 3.0;
+pub(super) const LIKELY_BOX: f32 = 1.0;
 const LIKELY_ELSEWHERE: f32 = 0.3;
 /// The walk a spot's worth is divided by is at least this, so the next spot over does not always win.
 const MIN_WALK: f32 = 300.0;
@@ -33,14 +33,17 @@ const ROUTE_CANDIDATES: usize = 8;
 const SCOUT_FROM: i32 = 120 * FRAMES_PER_SECOND;
 /// A route is given up on after this long, and a new one sent at most this often when nothing is stale.
 const ROUTE_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
+/// Scouts stay where their route ends, one watching each cluster (the user: a single Pawn stationed in each
+/// cluster does better than the whole party re-checking); this many at most, the oldest released for a new route.
+const MAX_SCOUTS: usize = 3;
 
 #[derive(Default)]
 pub struct Spots {
     /// Per metal spot (the hello's order), the last frame it was within an own unit's sight.
     seen: Vec<Option<i32>>,
     last_survey: i32,
-    /// The raider on a route, and since when.
-    scout: Option<(UnitId, i32)>,
+    /// Raiders out scouting: each on its route and then standing at its last spot, with the frame it left.
+    pub(super) posts: Vec<(UnitId, i32)>,
     /// The `scout_at` directive already served, by its expiry frame.
     served_scout_at: Option<i32>,
 }
@@ -112,20 +115,14 @@ impl Brain {
 
     /// H-SCOUT-ROUTE: one raider from `home_group` on a route of spots worth a look. Returns the scout, which the
     /// caller keeps out of the home group.
-    pub(super) fn run_scout(&mut self, tick: &Tick, kit: &Kit, home_group: &[&OwnUnit], commands: &mut Vec<Command>) -> Option<UnitId> {
+    pub(super) fn run_scout(&mut self, tick: &Tick, kit: &Kit, home_group: &[&OwnUnit], commands: &mut Vec<Command>) -> Vec<UnitId> {
         if !self.enabled("H-SCOUT-ROUTE") {
-            self.spots.scout = None;
-            return None;
+            self.spots.posts.clear();
+            return Vec::new();
         }
-        if let Some((id, since)) = self.spots.scout {
-            let alive = tick.snapshot.own_units.iter().any(|u| u.id == id);
-            if alive && tick.frame - since < ROUTE_FRAMES {
-                return Some(id);
-            }
-            self.spots.scout = None;
-        }
+        self.spots.posts.retain(|(id, _)| tick.snapshot.own_units.iter().any(|u| u.id == *id));
         if tick.frame < SCOUT_FROM {
-            return None;
+            return self.spots.posted();
         }
         let base_found = self.found_enemy_base().is_some();
         let base = self.enemy_base(self.home);
@@ -138,12 +135,17 @@ impl Brain {
         let asked = self.directives.scout_at.filter(|t| self.spots.served_scout_at != Some(t.expires_frame));
         let due = asked.is_some() || !base_found || freshest_round_base >= FRESH_FRAMES || tick.frame - self.spots.last_route() >= ROUTE_FRAMES;
         if !due {
-            return None;
+            return self.spots.posted();
         }
         let around = asked.map_or(base, |t| t.value);
         let candidates = self.spots_to_look_at(around, tick.frame, TURRET_BERTH, 0.0);
-        let first = candidates.first().copied().or_else(|| asked.map(|t| t.value))?;
-        let scout = home_group.iter().filter(|u| u.def == kit.raider && !u.being_built).min_by(|a, b| a.pos.dist2d(first).total_cmp(&b.pos.dist2d(first)))?;
+        let Some(first) = candidates.first().copied().or_else(|| asked.map(|t| t.value)) else { return self.spots.posted() };
+        let Some(scout) = home_group.iter().filter(|u| u.def == kit.raider && !u.being_built).min_by(|a, b| a.pos.dist2d(first).total_cmp(&b.pos.dist2d(first))) else { return self.spots.posted() };
+        // At the cap, the oldest post comes home to make room.
+        if self.spots.posts.len() >= MAX_SCOUTS {
+            let (oldest, _) = self.spots.posts.remove(0);
+            commands.push(Command::Move { unit: oldest, to: self.last_station, queue: false });
+        }
         // The route: the best spot from the scout, then the nearest of the best few from each point on.
         let mut route: Vec<Vec3> = Vec::new();
         let mut from = scout.pos;
@@ -161,24 +163,28 @@ impl Brain {
             from = next;
         }
         if route.is_empty() {
-            return None;
+            return self.spots.posted();
         }
         self.fire("H-SCOUT-ROUTE");
-        self.spots.scout = Some((scout.id, tick.frame));
+        self.spots.posts.push((scout.id, tick.frame));
         if let Some(t) = asked {
             self.spots.served_scout_at = Some(t.expires_frame);
         }
         let squares: Vec<String> = route.iter().map(|s| self.world.grid(*s)).collect();
-        eprintln!("[ai {}] f={} scout: {}#{} looks at {} ({} spots; base {})", self.ai(), tick.frame, self.name(scout.def), scout.id.0, squares.join(" "), route.len(), if base_found { "found" } else { "presumed" });
+        eprintln!("[ai {}] f={} scout: {}#{} looks at {} and stays at {} ({} out; base {})", self.ai(), tick.frame, self.name(scout.def), scout.id.0, squares.join(" "), squares.last().map_or("-", |s| s.as_str()), self.spots.posts.len(), if base_found { "found" } else { "presumed" });
         self.journal.note(tick.frame, "scout", serde_json::json!({ "unit": scout.id.0, "route": route.iter().map(|s| [s.x as i32, s.z as i32]).collect::<Vec<_>>() }), serde_json::json!({ "squares": squares }));
         commands.extend(route.iter().enumerate().map(|(n, to)| Command::Move { unit: scout.id, to: *to, queue: n > 0 }));
-        Some(scout.id)
+        self.spots.posted()
     }
 }
 
 impl Spots {
+    fn posted(&self) -> Vec<UnitId> {
+        self.posts.iter().map(|(id, _)| *id).collect()
+    }
+
     fn last_route(&self) -> i32 {
-        self.scout.map_or(i32::MIN / 2, |(_, since)| since)
+        self.posts.iter().map(|(_, since)| *since).max().unwrap_or(i32::MIN / 2)
     }
 }
 
@@ -197,7 +203,7 @@ impl Brain {
                 *never.entry(self.world.grid(*spot)).or_default() += 1;
             }
         }
-        let scout = self.spots.scout.map_or("no scout out".to_string(), |(id, since)| format!("scout #{} out for {}s", id.0, (frame - since) / FRAMES_PER_SECOND));
+        let scout = if self.spots.posts.is_empty() { "no scout out".to_string() } else { format!("{} scouts out", self.spots.posts.len()) };
         format!(
             "round the enemy base ({}) {} spots: {} never seen, the rest last seen up to {}s ago | its box's spots never seen: {} | {scout}",
             self.world.grid(base), round.len(), unseen_round,

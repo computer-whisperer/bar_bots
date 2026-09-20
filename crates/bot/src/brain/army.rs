@@ -451,8 +451,8 @@ impl Brain {
         self.team_post.committed = attackers.iter().map(|u| u.def).collect();
 
         // H-SCOUT-ROUTE (`scout.rs`): one raider at a time looks round the map; out of the home group meanwhile.
-        let scout_id = self.run_scout(tick, kit, &home_group, commands);
-        let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| Some(u.id) != scout_id).collect();
+        let scouts = self.run_scout(tick, kit, &home_group, commands);
+        let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| !scouts.contains(&u.id)).collect();
 
         // H-ARMY-CONTACT (`contact.rs`): every enemy party on our ground gets its own answer, or none; whoever answers
         // one is out of the home group until that is over, and everybody else carries on.
