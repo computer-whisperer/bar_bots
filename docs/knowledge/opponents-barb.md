@@ -578,3 +578,21 @@ with identical seeds. `--opponent-opening bots|vehicles` (BARb's `disabledunits`
 **Would be wrong if.** Outcomes by opening evened out over more games (14 vehicle games is few).
 **Used by.** Arena `--opponent-opening`; `opponent_first_factory` in `results.jsonl`; read batches by opening.
 
+
+### K-barb-tempo-is-half-clock-half-sighting
+**Claim.** BARb medium's state at a given minute can be estimated from what our bot may legitimately know, to about
+half the error of the clock alone. Held out by batch over 430 Quicksilver games (mean absolute error, whole game):
+its live army metal 637 against 1247 for the time-only curve (truth mean 3055); finished extractors 2.2 against 4.1
+(truth mean 10); the income proxy 6.7 against 12.9 metal/s; static-defence metal 558 against 846. The gain is all in
+the second half of the game — 1 % better than the clock in minutes 1-5, 27 % in 8-11, 53-54 % from minute 15 — because
+before the first contact there is nothing to see. The model is a per-minute mean tilted by per-minute z-scores of the
+evidence, with the tilt shrunk toward the clock early and floored at what we have seen alive.
+**Status.** measured (2026-09-20), offline; never run inside the bot.
+**Evidence.** `docs/studies/tempo-model.md`, `run/tempo_model.py`, `docs/studies/data/tempo-2026-09-20/`. 430 games in
+17 batches (v17 to v34), five folds held out by batch. Extends K-barb-medium-army-curve, whose numbers are the
+north-west games only; the curve here covers both corners and four more quantities.
+**Would be wrong if.** The same fit on a batch of a materially different bot version lost its advantage over the
+clock, or the error on another map stayed near its in-map level (it does not: 1629 against 637 for the army on the
+four v33 maps, and the extractor model does not transfer at all).
+**Used by.** (none yet) — candidate: H-ARMY-WAVE-GATE's estimate of the enemy army, and a line in the commander's
+briefing. Integration proposal in the study.

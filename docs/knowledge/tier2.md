@@ -249,3 +249,20 @@ excluded and why; unit files for cloak, `weapontype` and `areaofeffect`.
 **Would be wrong if.** An engine duel reproduced a simulated area-damage margin within a fifth, or a measurement of
 the spacing a real army fights at came out near 56.
 **Used by.** K-t2-mix-armada, K-t2-tower-line-needs-mass (both report the caveat rather than the number alone).
+
+### K-t2-barb-labs-at-minute-21-and-we-notice-three-minutes-late
+**Claim.** BARb medium reaches a finished advanced lab in 211 of 430 Quicksilver games, median at minute 21 (10th
+percentile 18, 90th 27); in this dataset it never has one before minute 15. We see the first tier-2 thing of theirs a
+median of 3 minutes after the lab finished (quartiles +2 and +4 minutes), and in 17 further games we saw tier-2 units
+of theirs when they never built a lab at all — their resurrection bots raising our own advanced units
+(K-army-dead-waves-are-resurrected). So a tier-2 sighting is late evidence and not proof; the clock is the better part
+of the estimate. A logistic on the evidence, offset by the per-minute base rate, scores a Brier of 0.054 against 0.083
+for the base rate alone (AUC 0.87 within minutes 20-40).
+**Status.** measured (2026-09-20) over every Quicksilver game with a ground-truth file.
+**Evidence.** `docs/studies/tempo-model.md`, section `y_t2lab`; `run/tempo_model.py` (an advanced lab is a `factory`
+costing >= 1500 metal, tier-1 labs being 470-570 and advanced 2600). The tier-2 unit list used as evidence was derived,
+not assumed: over the 144 games of v31/v32/v34 these are the `army` names with zero sightings before the opponent's
+first finished lab and at least a hundred after (`T2_ARMY` in the script).
+**Would be wrong if.** Against another profile or on another map the lab came materially earlier, or a scouting rule
+cut the three-minute lag.
+**Used by.** (none yet) — candidate: the commander's briefing states the probability rather than waiting for a sighting.

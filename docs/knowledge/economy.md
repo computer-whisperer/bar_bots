@@ -115,3 +115,17 @@ a metal income of 15-30 a second: minutes of income. Most of it lies where the f
 the games looked at 0-1000 of it was safe to work at any moment.
 **Status.** observed (2026-09-20), rec-1 (4 games), the per-minute `wrecks:` lines of bot.log.
 **Used by.** H-REC-CREW.
+
+### K-eco-their-extractors-are-the-spots-we-do-not-hold
+**Claim.** On a map with a fixed set of metal spots, our own extractor count is a better estimate of the opponent's
+extractor count than anything we see of theirs. On Quicksilver (44 spots) the correlation between the two, within a
+game minute, is −0.39 at minute 5, −0.54 at 10, −0.72 at 20 and −0.78 at 25. Used alone beside the clock it removes
+28 % of the error in estimating their extractor count, against 7 % for the extractors of theirs we have actually seen.
+The spots we do not hold, they hold.
+**Status.** measured (2026-09-20) on one map, 430 games.
+**Evidence.** `docs/studies/tempo-model.md`, section "What evidence actually moves the estimate"; correlations from
+`run/tempo_model.py`'s dataset (`f_own_mex` against `y_t1mex + y_t2mex`, per minute).
+**Would be wrong if.** The same correlation on the four v33 maps (53-92 spots) came out near zero, or a game where
+both sides expanded freely showed no complementarity.
+**Used by.** (none yet) — it is why the tempo model's economy estimate works at all, and an argument that our own
+expansion count is worth reporting to the commander as information about the opponent.

@@ -71,3 +71,17 @@ the mirror images of ours, and any extractor once seen persists as a ghost.
 enemy bases faster than they can defend them"); ghosts: https://www.beyondallreason.info/guide/radar.
 **Would be wrong if.** Raider groups sent to mirrored spots on Quicksilver found them empty or towered most of the time.
 **Used by.** H-ARMY-SWEEP (candidate: run the sweep with raiders from minute ~4, not only when the main target is empty)
+
+### K-scout-we-never-see-their-extractors
+**Claim.** Our bot has essentially no sight of the opponent's economy. Averaged over 430 games on Quicksilver we have
+identified and not watched die 0.0 of their extractors in minutes 1-8, 0.5 in minutes 11-15 and 1.3 of their 14.6 in
+minutes 20-40; in 39 % of late-game rows not one enemy extractor has ever been seen. Static defence is barely better:
+467 metal of turrets in hand against 3805 standing. Their army is the one thing we do see — 3435 metal of the 4853
+they have by minute 20 — because it comes to us.
+**Status.** measured (2026-09-20) over every match that has a ground-truth file.
+**Evidence.** `docs/studies/tempo-model.md` table "What the bot actually has in hand", from `run/tempo_model.py`
+(`f_live_mex_n`, `f_live_turret_m`, `f_live_army_m` against `truth-*.jsonl`).
+**Would be wrong if.** With a scouting rule that visits their half, the number of enemy extractors ever identified per
+game rose materially. That is the test of any scouting change, and it now has a baseline to beat.
+**Used by.** (none yet) — it is the reason an estimate of their economy has to be inferred rather than observed
+(K-barb-tempo-is-half-clock-half-sighting), and the strongest argument yet for H-ARMY-SCOUT / radar coverage.
