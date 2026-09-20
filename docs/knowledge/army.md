@@ -218,3 +218,19 @@ different places.
 minute 8 with 17-28 enemies in sight, while seat 0 kept 19-26 soldiers at its station 2200 away; lost at 20 minutes.
 **Evidence.** `run/matches/1789914072-team-2v2-board/00/bot.log`, the per-minute lines of both seats.
 **Used by.** H-TEAM-DEFEND.
+
+### K-army-enemy-army-seen-is-the-worst-estimate-we-have
+**Claim.** `enemy_army_seen` — the biggest enemy force in one look within the last two minutes, which the wave gate
+uses as its estimate of what our wave will meet — is the worst of the four estimates available to us. Over 430
+Quicksilver games its mean absolute error against the opponent's real army metal is 1741; the clock alone scores 1247,
+simply summing every enemy soldier ever identified minus the ones we watched die scores 1190, and a fitted model
+scores 637. It understates: 2287 against a real 4853 in minutes 20-40. The fault is the two-minute window, not the
+measurement — the same sum without the window is the single most informative observation we have (39 % of the
+time-only error removed, more than any other feature).
+**Status.** measured (2026-09-20), offline; the replacement is unmeasured in the arena.
+**Evidence.** `docs/studies/tempo-model.md`, tables "What the bot actually has in hand" and "Held-out error".
+`ENEMY_ARMY_MEMORY_FRAMES = 120 s` (`brain/army.rs:62`); the gate at `army.rs:465-478`. This is the mechanism behind
+K-army-verdicts-v18's "1500 known against a real 3205".
+**Would be wrong if.** With the gate reading an unwindowed sum (or the tempo estimate), waves still launched into
+armies they had not counted at the same rate.
+**Used by.** H-ARMY-WAVE-GATE (as a criticism of its input, not yet a change).

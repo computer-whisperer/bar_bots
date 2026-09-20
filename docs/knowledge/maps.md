@@ -159,3 +159,18 @@ call tells where another team started: an ally's start is where its commander is
 its ally team's start box, which only the setup script (`Game_getSetupScript`) gives.
 **Status.** supported (2026-09-20), read from `SSkirmishAICallback.h` and seen in team-2v2-smoke.
 **Used by.** H-TEAM-ALLIED-SPOTS, H-TEAM-ALLY-GROUND, H-MAP-ENEMY-BASE.
+
+### K-maps-quicksilver-corner-decides-both-economies
+**Claim.** The Quicksilver corner asymmetry is a property of the ground, not of our play: whoever holds the south-east
+start has roughly twice the extractors of whoever holds the north-west one. At minute 20 over 430 games, when we start
+north-west we have 3.9 extractors and BARb (south-east) has 20.8; when we start south-east we have 11.6 and BARb
+(north-west) has 8.9. Which start we drew is accordingly the single most informative thing we know about the
+opponent's economy: used alone beside the clock it removes 30 % of the error in estimating their extractor count and
+32 % of the error in the income proxy, more than any observation of them.
+**Status.** measured (2026-09-20). Sharpens K-maps-quicksilver-corner-asymmetry, which established the asymmetry from
+the terrain (15 spots near the north-west start on foot, 19 near the south-east one) and from our own results.
+**Evidence.** `docs/studies/tempo-model.md`, sections "Models, simple to less simple" and "What evidence actually
+moves the estimate"; opponent ground truth in every Quicksilver batch from v17 to v34.
+**Would be wrong if.** The two corners' extractor counts evened out once our own play stopped plateauing in the
+north-west (K-eco-reach-stops-at-the-first-gap): part of BARb's 20.8 is spots we never contest.
+**Used by.** (none yet) — candidate: the tempo model conditions on it; expansion and defence rules could too.
