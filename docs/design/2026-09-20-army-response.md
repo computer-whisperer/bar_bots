@@ -85,4 +85,9 @@ contact response replaces the defend rules (deleted first). 3. Posture replaces 
   duel regression is unchanged. First answers: three Grunts burn four extractors in about 15 s, so pursuers 1500 away
   are worth nothing whatever they are, and from 600 away Maces and Pawns both catch them at their work; a fleeing
   Grunt is never caught by a Mace. 0.4-1.2 ms a run. Known fault: a fleeing party out-ranging its pursuers kills them
-  for nothing, because pursuers never give a chase up. Validation against recorded raids: not done. Parts 2-4: not started.
+  for nothing, because pursuers never give a chase up. 
+- 2026-09-20, part 1, validation: 1106 recorded raids (K-army-distance-decides-a-raid-response). "Was any raider
+  killed" by where the answer came from: played 79 / 52 / 28 / 23 % (within 600, 600-1500, beyond 1500, nobody),
+  predicted 89 / 47 / 23 / 19 %; 71 % agreement episode by episode; our answer's losses under-predicted by 40-80 %.
+  Good enough to rank answers; the loss side needs a safety factor or the units following the party. 1.2 ms a
+  question at 4 seeds. Parts 2-4: not started.

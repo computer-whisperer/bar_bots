@@ -320,3 +320,20 @@ the centre are counted, so the statistic is bounded well above what was seen —
 if waves that arrive together after H-ARMY-MARCH and H-ARMY-STAGE improve showed a lower number.
 **Used by.** (none; it explained why retired H-MICRO-SPREAD's engine gain did not reach the arena); a caution for any future
 formation or spacing rule priced on the duel tables.
+
+### K-army-distance-decides-a-raid-response
+**Claim.** Whether an answer to a raid on an outpost kills anything is decided by where the answer starts from, not by
+how big it is: a raider is killed in 79 % of raids when one of ours was within 600 of the extractor ten seconds before
+it died, 52 % when the answer came from 600-1500 away, 28 % from beyond 1500 and 23 % when nobody came (the outpost's
+turret did it). Parties are not small: 200-1000 metal within 900 of the extractor on average. The chase simulator
+reproduces those rates from the units and distances alone (89 / 47 / 23 / 19 %) and agrees with the played outcome in
+71 % of single episodes; it under-predicts what our answer loses (304 metal against 506 close by, 89 against 189 from
+mid-range) — it knows only the party within 900, not what follows it.
+**Status.** measured (2026-09-20), 1106 raids in 48 games (now-quicksilver, now-isidis, now-mithril), medium BARb.
+Extractor losses in these episodes are not a fair test of the model: an episode is found by an extractor dying.
+**Evidence.** `run/raid_episodes.py <batches>`, `combatsim chase-file`, `run/raid_episodes.py --compare`.
+**Would be wrong if.** Episodes found another way (every party that came within 900 of an extractor, died or not) gave
+different rates by distance.
+**Used by.** (none yet) — the contact response of `docs/design/2026-09-20-army-response.md`: answer from near or not
+at all, guard where parties go, and price the answer's own losses higher than the model says.
+

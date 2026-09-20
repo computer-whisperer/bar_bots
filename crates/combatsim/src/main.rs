@@ -48,6 +48,7 @@ fn main() {
         Some("micro") => policies::sweep(&rules, &flags),
         Some("speed") => speed(&rules, &flags),
         Some("chase") => chase(&rules, &flags),
+        Some("chase-file") => chase_file(&rules, &args[1], flags.num("reps", 4.0) as u32),
         Some("--help" | "-h") | None => println!("{USAGE}"),
         _ => query(&rules, &flags),
     }
@@ -239,6 +240,25 @@ fn validate(rules: &Rules, flags: &Flags) {
 }
 
 /// Queries a second, by fight size, on this machine.
+/// One chase a line, as `run/raid_episodes.py` writes them: `pursuers` [[name, count, x, z]], `party` [[name, count]],
+/// `at` [x, z], `then` [x, z], `assets` [[name, x, z]], `seconds`. Prints one verdict a line; units the table lacks
+/// are left out and counted in `unknown`.
+fn chase_file(rules: &Rules, path: &str, reps: u32) {
+    let text = std::fs::read_to_string(path).expect("episode file");
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let e: serde_json::Value = serde_json::from_str(line).expect("episode json");
+        let mut unknown = 0;
+        let point = |v: &serde_json::Value, i: usize| Vec2::new(v[i].as_f64().unwrap_or(0.0) as f32, v[i + 1].as_f64().unwrap_or(0.0) as f32);
+        let mut def = |v: &serde_json::Value| { let d = rules.units.index(v[0].as_str().unwrap_or("")); unknown += usize::from(d.is_none()); d };
+        let pursuers = e["pursuers"].as_array().unwrap().iter().filter_map(|v| Some((def(v)?, v[1].as_u64()? as u32, point(v, 2)))).collect();
+        let party = e["party"].as_array().unwrap().iter().filter_map(|v| Some((def(v)?, v[1].as_u64()? as u32))).collect();
+        let assets = e["assets"].as_array().unwrap().iter().filter_map(|v| Some((def(v)?, point(v, 1)))).collect();
+        let chase = Chase { pursuers, party, at: point(&e["at"], 0), intent: Intent::Raid { then: point(&e["then"], 0) }, assets, seconds: e["seconds"].as_f64().unwrap_or(60.0) as f32 };
+        let v = chase.verdict(rules, reps);
+        println!("{{\"caught\":{},\"caught_after\":{},\"party_killed\":{},\"pursuers_lost\":{},\"assets_lost\":{},\"survived\":{},\"unknown\":{unknown}}}", v.caught, v.caught_after, v.party_killed, v.pursuers_lost, v.assets_lost, v.survived);
+    }
+}
+
 fn chase(rules: &Rules, flags: &Flags) {
     let pairs = |spec: String| -> Vec<(usize, u32)> {
         spec.split(',').filter(|p| !p.is_empty()).map(|part| {
@@ -257,7 +277,8 @@ fn chase(rules: &Rules, flags: &Flags) {
     // The buildings in a row beside the party, 250 apart: an outpost cluster.
     let assets: Vec<(usize, Vec2)> = pairs(flags.get("assets").unwrap_or("armmex:3").to_string()).into_iter()
         .flat_map(|(def, count)| (0..count).map(move |i| (def, Vec2::new(150.0, 250.0 * (i as f32 - (count - 1) as f32 / 2.0))))).collect();
-    let sent = Chase { pursuers: pairs(flags.get("pursuers").unwrap_or("").to_string()), from: Vec2::new(-distance, 0.0), party: pairs(flags.get("party").unwrap_or("").to_string()), at, intent, assets, seconds: flags.num("seconds", 60.0) };
+    let from = Vec2::new(-distance, 0.0);
+    let sent = Chase { pursuers: pairs(flags.get("pursuers").unwrap_or("").to_string()).into_iter().map(|(d, n)| (d, n, from)).collect(), party: pairs(flags.get("party").unwrap_or("").to_string()), at, intent, assets, seconds: flags.num("seconds", 60.0) };
     let reps = flags.num("reps", 8.0) as u32;
     let started = std::time::Instant::now();
     let with = sent.verdict(rules, reps);

@@ -8,9 +8,8 @@ use crate::sim::{Rules, simulate};
 
 #[derive(Clone, Debug)]
 pub struct Chase {
-    /// Ours that go after the party (unit type, count), and where they start from.
-    pub pursuers: Vec<(usize, u32)>,
-    pub from: Vec2,
+    /// Ours that go after the party: unit type, count, and where that group starts from.
+    pub pursuers: Vec<(usize, u32, Vec2)>,
     /// The party (unit type, count), where it is and what it is there to do.
     pub party: Vec<(usize, u32)>,
     pub at: Vec2,
@@ -46,15 +45,15 @@ impl Chase {
     pub fn scenario(&self) -> Scenario {
         let mut scenario = Scenario::new();
         (scenario.time_limit, scenario.stalemate) = (self.seconds, self.seconds);
-        let facing = self.from.towards(self.at);
-        for (def, count) in &self.pursuers {
-            scenario.sides[0].push(Group::new(*def, *count, self.from, facing));
+        for (def, count, from) in &self.pursuers {
+            scenario.sides[0].push(Group::new(*def, *count, *from, from.towards(self.at)));
         }
         for (def, place) in &self.assets {
-            scenario.sides[0].push(Group::new(*def, 1, *place, facing));
+            scenario.sides[0].push(Group::new(*def, 1, *place, Vec2::new(1.0, 0.0)));
         }
+        let threat = self.pursuers.first().map_or(Vec2::new(self.at.x - 1.0, self.at.z), |p| p.2);
         for (def, count) in &self.party {
-            let mut group = Group::new(*def, *count, self.at, self.at.towards(self.from));
+            let mut group = Group::new(*def, *count, self.at, self.at.towards(threat));
             group.intent = self.intent;
             scenario.sides[1].push(group);
         }

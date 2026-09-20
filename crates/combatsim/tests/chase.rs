@@ -7,8 +7,7 @@ use combatsim::{Intent, Vec2};
 fn outpost(rules: &Rules, pursuers: (&str, u32), distance: f32, intent: Intent) -> Chase {
     let unit = |name: &str| rules.units.index(name).expect(name);
     Chase {
-        pursuers: if pursuers.1 > 0 { vec![(unit(pursuers.0), pursuers.1)] } else { Vec::new() },
-        from: Vec2::new(-distance, 0.0),
+        pursuers: if pursuers.1 > 0 { vec![(unit(pursuers.0), pursuers.1, Vec2::new(-distance, 0.0))] } else { Vec::new() },
         party: vec![(unit("corak"), 3)],
         at: Vec2::new(0.0, 0.0),
         intent,
