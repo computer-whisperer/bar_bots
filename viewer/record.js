@@ -201,7 +201,7 @@ const WR = (() => {
   // Units at `frame`, positions interpolated towards the next sample. Rows: {id, def, x, z, health, flags, damage}.
   function stateAt(match, frame) {
     const i = indexAt(match.samples, frame);
-    if (i < 0) return { sample: null, own: [], enemies: [] };
+    if (i < 0) return { sample: null, own: [], allies: [], enemies: [] };
     const a = match.samples[i];
     const b = match.samples[i + 1];
     // A long gap is a bot restart or a held game, not motion.
@@ -217,7 +217,9 @@ const WR = (() => {
     const damaged = new Map(((b || a).dmg || []).map(([id, amount]) => [id, amount]));
     const own = blend(a.own, b && b.own, 4);
     for (const u of own) u.damage = damaged.get(u.id) || 0;
-    return { sample: a, own, enemies: blend(a.en, b && b.en, 4) };
+    // Allies (`al`: [id, def, x, z, team, being built]): other seats of ours, or anybody else on our side.
+    const allies = blend(a.al || [], b && b.al, 4).map((u) => ({ ...u, team: u.health, health: null, flags: u.flags ? FLAG.beingBuilt : 0 }));
+    return { sample: a, own, allies, enemies: blend(a.en, b && b.en, 4) };
   }
 
   // Heuristic firings summed over the game minute that contains `frame`: [[rule, count]] by count.

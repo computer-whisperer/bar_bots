@@ -28,6 +28,8 @@ const HEARTBEAT_INTERVAL: i32 = 30 * 30;
 const CENSUS_INTERVAL: i32 = 60 * 30;
 /// Frames between ground-truth samples of the opponent's units (`WITHIN_REASON_OBSERVE` with `WITHIN_REASON_TRUTH_DIR`).
 const TRUTH_INTERVAL: i32 = 2 * 30;
+/// Frames between looks at the map's features (wrecks); a multiple of the tick interval.
+const WRECKS_INTERVAL: i32 = 3 * 30;
 
 struct Instance {
     ai_id: c_int,
@@ -93,7 +95,11 @@ impl Instance {
             Err(e) => return self.disconnect(e),
         }
         if self.has_credit && frame % TICK_INTERVAL == 0 {
-            let tick = Tick { frame, events: std::mem::take(&mut self.events), snapshot: self.engine.snapshot() };
+            let mut snapshot = self.engine.snapshot();
+            if frame % WRECKS_INTERVAL == 0 {
+                snapshot.wrecks = Some(self.engine.wrecks());
+            }
+            let tick = Tick { frame, events: std::mem::take(&mut self.events), snapshot };
             self.send(ToBot::Tick(tick));
             // Lockstep (`WITHIN_REASON_LOCKSTEP`, headless study runs only): the engine waits here for the answer,
             // so a bot that holds its reply while a language model thinks has in effect paused the game.
@@ -169,6 +175,8 @@ impl Instance {
                 | Command::SetRepeat { unit, .. }
                 | Command::Guard { unit, .. }
                 | Command::ReclaimArea { unit, .. }
+                | Command::ReclaimFeature { unit, .. }
+                | Command::Resurrect { unit, .. }
                 | Command::Repair { unit, .. }
                 | Command::SelfDestruct { unit }) = command
                 else {

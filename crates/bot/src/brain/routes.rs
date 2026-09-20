@@ -49,6 +49,9 @@ impl Brain {
             spots.iter().filter(|s| from_home.distance(**s).is_none()).map(|s| format!("({:.0}, {:.0})", s.x, s.z)).collect();
         eprintln!("[ai {}] terrain: spots we cannot walk to: {}", self.ai(), cut_off.join(" "));
         self.routes = Some(Routes { from_home, from_enemy, enemy_origins, passable });
+        for p in self.passages() {
+            eprintln!("[ai {}] terrain: passage at {} ({:.0}, {:.0}), {:.0} wide, {:.0} % of the way to the enemy", self.ai(), self.world.grid(p.at), p.at.x, p.at.z, p.width, p.along * 100.0);
+        }
         if let Some(sketch) = self.terrain_sketch() {
             for row in sketch["rows"].as_array().into_iter().flatten() {
                 eprintln!("[ai {}] terrain: {}", self.ai(), row.as_str().unwrap_or_default());
@@ -114,6 +117,11 @@ impl Brain {
             "legend": "north is up; 4x4 characters per grid cell. ~ water, # cliff or slope our bots cannot cross, x ground we cannot walk to from our start, . o O walkable ground (low, middle, high)",
             "rows": lines,
         }))
+    }
+
+    /// The narrow places on the ways between home and the nearest enemy bases, the narrowest first.
+    pub(super) fn passages(&self) -> Vec<terrain::Passage> {
+        self.routes.as_ref().and_then(|r| r.from_enemy.as_ref().map(|enemy| terrain::passages(&r.from_home, enemy))).unwrap_or_default()
     }
 
     /// The reachable ground nearest `pos`; `pos` itself when we cannot tell.

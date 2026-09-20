@@ -6,13 +6,16 @@ use std::ffi::{CStr, c_int, c_void};
 
 use bot_protocol::{
     AllyUnit, BuildSite, Command, EnemyUnit, Hello, MapInfo, MoveClass, MoveKind, OwnUnit, Resource, Snapshot, Terrain,
-    StartBox, TeamInfo, UnitDefId, UnitDefInfo, UnitId, Vec3,
+    FeatureId, StartBox, TeamInfo, UnitDefId, UnitDefInfo, UnitId, Vec3, Wreck,
 };
 use recoil_ai_sys as sys;
 
 /// Heightmap squares to elmos.
 const SQUARE_SIZE: f32 = 8.0;
 const MAX_UNITS: usize = 32_000;
+/// Features with less metal than this are not worth telling the bot about (trees, pebbles).
+const WRECK_MIN_METAL: f32 = 25.0;
+const MAX_WRECKS: usize = 150;
 /// Base buildings stay this far from any metal spot, leaving room for the extractor and a path to it.
 const SPOT_KEEPOUT: f32 = 100.0;
 
@@ -24,6 +27,8 @@ pub struct Engine {
     id_buf: Vec<c_int>,
     /// Metal spots, kept so base buildings stay off them.
     metal_spots: Vec<Vec3>,
+    /// Per feature type: the metal a whole one holds, or `None` when it cannot be reclaimed.
+    feature_metal: std::collections::HashMap<c_int, Option<f32>>,
 }
 
 /// The one engine call that must be made with the instance table unlocked: the cheat that creates a unit, during
@@ -65,7 +70,7 @@ impl Engine {
     /// `callback` must be the table the engine passed to `init` for `ai_id`, and stay valid
     /// until `release`.
     pub unsafe fn new(ai_id: c_int, callback: *const sys::SSkirmishAICallback) -> Self {
-        let mut engine = Engine { ai_id, callback, metal: -1, energy: -1, id_buf: vec![0; MAX_UNITS], metal_spots: Vec::new() };
+        let mut engine = Engine { ai_id, callback, metal: -1, energy: -1, id_buf: vec![0; MAX_UNITS], metal_spots: Vec::new(), feature_metal: Default::default() };
         engine.metal = call!(engine, getResourceByName(c"Metal".as_ptr()));
         engine.energy = call!(engine, getResourceByName(c"Energy".as_ptr()));
         engine
@@ -238,7 +243,37 @@ impl Engine {
             })
             .collect();
 
-        Snapshot { metal: self.resource(self.metal), energy: self.resource(self.energy), own_units, allies, enemies }
+        Snapshot { metal: self.resource(self.metal), energy: self.resource(self.energy), own_units, allies, enemies, wrecks: None }
+    }
+
+    /// The reclaimable features in sight that hold metal worth a walk, the richest first.
+    pub fn wrecks(&mut self) -> Vec<Wreck> {
+        let max = self.id_buf.len() as c_int;
+        let count = call!(self, getFeatures(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        let ids: Vec<c_int> = self.id_buf[..count].to_vec();
+        let mut wrecks = Vec::new();
+        for id in ids {
+            let def = call!(self, Feature_getDef(id));
+            if def < 0 {
+                continue;
+            }
+            let whole = match self.feature_metal.get(&def) {
+                Some(known) => *known,
+                None => {
+                    let metal = call!(self, FeatureDef_isReclaimable(def)).then(|| call!(self, FeatureDef_getContainedResource(def, self.metal)));
+                    self.feature_metal.insert(def, metal);
+                    metal
+                }
+            };
+            let Some(metal) = whole.map(|whole| whole * call!(self, Feature_getReclaimLeft(id))).filter(|metal| *metal >= WRECK_MIN_METAL) else { continue };
+            let mut pos = [0f32; 3];
+            call!(self, Feature_getPosition(id, pos.as_mut_ptr()));
+            let raises = call!(self, Feature_getResurrectDef(id));
+            wrecks.push(Wreck { id: FeatureId(id), pos: Vec3 { x: pos[0], y: pos[1], z: pos[2] }, metal, resurrects_into: (raises >= 0).then_some(UnitDefId(raises)) });
+        }
+        wrecks.sort_by(|a, b| b.metal.total_cmp(&a.metal));
+        wrecks.truncate(MAX_WRECKS);
+        wrecks
     }
 
     fn resource(&self, id: c_int) -> Resource {
@@ -478,6 +513,20 @@ impl Engine {
                 options: 0,
                 timeOut: NO_TIMEOUT,
                 toGuardUnitId: target.0,
+            }),
+            Command::ReclaimFeature { unit, feature, queue } => self.handle(sys::COMMAND_UNIT_RECLAIM_FEATURE, &mut sys::SReclaimFeatureUnitCommand {
+                unitId: unit.0,
+                groupId: NO_GROUP,
+                options: options(queue),
+                timeOut: NO_TIMEOUT,
+                toReclaimFeatureId: feature.0,
+            }),
+            Command::Resurrect { unit, feature, queue } => self.handle(sys::COMMAND_UNIT_RESURRECT, &mut sys::SResurrectUnitCommand {
+                unitId: unit.0,
+                groupId: NO_GROUP,
+                options: options(queue),
+                timeOut: NO_TIMEOUT,
+                toResurrectFeatureId: feature.0,
             }),
             Command::Repair { unit, target, queue } => self.handle(sys::COMMAND_UNIT_REPAIR, &mut sys::SRepairUnitCommand {
                 unitId: unit.0,

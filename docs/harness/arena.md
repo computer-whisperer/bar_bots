@@ -46,7 +46,7 @@ compare batches run at different requested speeds.
 
 ## Watching the opponent
 
-`WITHIN_REASON_OBSERVE=1` makes the shim write a census of both sides to `engine.log` once a game minute (unit types,
+The arena sets `WITHIN_REASON_OBSERVE=1` for every match (since 2026-09-20; before, the caller had to). It makes the shim write a census of both sides to `engine.log` once a game minute (unit types,
 counts, mean positions). It switches the engine's cheat callbacks on for the length of that one query only; the bot's own
 view stays fair. `run/compare_census.py run/matches/<batch>/<NN> [--detail MINUTE]` prints the two sides beside each other.
 `--corner nw|se` fixes our start (`nw` is the first start box of the layout); `--swap-corners` puts ally team 0 in the second box.

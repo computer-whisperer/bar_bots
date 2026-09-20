@@ -141,6 +141,92 @@ impl Field {
     }
 }
 
+/// A passage on the way between two places: where it is and how wide.
+pub struct Passage {
+    pub at: Vec3,
+    pub width: f32,
+    /// How far along the way from the first place it lies, 0 to 1.
+    pub along: f32,
+}
+
+/// The narrow places on the ways between the origins of `from` and `to`: what a defender holds and an attacker must
+/// force. The corridor is every cell on a route at most [`DETOUR`] times the shortest; it is cut into bands by distance
+/// from `from`, each band falls into connected pieces (one per parallel route), and a piece much narrower than the
+/// corridor's usual width is a passage. Each route's narrowest piece is reported, the narrowest first.
+pub fn passages(from: &Field, to: &Field) -> Vec<Passage> {
+    const DETOUR: f32 = 1.3;
+    /// Depth of a band, in cells.
+    const BAND: u32 = 4;
+    let cells = from.cost.len();
+    let sum = |i: usize| (from.cost[i] != UNREACHABLE && to.cost[i] != UNREACHABLE).then(|| from.cost[i] + to.cost[i]);
+    let Some(shortest) = (0..cells).filter_map(sum).min() else { return Vec::new() };
+    let limit = (shortest as f32 * DETOUR) as u32;
+    let in_corridor = |i: usize| sum(i).is_some_and(|s| s <= limit);
+    let band_of = |i: usize| from.cost[i] / (BAND * 10);
+    let mut seen = vec![false; cells];
+    // (band, cells in the piece, sum x, sum z)
+    let mut pieces: Vec<(u32, usize, f32, f32)> = Vec::new();
+    for start in 0..cells {
+        if seen[start] || !in_corridor(start) {
+            continue;
+        }
+        let band = band_of(start);
+        let (mut count, mut x, mut z) = (0usize, 0.0, 0.0);
+        let mut stack = vec![start];
+        seen[start] = true;
+        while let Some(i) = stack.pop() {
+            let centre = from.centre(i);
+            (count, x, z) = (count + 1, x + centre.x, z + centre.z);
+            let (cx, cz) = ((i % from.width) as i32, (i / from.width) as i32);
+            for (dx, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)] {
+                let (nx, nz) = (cx + dx, cz + dz);
+                if nx < 0 || nz < 0 || nx >= from.width as i32 || nz >= from.height as i32 {
+                    continue;
+                }
+                let next = nz as usize * from.width + nx as usize;
+                if !seen[next] && in_corridor(next) && band_of(next) == band {
+                    seen[next] = true;
+                    stack.push(next);
+                }
+            }
+        }
+        pieces.push((band, count, x, z));
+    }
+    // Slivers where a band (a ring round the first place) meets the corridor's edge are not routes. A piece counts when
+    // it is a fifth of its band or more. The price: a narrow side pass level with a wide one is not reported (tried
+    // without the share rule on three maps: 50-100 wide slivers beside every real pass).
+    let mut band_cells: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+    for piece in &pieces {
+        *band_cells.entry(piece.0).or_default() += piece.1;
+    }
+    pieces.retain(|p| p.1 >= 3 * BAND as usize && p.1 * 5 >= band_cells[&p.0]);
+    // Away from both ends, where the corridor narrows to a point by construction.
+    let bands = shortest / (BAND * 10);
+    let middle: Vec<&(u32, usize, f32, f32)> = pieces.iter().filter(|p| p.0 * 5 >= bands && p.0 * 5 <= bands * 4).collect();
+    let mut widths: Vec<usize> = middle.iter().map(|p| p.1).collect();
+    widths.sort_unstable();
+    let Some(usual) = widths.get(widths.len() / 2).copied() else { return Vec::new() };
+    let mut narrow: Vec<Passage> = middle
+        .iter()
+        .filter(|p| p.1 * 2 <= usual)
+        .map(|p| Passage {
+            at: Vec3 { x: p.2 / p.1 as f32, y: 0.0, z: p.3 / p.1 as f32 },
+            width: p.1 as f32 / BAND as f32 * from.cell,
+            along: p.0 as f32 / bands.max(1) as f32,
+        })
+        .collect();
+    narrow.sort_by(|a, b| a.width.total_cmp(&b.width));
+    // One per place: neighbouring bands of the same gap say the same thing.
+    let mut chosen: Vec<Passage> = Vec::new();
+    for passage in narrow {
+        if chosen.iter().all(|c| c.at.dist2d(passage.at) > 600.0) {
+            chosen.push(passage);
+        }
+    }
+    chosen.truncate(4);
+    chosen
+}
+
 /// A coarse picture of the map in text, `size` characters square, for a reader that cannot see it: `~` water,
 /// `#` ground this class cannot stand on (cliffs), `x` ground it could stand on but cannot walk to from the field's
 /// origin, and `.` `o` `O` walkable ground by height (low, middle, high thirds).

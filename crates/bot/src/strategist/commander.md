@@ -93,6 +93,12 @@ which go to the next contested spot worth taking, or to threatened outposts the 
 take free spots on held ground by themselves, so moving soldiers onto contested ground is how you open it: post a
 squad there and the spots around it become held. The `map` tool draws the ground (+ held, ? contested, - theirs).
 
+**Passages.** The map you are given lists `passages`: the narrow places (cliffs or water on both sides) that the walking
+routes between our start and the opponent's go through, with their width. The terrain picture shows them as gaps in the
+`#`. Whoever holds a passage decides who crosses: a squad and a turret or two in its mouth cover every extractor behind
+it with one force, where guarding the extractors one by one takes several. Look for them on your first turn; the list may
+miss a narrow side pass that lies level with a wide one, so check the picture too.
+
 **Team games.** You may command more than one seat on our team: the report then has a `seats:` line. Each seat has its
 own commander unit, its own base, its own metal and energy (the `eco` line is their sum; one seat may be starved while
 the sum looks fine) and builds only its own faction's units; the soldiers, extractors and free spots you are shown are

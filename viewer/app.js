@@ -12,6 +12,7 @@
   const COLOR = {};
   for (const name of ["surface", "surface-2", "line", "ink", "ink-2", "muted", "ours", "theirs", "good", "critical", "warning", "llm"]) COLOR[name] = css(`--${name}`);
   const OWN_ATTACKER = "#86b6ef";
+  const ALLY = "#3fae8f";
   const ORDER_COLOR = { build: COLOR.good, fight: COLOR.critical, move: COLOR.muted };
   /// How long an order line and a death mark stay on the map, in frames.
   const ORDER_FRAMES = 3 * WR.FPS;
@@ -314,6 +315,7 @@
     };
     for (const cls of ["commander", "army", "builder", "extractor", "factory", "turret", "building"]) entry(cls, COLOR.ours, cls);
     entry("army", OWN_ATTACKER, "attacker");
+    entry("army", ALLY, "ally (another seat of ours, or another player)");
     entry("army", COLOR.theirs, "enemy seen");
     entry("unknown", COLOR.theirs, "radar contact");
   }
@@ -468,6 +470,12 @@
 
     // Buildings under mobile units, enemies over ours so a raid in the base stays visible.
     const mobileLast = (a, b) => (view.match.defs[a.def]?.speed > 0) - (view.match.defs[b.def]?.speed > 0);
+    // Allies first, under our own: the same glyphs in the allied colour. A team game recorded by one seat would
+    // otherwise show half our side's map as empty.
+    for (const u of [...state.allies].sort(mobileLast)) {
+      ctx.globalAlpha = u.flags & WR.FLAG.beingBuilt ? 0.4 : 1;
+      glyph(ctx, classOf(u.def), px(u.x), pz(u.z), ALLY);
+    }
     for (const u of [...state.own].sort(mobileLast)) {
       ctx.globalAlpha = u.flags & WR.FLAG.beingBuilt ? 0.4 : 1;
       const color = u.flags & WR.FLAG.attacker ? OWN_ATTACKER : u.flags & WR.FLAG.squad ? COLOR.llm : COLOR.ours;

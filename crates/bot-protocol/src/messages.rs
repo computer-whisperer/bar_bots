@@ -6,6 +6,10 @@ pub struct UnitId(pub i32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct UnitDefId(pub i32);
 
+/// A map feature: a wreck, a rock, a tree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct FeatureId(pub i32);
+
 /// Map position in elmos; `y` is height.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Vec3 {
@@ -150,6 +154,19 @@ pub struct Snapshot {
     pub allies: Vec<AllyUnit>,
     /// Enemies currently in line of sight or radar.
     pub enemies: Vec<EnemyUnit>,
+    /// Reclaimable features in sight worth the walk (wrecks mostly), the richest first, capped. `None` on the ticks the
+    /// shim did not look (it looks every few seconds): what was sent last still stands.
+    pub wrecks: Option<Vec<Wreck>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Wreck {
+    pub id: FeatureId,
+    pub pos: Vec3,
+    /// Metal left in it.
+    pub metal: f32,
+    /// The unit a resurrection bot can raise from it.
+    pub resurrects_into: Option<UnitDefId>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
@@ -226,6 +243,10 @@ pub enum Command {
     Guard { unit: UnitId, target: UnitId },
     /// Reclaim every wreck and rock within `radius` of `centre` for their metal.
     ReclaimArea { unit: UnitId, centre: Vec3, radius: f32, queue: bool },
+    /// Take one feature apart for its metal.
+    ReclaimFeature { unit: UnitId, feature: FeatureId, queue: bool },
+    /// Raise the unit a wreck was (resurrection bots only); it costs energy and time, no metal.
+    Resurrect { unit: UnitId, feature: FeatureId, queue: bool },
     /// Restore `target`'s health (a builder's job; it also finishes a stalled construction).
     Repair { unit: UnitId, target: UnitId, queue: bool },
     /// Cheat: a finished unit of type `def` appears at `at`, owned by this AI's team. For the duel harness

@@ -192,6 +192,8 @@ impl Recorder {
                 Command::Guard { unit, target } => json!(["guard", unit.0, target.0]),
                 Command::Repair { unit, target, .. } => json!(["repair", unit.0, target.0]),
                 Command::ReclaimArea { unit, centre, radius, .. } => json!(["reclaim", unit.0, centre.x as i32, centre.z as i32, radius as i32]),
+                Command::ReclaimFeature { unit, feature, .. } => json!(["reclaim_feature", unit.0, feature.0]),
+                Command::Resurrect { unit, feature, .. } => json!(["resurrect", unit.0, feature.0]),
                 Command::GiveUnit { def, at } => json!(["give", self.def(Some(def)), at.x as i32, at.z as i32]),
                 Command::SelfDestruct { unit } => json!(["selfdestruct", unit.0]),
             })
@@ -215,6 +217,11 @@ impl Recorder {
             let comma = if i == 0 { "" } else { "," };
             let def = self.def(self.known.get(&e.id).and_then(|k| k.0));
             let _ = write!(self.buffer, "{comma}[{},{def},{},{},{:.0}]", e.id.0, e.pos.x as i32, e.pos.z as i32, e.health);
+        }
+        self.buffer.push_str("],\"al\":[");
+        for (i, a) in s.allies.iter().enumerate() {
+            let comma = if i == 0 { "" } else { "," };
+            let _ = write!(self.buffer, "{comma}[{},{},{},{},{},{}]", a.id.0, self.def(Some(a.def)), a.pos.x as i32, a.pos.z as i32, a.team, a.being_built as i32);
         }
         self.buffer.push_str("],\"dmg\":[");
         for (i, (unit, damage)) in std::mem::take(&mut self.damage).into_iter().enumerate() {

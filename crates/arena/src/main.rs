@@ -291,6 +291,10 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         // The commander takes its turns with the game held still: the shim waits for each of the bot's answers.
         .envs(options.commander.then_some(("WITHIN_REASON_LOCKSTEP", "1")))
         .env("WITHIN_REASON_TRACE_BUILDS", "1")
+        // Every match leaves the opponent's ground truth and a census for study (the shim reads them with cheat access
+        // for the length of the query; the bot never sees them). It used to take the caller's environment to switch on,
+        // and a game launched without it cannot be studied afterwards.
+        .env("WITHIN_REASON_OBSERVE", "1")
         .env("WITHIN_REASON_TRUTH_DIR", &dir)
         .envs(options.call_settled.then_some(("WITHIN_REASON_BALANCE", "1")))
         .env("WITHIN_REASON_SOCKET", &socket)
