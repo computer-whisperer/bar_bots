@@ -45,6 +45,21 @@ impl std::ops::Mul<f32> for Vec2 {
     }
 }
 
+/// What a group is on the field to do.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub enum Intent {
+    /// Close with the enemy and fight it out: a stand-up fight, and what every group did before chases existed.
+    #[default]
+    Fight,
+    /// Go for the other side's unarmed buildings (nearest first) and ignore its soldiers until one of them hurts
+    /// it; from then on it fights like anybody else.
+    Raid,
+    /// Walk to this point and leave the field there, shooting only what comes into range on the way.
+    Flee(Vec2),
+    /// Stand at `at`; fight what comes within `radius` of it and go back afterwards.
+    Guard { at: Vec2, radius: f32 },
+}
+
 /// One block of identical units: where they stand, how tightly, and when they turn up.
 #[derive(Clone, Debug)]
 pub struct Group {
@@ -61,11 +76,12 @@ pub struct Group {
     pub delay: f32,
     /// Stand and fight where placed instead of advancing. Buildings always hold.
     pub hold: bool,
+    pub intent: Intent,
 }
 
 impl Group {
     pub fn new(def: usize, count: u32, front: Vec2, facing: Vec2) -> Group {
-        Group { def, count, front, facing, spacing: 56.0, per_rank: 8, delay: 0.0, hold: false }
+        Group { def, count, front, facing, spacing: 56.0, per_rank: 8, delay: 0.0, hold: false, intent: Intent::Fight }
     }
 
     /// Where each unit of the group stands: ranks across the facing, further ranks behind. This is the duel
@@ -197,6 +213,12 @@ pub struct Outcome {
     pub value_left: [f32; 2],
     /// Side 0's `value_left` less side 1's: +1 a flawless win, -1 a wipe without a scratch.
     pub margin: f32,
+    /// Metal of unarmed buildings (what raiders come for) each side lost.
+    pub assets_lost: [f32; 2],
+    /// Units per side that fled the field alive; they count as value left, not as losses.
+    pub escaped: [u32; 2],
+    /// Seconds to the first damage one of the side's mobile units took: when a chase caught up with it.
+    pub first_hurt: [Option<f32>; 2],
     /// Value left per side every few seconds, for a caller that wants to see the shape of the fight.
     pub timeline: Vec<[f32; 2]>,
 }

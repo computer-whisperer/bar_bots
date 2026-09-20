@@ -8,10 +8,12 @@
 
 use crate::field::Flow;
 use crate::rng::Rng;
-use crate::scenario::{End, Focus, Micro, Odds, Outcome, Scenario, Vec2};
+use crate::scenario::{End, Focus, Intent, Micro, Odds, Outcome, Scenario, Vec2};
 use crate::units::{FPS, Units, aim_error};
 
 const NONE: u32 = u32::MAX;
+/// A unit this close to the point it is walking to (a flight's end, a guard's post) has arrived.
+const ARRIVED: f32 = 60.0;
 /// Targets are picked twice a second, as the engine re-chooses on its own slow clock rather than every frame.
 const RETARGET: u32 = 15;
 /// Side of a bucket in the neighbour grid, in elmos: wider than any area of effect we care about.
@@ -176,6 +178,13 @@ struct Body {
     target: u32,
     /// Frame this unit's weapons may first fire at its current target.
     aimed_at: u32,
+    intent: Intent,
+    /// A raider that has been hurt: it fights from here on.
+    provoked: bool,
+    /// Left the field alive (`Intent::Flee`).
+    escaped: bool,
+    /// An unarmed building: what raiders come for.
+    asset: bool,
 }
 
 impl Body {
@@ -257,6 +266,8 @@ struct Sim<'a> {
     energy_cap: [f32; 2],
     metal: [f32; 2],
     micro: [Micro; 2],
+    first_hurt: [Option<u32>; 2],
+    assets_lost: [f32; 2],
 }
 
 impl<'a> Sim<'a> {
@@ -290,6 +301,10 @@ impl<'a> Sim<'a> {
                         reach: unit.reach(),
                         target: NONE,
                         aimed_at: 0,
+                        intent: group.intent,
+                        provoked: false,
+                        escaped: false,
+                        asset: !unit.mobile() && rules.shots[group.def].is_empty(),
                     });
                 }
             }
@@ -322,6 +337,8 @@ impl<'a> Sim<'a> {
             energy_cap: [0, 1].map(|s| scenario.energy[s].stored),
             metal,
             micro: scenario.micro,
+            first_hurt: [None; 2],
+            assets_lost: [0.0; 2],
         }
     }
 
@@ -371,7 +388,8 @@ impl<'a> Sim<'a> {
         let margin = value_left[0] - value_left[1];
         let mut survivors = [Vec::new(), Vec::new()];
         let mut metal_lost = self.metal;
-        for body in self.bodies.iter().filter(|b| b.alive) {
+        let escaped = [0, 1].map(|s| self.bodies.iter().filter(|b| b.escaped && b.side as usize == s).count() as u32);
+        for body in self.bodies.iter().filter(|b| b.alive || b.escaped) {
             let counts = &mut survivors[body.side as usize];
             match counts.iter_mut().find(|(def, _)| *def == body.def as usize) {
                 Some((_, n)) => *n += 1,
@@ -392,6 +410,9 @@ impl<'a> Sim<'a> {
             metal_lost,
             value_left,
             margin,
+            assets_lost: self.assets_lost,
+            escaped,
+            first_hurt: self.first_hurt.map(|f| f.map(|f| f as f32 / FPS)),
             timeline,
         }
     }
@@ -402,7 +423,7 @@ impl<'a> Sim<'a> {
 
     fn value_left(&self) -> [f32; 2] {
         let mut left = [0.0; 2];
-        for body in self.bodies.iter().filter(|b| b.alive) {
+        for body in self.bodies.iter().filter(|b| b.alive || b.escaped) {
             left[body.side as usize] += body.metal * (body.hp / body.max_hp).clamp(0.0, 1.0);
         }
         [0, 1].map(|s| if self.metal[s] > 0.0 { left[s] / self.metal[s] } else { 0.0 })
@@ -481,11 +502,22 @@ impl<'a> Sim<'a> {
             // The policy's pick, ranked among the enemies this unit can already shoot: a unit walks at the nearest
             // thing until something is in range, whatever its orders say about priorities.
             let mut chosen = (f32::MAX, NONE);
+            let (intent, provoked) = (self.bodies[i].intent, self.bodies[i].provoked);
             for (j, other) in self.bodies.iter().enumerate() {
-                if !(other.here(frame) && other.side != side && self.seen[j]) {
+                // Where the other side's buildings stand is known; its soldiers have to be seen.
+                if !(other.here(frame) && other.side != side && (self.seen[j] || other.asset)) {
                     continue;
                 }
                 let d = pos.dist2(other.pos);
+                let wanted = match intent {
+                    Intent::Fight => true,
+                    Intent::Raid => provoked || other.asset,
+                    Intent::Flee(_) => d <= reach * reach,
+                    Intent::Guard { at, radius } => d <= reach * reach || other.pos.dist2(at) <= radius * radius,
+                };
+                if !wanted {
+                    continue;
+                }
                 if d < best.0 {
                     best = (d, j as u32);
                 }
@@ -522,8 +554,26 @@ impl<'a> Sim<'a> {
             let (hp, max_hp) = (body.hp, body.max_hp);
             let micro = self.micro[side];
             let stop = reach * self.rules.tuning.stop_at;
-            let goal = if target != NONE { self.bodies[target as usize].pos } else { self.goal[side] };
+            let intent = body.intent;
+            let goal = match intent {
+                Intent::Flee(to) => to,
+                _ if target != NONE => self.bodies[target as usize].pos,
+                Intent::Guard { at, .. } => at,
+                _ => self.goal[side],
+            };
             let range = pos.dist(goal);
+            if let Intent::Flee(_) = intent
+                && range < ARRIVED
+            {
+                let body = &mut self.bodies[i];
+                (body.alive, body.escaped) = (false, true);
+                continue;
+            }
+            if matches!(intent, Intent::Guard { .. }) && target == NONE && range < ARRIVED {
+                self.bodies[i].vel = Vec2::default();
+                continue;
+            }
+            let fleeing = matches!(intent, Intent::Flee(_));
             // A unit too badly hurt to be worth spending turns round and leaves; it still shoots what comes into
             // range on the way, as a unit under a move order does.
             let withdrawing = micro.withdraw_below > 0.0 && hp < max_hp * micro.withdraw_below;
@@ -535,7 +585,7 @@ impl<'a> Sim<'a> {
                 let outruns = speed > enemy.speed || micro.kite_when_slower;
                 outranges && outruns && range < stop - KITE_SLACK
             };
-            if !withdrawing && !kiting {
+            if !withdrawing && !kiting && !fleeing {
                 if target != NONE && range <= stop {
                     self.bodies[i].vel = Vec2::default();
                     continue;
@@ -753,8 +803,15 @@ impl<'a> Sim<'a> {
                 if amount > 0.0 && body.alive {
                     body.hp -= amount;
                     hurt = true;
+                    body.provoked = true;
+                    if body.speed > 0.0 {
+                        self.first_hurt[body.side as usize].get_or_insert(frame);
+                    }
                     if body.hp <= 0.0 {
                         body.alive = false;
+                        if body.asset {
+                            self.assets_lost[body.side as usize] += body.metal;
+                        }
                     }
                 }
             }

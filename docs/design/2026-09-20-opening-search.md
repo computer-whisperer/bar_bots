@@ -108,6 +108,8 @@ time lost to walking, by minute, across settings of the knobs in arena batches; 
   orders for them are the next measurement).
 - 2026-09-20, step 3, first version: H-OPEN-SEARCH (500 ms, from the rule-made opening, objective `Tempo`, commander
   leashed to 1500, spots named by the search). open-search-1-ab: better on every opening measure on the same seeds;
-  full-game A/Bs on three maps running (open-search-2-*). Not built: the priorities as input (section 3: the
+  full-game A/Bs on three maps, twice (open-search-2-*, then -3-* with exposure priced and turrets on offer): the
+  lead at minute 6 is real and is not converted into results (8-17-3 against 11-12-5 over 28 games an arm); it is
+  raided away from minute 6. To be re-measured after the army's contact response is rebuilt. Not built: the priorities as input (section 3: the
   `build_priorities` tool, the pre-game turn), the first-contact weighting of the army term, the mid-game search.
   Step 4 (the commander unit forward and fighting): not started.

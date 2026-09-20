@@ -22,6 +22,8 @@ FPS = 30
 # fields against us (which includes tier-2 vehicles it builds from an advanced plant).
 FACTORIES = ["lab", "vp", "alab", "avp"]
 EXTRA = ["com"]
+# What raiders come for: economy buildings, unarmed, in a scenario only to be burned or saved (chase scenarios).
+ASSETS = ["mex", "win", "solar", "makr", "estor", "nanotc", "rad"]
 DEFENCE_DIRS = ["ArmBuildings/LandDefenceOffence", "CorBuildings/LandDefenceOffence"]
 
 # Units whose whole reason for existing is a mechanism the simulation has no model for. Keeping them would put a
@@ -183,7 +185,7 @@ def main():
     files = {p.stem: p for p in (root / "units").rglob("*.lua")}
     wanted = []
     for side in ("arm", "cor"):
-        wanted += [side + s for s in FACTORIES + EXTRA]
+        wanted += [side + s for s in FACTORIES + EXTRA + ASSETS]
         for factory in FACTORIES:
             wanted += load([files[side + factory]])[side + factory].get("buildoptions", [])
     wanted += [p.stem for d in DEFENCE_DIRS for p in (root / "units" / d).glob("*.lua")]

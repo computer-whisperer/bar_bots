@@ -1026,6 +1026,21 @@
 }
 ]
 },
+"armestor": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 1700,
+"health": 1890,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 170,
+"radius": 21.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
+},
 "armfark": {
 "air": false,
 "armor": "standard",
@@ -1931,6 +1946,21 @@
 }
 ]
 },
+"armmakr": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 1150,
+"health": 167,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 1,
+"radius": 20.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
+},
 "armmanni": {
 "air": false,
 "armor": "standard",
@@ -2167,6 +2197,21 @@
 }
 ]
 },
+"armmex": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 500,
+"health": 270,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 50,
+"radius": 24.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
+},
 "armmlv": {
 "air": false,
 "armor": "standard",
@@ -2209,6 +2254,21 @@
 "water_only": false
 }
 ]
+},
+"armnanotc": {
+"air": false,
+"armor": "nanos",
+"builder": true,
+"energy": 3200,
+"health": 560,
+"max_depth": 0.0,
+"max_slope": 28,
+"metal": 230,
+"radius": 15.5,
+"sight": 380,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
 },
 "armpb": {
 "air": false,
@@ -2343,6 +2403,21 @@
 "water_only": false
 }
 ]
+},
+"armrad": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 630,
+"health": 180,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 60,
+"radius": 16.0,
+"sight": 680,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
 },
 "armrectr": {
 "air": false,
@@ -2733,6 +2808,21 @@
 }
 ]
 },
+"armsolar": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 0,
+"health": 340,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 155,
+"radius": 25.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
+},
 "armsptk": {
 "air": false,
 "armor": "standard",
@@ -2967,6 +3057,21 @@
 "water_only": false
 }
 ]
+},
+"armwin": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 175,
+"health": 196,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 40,
+"radius": 17.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
 },
 "armyork": {
 "air": false,
@@ -4032,6 +4137,21 @@
 }
 ]
 },
+"corestor": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 1800,
+"health": 2000,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 175,
+"radius": 30.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
+},
 "coreter": {
 "air": false,
 "armor": "standard",
@@ -4813,6 +4933,21 @@
 }
 ]
 },
+"cormakr": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 1250,
+"health": 167,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 1,
+"radius": 16.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
+},
 "cormando": {
 "air": false,
 "armor": "standard",
@@ -4946,6 +5081,21 @@
 "water_only": false
 }
 ]
+},
+"cormex": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 500,
+"health": 275,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 50,
+"radius": 24.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
 },
 "cormexp": {
 "air": false,
@@ -5192,6 +5342,21 @@
 "tech": 1,
 "weapons": []
 },
+"cornanotc": {
+"air": false,
+"armor": "nanos",
+"builder": true,
+"energy": 3200,
+"health": 560,
+"max_depth": 0.0,
+"max_slope": 28,
+"metal": 230,
+"radius": 15.5,
+"sight": 380,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
+},
 "cornecro": {
 "air": false,
 "armor": "standard",
@@ -5368,6 +5533,21 @@
 "water_only": false
 }
 ]
+},
+"corrad": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 630,
+"health": 180,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 60,
+"radius": 16.0,
+"sight": 680,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
 },
 "corraid": {
 "air": false,
@@ -5726,6 +5906,21 @@
 "water_only": false
 }
 ]
+},
+"corsolar": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 0,
+"health": 355,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 150,
+"radius": 38.5,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
 },
 "corspec": {
 "air": false,
@@ -6286,6 +6481,21 @@
 "water_only": false
 }
 ]
+},
+"corwin": {
+"air": false,
+"armor": "standard",
+"builder": false,
+"energy": 175,
+"health": 220,
+"max_depth": 0.0,
+"max_slope": 0,
+"metal": 43,
+"radius": 17.0,
+"sight": 273,
+"speed": 0.0,
+"tech": 1,
+"weapons": []
 },
 "corwolv": {
 "air": false,

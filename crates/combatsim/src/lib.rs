@@ -14,6 +14,6 @@ pub mod sim;
 pub mod units;
 
 pub use field::Field;
-pub use scenario::{End, Focus, Group, Micro, Odds, Outcome, Scenario, Vec2};
+pub use scenario::{End, Focus, Group, Intent, Micro, Odds, Outcome, Scenario, Vec2};
 pub use sim::{Rules, Tuning, odds, simulate};
 pub use units::Units;
