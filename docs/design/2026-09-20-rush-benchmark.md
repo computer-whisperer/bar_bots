@@ -93,3 +93,14 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   lost one, because BARb was dead or dying by then. The next lever is the production posture behind the pressure:
   Pawns without a gap from the lab's first minute until the kill or the pressure fails (army part 3, posture) - a
   decision for the user, with the LLM's `build_priorities` as the other route.
+- 2026-09-20, back on Quicksilver (the user: parity with the replays until the players send Comet games; map size
+  changes timings and aggression patterns). On the lobby's boxes the layout reproduces the replays (BARb south at
+  (3371, 5556) as in Matt's game; the search places us at (2152, 972), beside both players' starts). The commander's
+  walk for the lab (its anchor lay on the first extractor's nanoframe) is fixed: mex, solar, lab at 22 s, solar, mex,
+  solar without a step. rush-10: 0-11-1 both arms. The first Pawn is on the players' schedule now (leaves 1:00-1:45,
+  sees the base 1.6-3.1 min) and then every sortie comes home "outmatched" on meeting BARb's commander out front,
+  four times a game with a minute's rest each. The user: retreating from the commander is right (high power, slow);
+  going home without trying the base elsewhere is the flaw, one of a bucket of troop-movement problems. Now the
+  party goes for another extractor it is priced to win at, or waits out of reach for reinforcements; home only with
+  nobody left (`target-harass`, rush-11). Still open behind it: Pawns per minute 0 / 3 / 5 / 4 / 2 against Matt's
+  5 / 7 / 6 / 8.

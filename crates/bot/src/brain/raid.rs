@@ -28,8 +28,12 @@ const TARGET_RADIUS: f32 = 600.0;
 /// simulator against what is known to stand at the target (`contact.rs`'s safety on our losses applies).
 const GO_GAIN: f32 = 0.0;
 const REPRICE_FRAMES: i32 = 4 * FRAMES_PER_SECOND;
-/// After a party comes home, no new one for this long.
+/// After a party is lost, no new one for this long.
 const REST_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
+/// Outmatched at its target, the party tries this many other extractors of theirs, nearest first, before waiting.
+const ELSEWHERE_TRIES: usize = 3;
+/// How far from the nearest threat the party waits for reinforcements when nothing is worth attacking.
+const WAIT_OFF: f32 = 1000.0;
 /// H-ARMY-KILL: the party at the opponent's base with no enemy soldier in sight this close offers the kill.
 const KILL_RADIUS: f32 = 1000.0;
 /// An extractor this close to the enemy's base is the base's business, not a raid's.
@@ -60,6 +64,8 @@ pub struct Raid {
     held: HashSet<UnitId>,
     /// Metal spots in the enemy's start box the party has stood at and found nothing (`unscouted_box_spots`).
     visited: Vec<Vec3>,
+    /// Waiting out of reach for reinforcements (logged once).
+    waiting: bool,
 }
 
 impl Raid {
@@ -123,6 +129,21 @@ impl Brain {
             return Some(*spot);
         }
         self.reachable_on_foot(base).then_some(base)
+    }
+
+    /// Outmatched at `target`: another extractor of theirs the body is priced to win at, nearest first and clear of
+    /// what is armed in sight. The experienced players' Pawns meet BARb's commander out front and go round it to the
+    /// extractors it is not standing on; ours went home and rested a minute (rush-10-qs-place 08).
+    fn harass_elsewhere(&mut self, body: &[&OwnUnit], target: Vec3, centre: Vec3, tick: &Tick) -> Option<Vec3> {
+        let armed: Vec<Vec3> = tick.snapshot.enemies.iter()
+            .filter(|e| e.def.is_none_or(|d| self.world.def(d).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0)))
+            .map(|e| e.pos)
+            .collect();
+        let mut candidates: Vec<Vec3> = self.raid_targets().into_iter()
+            .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < CONTACT_RADIUS))
+            .collect();
+        candidates.sort_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)));
+        candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.assault_verdict(body, *t, CONTACT_RADIUS, tick).gain >= GO_GAIN)
     }
 
     /// `soldiers`: finished soldiers no squad has claimed. Returns with the party's orders pushed.
@@ -198,6 +219,7 @@ impl Brain {
         let armed_in_sight = in_sight.iter().any(|e| armed(e) && !is_commander(e));
         let commander_in_sight = in_sight.iter().any(|e| is_commander(e));
         let commander_at = in_sight.iter().find(|e| is_commander(e)).map(|e| e.pos);
+        let armed_in_sight_at: Vec<Vec3> = in_sight.iter().filter(|e| armed(e)).map(|e| e.pos).collect();
         let commander_near = commander_at.is_some_and(|at| at.dist2d(centre) < COMMANDER_REACH);
         let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES;
         let party_metal: f32 = body.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
@@ -229,6 +251,7 @@ impl Brain {
                     self.raid.last_order_frame = 0;
                 }
                 self.raid.target = Some(target);
+                self.raid.waiting = false;
                 // H-ARMY-KILL: at their base with no soldier of theirs in sight, and the commander either out of sight
                 // or outnumbered, the home group comes to finish it.
                 let kill_open = !armed_in_sight && (!commander_in_sight || party_metal >= COMMANDER_PARTY_METAL);
@@ -244,15 +267,40 @@ impl Brain {
                 commands.extend(self.march(&mut held, &body, target, tick.snapshot.enemies.as_slice()));
                 self.raid.held = held;
             }
+            Some(target) if party.len() >= PARTY => {
+                // Outmatched here: an extractor of theirs elsewhere, or wait out of reach of the nearest threat for
+                // the Pawns still coming. Home is for a party with nobody left.
+                if let Some(next) = self.harass_elsewhere(&body, target, centre, tick) {
+                    eprintln!("[ai {}] f={} pressure: party of {} outmatched at ({:.0}, {:.0}), goes for ({:.0}, {:.0}) instead", self.ai(), tick.frame, body.len(), target.x, target.z, next.x, next.z);
+                    self.raid.target = Some(next);
+                    self.raid.last_order_frame = tick.frame;
+                    self.raid.waiting = false;
+                    self.raid.held.clear();
+                    commands.extend(party.iter().map(|u| Command::Move { unit: u.id, to: next, queue: false }));
+                } else {
+                    let threats = armed_in_sight_at.iter().copied()
+                        .chain(self.enemy_buildings.values().filter(|(def, pos, _)| pos.dist2d(target) < CONTACT_RADIUS && self.world.def(*def).is_some_and(|d| d.weapon_count > 0)).map(|(_, pos, _)| *pos));
+                    let threat = threats.min_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre))).unwrap_or(target);
+                    let (dx, dz) = (centre.x - threat.x, centre.z - threat.z);
+                    let len = dx.hypot(dz).max(1.0);
+                    let wait = Vec3 { x: threat.x + dx / len * WAIT_OFF, y: 0.0, z: threat.z + dz / len * WAIT_OFF };
+                    if !self.raid.waiting {
+                        eprintln!("[ai {}] f={} pressure: party of {} outmatched at ({:.0}, {:.0}), waits at ({:.0}, {:.0}) for more", self.ai(), tick.frame, body.len(), target.x, target.z, wait.x, wait.z);
+                        self.raid.waiting = true;
+                    }
+                    if tick.frame - self.raid.last_order_frame >= REPRICE_FRAMES {
+                        self.raid.last_order_frame = tick.frame;
+                        commands.extend(party.iter().map(|u| Command::Move { unit: u.id, to: wait, queue: false }));
+                    }
+                }
+            }
             _ => {
-                eprintln!(
-                    "[ai {}] f={} pressure: party of {} comes home ({})",
-                    self.ai(), tick.frame, party.len(), if outmatched { "outmatched" } else if party.len() < PARTY { "too few left" } else { "no target" }
-                );
+                eprintln!("[ai {}] f={} pressure: party of {} comes home ({})", self.ai(), tick.frame, party.len(), if party.len() < PARTY { "too few left" } else { "no target" });
                 let station = self.last_station;
                 commands.extend(party.iter().map(|u| Command::Move { unit: u.id, to: station, queue: false }));
                 self.raid.members.clear();
                 self.raid.held.clear();
+                self.raid.waiting = false;
                 self.raid.target = None;
                 self.raid.rest_until = tick.frame + REST_FRAMES;
             }
