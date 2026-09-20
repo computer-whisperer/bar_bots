@@ -96,3 +96,15 @@ spot's claim. With no orders before f=60 and a 45-frame grace after each order, 
 **Would be wrong if.** Records showed overlapping build orders for one builder again.
 **Used by.** H-ECO-OPENING (`FIRST_ORDER_FRAME`, `ORDER_GRACE_FRAMES`).
 
+### K-rules-mex-position-is-an-area
+**Claim.** An extractor does not have to stand on the spot position the engine reports: BAR accepts any position from
+which the extractor's radius covers every metal cell of the patch (`common/upgets/api_resource_spot_finder.lua`
+`IsBuildingPositionValid`, enforced by `luarules/gadgets/cmd_mex_denier.lua`). The engine's spot list gives the patch's
+top-left best cell, and we always build there.
+**Status.** observed (2026-09-20); first noticed by the user in the viewer.
+**Evidence.** v24, 24 games: our extractors sit at the engine's spot + (8, 8) in 30 of 30 placements; BARb's, from its own
+spot finder, at + (40, 72) in 41 of 42. Both are accepted, so the valid area spans at least 32 x 64 elmos.
+**Would be wrong if.** Orders at other positions inside that span were refused.
+**Used by.** Nothing yet. Candidate: send each spot's valid region in `Hello` and build at the valid position nearest
+the builder (saves 1-2 s of walking per extractor; may put the first extractor inside the commander's build range).
+
