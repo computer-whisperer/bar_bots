@@ -153,7 +153,10 @@ still (+0.52/+0.74) but leans on a weapon the simulator models badly (K-t2-sim-c
 **Would be wrong if.** An engine duel of `corthud:12,corstorm:13,corcan:5` against the same metal of pure
 corthud/corstorm, both against a scaled BARb army, failed to favour the Sumo mix by at least a fifth of the simulated
 margin; or an arena batch with the mix did no better than one without.
-**Used by.** (candidate: H-T2-PROD)
+**Used by.** H-T2-PRODUCTION's Cortex line. Note for that rule: its placeholder pairs corcan with **cormort**
+(Sheldon), and cormort is one of the two worst Cortex options in the sweep — `t1+mort` -0.21/+0.14 and `mort` alone
+-0.58 over all scenarios, against `t1+can` +0.35/+0.68. Pair the Sumo with the tier-1 line instead, and with a
+Mammoth when a tower line has to be broken.
 
 ### K-t2-mix-armada
 **Claim.** Out of an `armalab`, build **Welders (`armzeus`) and Hounds (`armfido`)** for about a third of the army's
@@ -172,7 +175,8 @@ spacing-160 column beside the spacing-56 one; the ranking is stable between them
 **Would be wrong if.** An engine duel put a Welder-and-Hound mix at or below the tier-1 line at equal metal; or the
 measured fighting spacing of a real army turned out to be tighter than 56, which would mean the Hound number is worse
 than the study's own upper bound.
-**Used by.** (candidate: H-T2-PROD)
+**Used by.** H-T2-PRODUCTION's Armada line, whose armzeus/armfido placeholder this supports at roughly one Welder to
+one Hound by metal (1.7 Welders to 2.1 Hounds a minute at +30 M/s), behind a tier-1 third.
 
 ### K-t2-tower-line-needs-mass
 **Claim.** At equal army metal, an assault on BARb's minute-25 base — 12 light towers, 2 heavy, 2 medium, its mobile
