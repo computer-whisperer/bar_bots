@@ -216,7 +216,11 @@ Nothing. Not "a small gain we cannot resolve" — the mechanism measure is flat 
 the win counts are inside the noise this harness is known to have (two arms of identical code have scored 8-3-1
 against 4-4-4). The ablation itself is clean: H-MICRO-SPREAD fired 0 times in all 24 arm-B games.
 
-Two measurements say why, and the second is the interesting one.
+It also broke nothing, which was the risk: sending 40 units to 40 separate points could have filed move failures
+into the rule that gives an attack target up as unreachable. Move failures per game 91 with against 90 without,
+targets given up as unreachable 0.00 against 0.04.
+
+Two measurements say why the rule did not show, and the second is the interesting one.
 
 **Exposure.** The rule acted in 15 of the 24 arm-A games, 7 orders a game on average
 (0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 3, 3, 5, 6, 7, 7, 8, 12, 13, 23, 24, 43, 51). The nine games where it never fired
