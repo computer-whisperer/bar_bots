@@ -86,6 +86,8 @@ pub struct Game {
     /// Every metal spot with the amount the engine reports for it.
     pub spots: Vec<((f64, f64), f64)>,
     pub wind: (f64, f64),
+    /// A wind to price plans at instead of the engine's process mean (the bot's H-OPEN-WIND off: the middle of the range).
+    pub wind_override: Option<f64>,
     pub terrain: Terrain,
 }
 
@@ -134,7 +136,7 @@ pub fn process_mean_wind(min: f64, max: f64) -> f64 {
 impl Game {
     /// The wind a plan is priced at: the mean of the engine's law for this map's bounds (`process_mean_wind`).
     pub fn mean_wind(&self) -> f64 {
-        process_mean_wind(self.wind.0, self.wind.1)
+        self.wind_override.unwrap_or_else(|| process_mean_wind(self.wind.0, self.wind.1))
     }
 
     /// What our tier-1 extractor draws from a spot of this amount.

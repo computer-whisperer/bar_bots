@@ -69,6 +69,8 @@ impl Brain {
             size: (hello.map.width as f64, hello.map.height as f64),
             spots: hello.metal_spots.iter().map(|s| ((s.x as f64, s.z as f64), s.y as f64)).collect(),
             wind: (hello.map.wind_min as f64, hello.map.wind_max as f64),
+            // H-OPEN-WIND: plans priced at the engine's process mean; off, at the middle of the range as before.
+            wind_override: (!self.enabled("H-OPEN-WIND")).then(|| (hello.map.wind_min as f64 + hello.map.wind_max as f64) / 2.0),
             terrain: hello.terrain.clone(),
         })
     }

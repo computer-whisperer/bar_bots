@@ -280,6 +280,7 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
         size: (number(&map["width"]), number(&map["height"])),
         spots,
         wind: (number(&map["wind_min"]), number(&map["wind_max"])),
+        wind_override: None,
         units: table,
         terrain: terrain(path, &header),
     };
