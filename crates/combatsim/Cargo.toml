@@ -1,0 +1,10 @@
+[package]
+name = "combatsim"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Study tool: a fast combat simulator answering 'x against y on terrain z' from the game's own unit numbers"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
