@@ -51,3 +51,17 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   soldier in sight and the commander outnumbered, the home group is committed). rush-smoke2: five units strung out
   2000 elmos met BARb's commander one at a time and died in six seconds, hence the march and the commander rule.
   A/B rush-2-ab running (pressure and kill against neither, north start, 12 an arm).
+- 2026-09-20, later rulings (the user): the benchmark moves to Comet Catcher (symmetric; Quicksilver's asymmetry is a
+  variable to avoid and its north start a nonstandard layout); the commander's start position inside its box is the
+  first genuine game input and belongs to the build-order search and the LLM commander's guidance; the bot is still
+  too timid: Matt's first Pawn left for the enemy base as soon as it was built (83 s) and hurt an extractor at 146 s.
+  Done for the last: the party is one raider, the rest join as they come. On the start position: in BAR an AI is
+  placed by a human through the lobby (`aiPlacedPosition`, `game_initial_spawn.lua`), never by itself, so for games
+  with people the bot can only walk to the point it wants at frame 0 (5 s on Quicksilver's north start), while the
+  arena can fix positions in the script (StartPosType 0 with StartPosX/Z per team) so the search's choice is the
+  spawn. To build: the search over start points inside the box (`Hello` carries the boxes), the walk as the plan's
+  first step, the arena writing the chosen point. rush-4-ab (mirrored, north start): 1-11 against 0-12, no pressure
+  party before minute 8 (a 60 s window made the term unreachable). Presence is now whole to the contact time, falling
+  over 240 s, times the square of speed over a raider's; offline at weight 6 the plan is ck then six Pawns (7 soldiers
+  and 2 constructors by minute 3), at 10 twelve Pawns and nothing else. rush-5-comet-ab running.
+

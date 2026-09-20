@@ -16,8 +16,10 @@ use super::army::CONTACT_RADIUS;
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
 
-/// Raiders that leave together; more join as they come out of the lab.
-const PARTY: usize = 5;
+/// Raiders that leave together; more join as they come out of the lab. One: the experienced player's first Pawn left
+/// for the opponent's base the moment it was built (finished at 83 s, 2500 elmos out at 116 s, an extractor hurt at
+/// 146 s); a party of five waited for the fifth.
+const PARTY: usize = 1;
 /// Raiders idle this close to home while a party is out go and join it.
 const JOIN_RADIUS: f32 = 1200.0;
 /// What counts as standing at a target, for what the party will meet there.

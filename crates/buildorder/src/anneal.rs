@@ -62,12 +62,13 @@ pub struct Contact {
 }
 
 impl Contact {
-    /// The share of `weight` a soldier of this speed, finished at `t`, earns: in time or not, and a raider's share of
-    /// it for anything slower than one (a Rocketeer at the opponent's base is not the pressure a Pawn is: the
-    /// experienced players' rushes are Pawns only, and with metal alone the search led with Rocketeers).
+    /// The share of `weight` a soldier of this speed, finished at `t`, earns: whole when there by the contact time,
+    /// falling to nothing over the window (long: the players' Pawns keep coming to minute 5), times the square of the
+    /// unit's speed over a raider's for anything slower (a Rocketeer at the opponent's base is not the pressure a Pawn
+    /// is; with metal alone the search led with Rocketeers, rush-2-ab).
     pub fn presence(self, t: f64, speed: f64) -> f64 {
         let arrives = t + self.walk / speed.max(1.0);
-        (1.0 - (arrives - self.at) / self.window).clamp(0.0, 1.0) * (speed / RAIDER_SPEED).min(1.0)
+        (1.0 - (arrives - self.at) / self.window).clamp(0.0, 1.0) * (speed / RAIDER_SPEED).min(1.0).powi(2)
     }
 }
 
