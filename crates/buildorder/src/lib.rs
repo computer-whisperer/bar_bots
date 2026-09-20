@@ -2,7 +2,7 @@
 //! A study tool: see `docs/studies/build-order.md` for what it models, what it ignores and how far off it is.
 
 pub mod anneal;
-pub mod map;
+pub mod game;
 pub mod plan;
 pub mod record;
 pub mod sim;

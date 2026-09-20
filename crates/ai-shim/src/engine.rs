@@ -5,7 +5,7 @@
 use std::ffi::{CStr, c_int, c_void};
 
 use bot_protocol::{
-    AllyUnit, BuildSite, Command, EnemyUnit, Hello, MapInfo, MoveClass, MoveKind, OwnUnit, Resource, Snapshot, Terrain,
+    AllyUnit, BuildSite, Command, Converter, EnemyUnit, Hello, MapInfo, MoveClass, MoveKind, OwnUnit, Resource, Snapshot, Terrain,
     FeatureId, StartBox, TeamInfo, UnitDefId, UnitDefInfo, UnitId, Vec3, Wreck,
 };
 use recoil_ai_sys as sys;
@@ -189,11 +189,31 @@ impl Engine {
             energy_cost: call!(self, UnitDef_getCost(id, self.energy)),
             speed: call!(self, UnitDef_getSpeed(id)),
             build_speed: call!(self, UnitDef_getBuildSpeed(id)),
+            build_time: call!(self, UnitDef_getBuildTime(id)),
+            build_distance: call!(self, UnitDef_getBuildDistance(id)),
             extracts_metal: call!(self, UnitDef_getExtractsResource(id, self.metal)),
+            metal_make: call!(self, UnitDef_getResourceMake(id, self.metal)),
+            energy_make: call!(self, UnitDef_getResourceMake(id, self.energy)),
+            energy_upkeep: call!(self, UnitDef_getUpkeep(id, self.energy)),
+            wind_cap: call!(self, UnitDef_getWindResourceGenerator(id, self.energy)),
+            metal_storage: call!(self, UnitDef_getStorage(id, self.metal)),
+            energy_storage: call!(self, UnitDef_getStorage(id, self.energy)),
+            converter: self.converter(id),
             weapon_count: call!(self, UnitDef_getWeaponMounts(id)),
             build_options: options.into_iter().map(UnitDefId).collect(),
             move_class: self.move_class(id),
         }
+    }
+
+    fn converter(&self, id: c_int) -> Option<Converter> {
+        let count = call!(self, UnitDef_getCustomParams(id, std::ptr::null_mut(), std::ptr::null_mut())).max(0) as usize;
+        let (mut keys, mut values) = (vec![std::ptr::null(); count], vec![std::ptr::null(); count]);
+        call!(self, UnitDef_getCustomParams(id, keys.as_mut_ptr(), values.as_mut_ptr()));
+        let number = |name: &str| {
+            let at = keys.iter().position(|k| self.string(*k) == name)?;
+            self.string(values[at]).parse::<f32>().ok()
+        };
+        Some(Converter { capacity: number("energyconv_capacity")?, efficiency: number("energyconv_efficiency")? })
     }
 
     pub fn snapshot(&mut self) -> Snapshot {

@@ -1,6 +1,9 @@
-//! The unit table: numbers derived from the game's unit definition files by `tools/extract_units.py`.
+//! The unit table: the numbers the engine reports for this game's unit types, as the bot's `Hello` or a match
+//! record's header carries them. Nothing is compiled in.
 
 use std::collections::HashMap;
+
+use bot_protocol::{MoveClass, UnitDefInfo};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
@@ -8,7 +11,7 @@ pub enum Role {
     /// Economy building: extractor, generator, converter, storage.
     Eco,
     Factory,
-    /// Mobile constructor (also resurrection bots and minelayers: anything a factory builds that has build power).
+    /// Mobile constructor: anything that moves and has a build menu.
     Builder,
     Nano,
     Turret,
@@ -19,23 +22,22 @@ pub enum Role {
 pub struct Unit {
     pub name: String,
     pub role: Role,
-    /// "lab" or "vp" for units built there, empty otherwise.
-    pub factory: String,
+    /// Indices into `Units::list` of what it builds.
+    pub builds: Vec<usize>,
     pub metal_cost: f64,
     pub energy_cost: f64,
     pub build_time: f64,
     pub worker_time: f64,
     pub build_distance: f64,
-    /// Elmos per second.
     pub speed: f64,
+    pub move_class: Option<MoveClass>,
     pub metal_make: f64,
-    /// Net constant energy production: `energymake - energyupkeep` (solars produce through a negative upkeep).
+    /// Net constant energy production: `energy_make - energy_upkeep`.
     pub energy_make: f64,
     pub extracts_metal: f64,
     pub wind_cap: f64,
     pub metal_storage: f64,
     pub energy_storage: f64,
-    /// Energy per second a converter can take, and metal returned per energy.
     pub conv_capacity: f64,
     pub conv_efficiency: f64,
 }
@@ -45,48 +47,45 @@ pub struct Units {
     by_name: HashMap<String, usize>,
 }
 
-const TABLE: &str = include_str!("../data/units.csv");
+fn role(n: &UnitDefInfo) -> Role {
+    let (moves, menu) = (n.speed > 0.0, !n.build_options.is_empty());
+    match () {
+        _ if moves && menu && n.name.ends_with("com") => Role::Commander,
+        _ if moves && menu => Role::Builder,
+        _ if menu => Role::Factory,
+        _ if !moves && n.build_speed > 0.0 => Role::Nano,
+        _ if !moves && n.weapon_count > 0 => Role::Turret,
+        _ if moves && n.weapon_count > 0 => Role::Army,
+        _ => Role::Eco,
+    }
+}
 
 impl Units {
-    pub fn load() -> Units {
-        let mut lines = TABLE.lines().filter(|l| !l.starts_with('#'));
-        let header: Vec<&str> = lines.next().expect("header").split(',').collect();
-        let col = |name: &str| header.iter().position(|h| *h == name).unwrap_or_else(|| panic!("column {name}"));
-        let (c_name, c_role, c_factory) = (col("name"), col("role"), col("factory"));
-        let num = |cells: &[&str], name: &str| cells[col(name)].parse::<f64>().unwrap_or(0.0);
-        let mut list = Vec::new();
-        for line in lines.filter(|l| !l.is_empty()) {
-            let cells: Vec<&str> = line.split(',').collect();
-            let role = match cells[c_role] {
-                "com" => Role::Commander,
-                "eco" => Role::Eco,
-                "factory" => Role::Factory,
-                "builder" => Role::Builder,
-                "nano" => Role::Nano,
-                "turret" => Role::Turret,
-                "army" => Role::Army,
-                other => panic!("role {other}"),
-            };
-            list.push(Unit {
-                name: cells[c_name].to_string(),
-                role,
-                factory: cells[c_factory].to_string(),
-                metal_cost: num(&cells, "metalcost"),
-                energy_cost: num(&cells, "energycost"),
-                build_time: num(&cells, "buildtime"),
-                worker_time: num(&cells, "workertime"),
-                build_distance: num(&cells, "builddistance"),
-                speed: num(&cells, "speed"),
-                metal_make: num(&cells, "metalmake"),
-                energy_make: num(&cells, "energymake") - num(&cells, "energyupkeep"),
-                extracts_metal: num(&cells, "extractsmetal"),
-                wind_cap: num(&cells, "windgenerator"),
-                metal_storage: num(&cells, "metalstorage"),
-                energy_storage: num(&cells, "energystorage"),
-                conv_capacity: num(&cells, "energyconv_capacity"),
-                conv_efficiency: num(&cells, "energyconv_efficiency"),
-            });
-        }
+    pub fn new(defs: &[UnitDefInfo]) -> Units {
+        let index_of: HashMap<_, usize> = defs.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
+        let list: Vec<Unit> = defs
+            .iter()
+            .map(|n| Unit {
+                name: n.name.clone(),
+                role: role(n),
+                builds: n.build_options.iter().filter_map(|id| index_of.get(id).copied()).collect(),
+                metal_cost: n.metal_cost as f64,
+                energy_cost: n.energy_cost as f64,
+                build_time: n.build_time as f64,
+                worker_time: n.build_speed as f64,
+                build_distance: n.build_distance as f64,
+                speed: n.speed as f64,
+                move_class: n.move_class,
+                metal_make: n.metal_make as f64,
+                energy_make: (n.energy_make - n.energy_upkeep) as f64,
+                extracts_metal: n.extracts_metal as f64,
+                wind_cap: n.wind_cap as f64,
+                metal_storage: n.metal_storage as f64,
+                energy_storage: n.energy_storage as f64,
+                conv_capacity: n.converter.map_or(0.0, |c| c.capacity as f64),
+                conv_efficiency: n.converter.map_or(0.0, |c| c.efficiency as f64),
+            })
+            .collect();
         let by_name = list.iter().enumerate().map(|(i, u)| (u.name.clone(), i)).collect();
         Units { list, by_name }
     }
@@ -96,6 +95,15 @@ impl Units {
     }
 
     pub fn get(&self, name: &str) -> &Unit {
-        &self.list[self.index(name).unwrap_or_else(|| panic!("unit {name} is not in data/units.csv"))]
+        &self.list[self.index(name).unwrap_or_else(|| panic!("no unit type {name} in this game"))]
+    }
+
+    /// The cheapest thing `builder` builds that passes `test`.
+    pub fn cheapest(&self, builder: usize, test: impl Fn(&Unit) -> bool) -> Option<usize> {
+        self.list[builder].builds.iter().copied().filter(|u| test(&self.list[*u])).min_by(|a, b| self.list[*a].metal_cost.total_cmp(&self.list[*b].metal_cost))
+    }
+
+    pub fn extractor(&self, builder: usize) -> Option<usize> {
+        self.cheapest(builder, |u| u.extracts_metal > 0.0)
     }
 }

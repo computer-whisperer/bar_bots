@@ -273,10 +273,17 @@ fn header(hello: &Hello, mode: &str) -> Value {
             json!({
                 "id": d.id.0, "name": d.name, "class": class(d), "metal": d.metal_cost, "energy": d.energy_cost,
                 "speed": d.speed, "weapons": d.weapon_count,
+                "build_time": d.build_time, "build_speed": d.build_speed, "build_distance": d.build_distance,
+                "builds": d.build_options.iter().map(|o| o.0).collect::<Vec<_>>(),
+                "extracts_metal": d.extracts_metal, "metal_make": d.metal_make, "energy_make": d.energy_make,
+                "energy_upkeep": d.energy_upkeep, "wind_cap": d.wind_cap, "metal_storage": d.metal_storage,
+                "energy_storage": d.energy_storage,
+                "converter": d.converter.map(|c| json!([c.capacity, c.efficiency])),
+                "move": d.move_class.map(|m| json!([format!("{:?}", m.kind).to_lowercase(), m.max_slope, m.depth])),
             })
         })
         .collect();
-    let spots: Vec<Value> = hello.metal_spots.iter().map(|s| json!([s.x as i32, s.z as i32])).collect();
+    let spots: Vec<Value> = hello.metal_spots.iter().map(|s| json!([s.x as i32, s.z as i32, s.y])).collect();
     let map = &hello.map;
     // The Claude Code session beside the brain keeps its own transcript (`strategist/transcript.rs`).
     let decision_logs: Vec<String> = (mode != "heuristic").then(|| format!("strategist-{}.jsonl", hello.ai_id)).into_iter().collect();

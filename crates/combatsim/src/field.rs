@@ -1,7 +1,7 @@
 //! Ground a fight happens on: which cells a unit can stand in, and which way to walk from each of them.
 //!
 //! The grid is the bot's terrain format (`docs/harness/record-format.md`): heights as i16 and slopes as u8 at
-//! 16-elmo cells. The walking field is the same Dijkstra sweep as `crates/bot/src/terrain.rs`, run backwards from
+//! 16-elmo cells. The walking field is the same Dijkstra sweep as `crates/terrain`, run backwards from
 //! the goal so units can read a direction straight out of it; a choke then limits how many units get through
 //! without any pathfinding in the hot loop.
 

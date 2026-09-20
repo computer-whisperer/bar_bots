@@ -198,7 +198,7 @@ LLM levers belong. BARb is the reference for economy and army hoarding, not for 
 
 The shim sends the ground once, in `Hello`: heights and slopes at the engine's slope-map resolution (16 elmos), and
 each unit type's movement class (kind, steepest slope, water depth). The bot builds walking-distance fields over it
-(`crates/bot/src/terrain.rs`, Dijkstra on the passable cells of our soldiers' class) from home and from where the enemy
+(`crates/terrain`, Dijkstra on the passable cells of our soldiers' class) from home and from where the enemy
 is believed to live, and the brain's geometry goes through them (`brain/routes.rs`): which metal spots are ours, what
 "forward of home" means (along the route, not the straight line), which attack targets can be walked to, where a wave
 stages. Without terrain data everything falls back to straight lines. Known simplifications: one movement class stands

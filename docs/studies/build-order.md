@@ -16,16 +16,23 @@ which the workspace already has). Chosen over a Python script because the search
 study run (1.6 million per optimisation: 200 000 iterations x 8 restarts; the whole grid below takes 9 minutes on 8
 threads) and because openings found here are meant to be fed to the Rust bot later. Deterministic for a given `--seed`.
 
+**Since 2026-09-20 the crate is the library the bot's opening search will link** (`docs/design/2026-09-20-opening-search.md`),
+and what this study compiled in is gone: the unit table (`data/units.csv`, `tools/extract_units.py`), Quicksilver's
+spots and starts (`map.rs`) and the `study` command that produced the grid below. The game now comes from a match
+record's header (any record written from 2026-09-20 on: unit numbers as the engine reports them, spots with their
+amounts, the terrain file beside it for walking distances) or, in the bot, from `Hello`. To reproduce this study's
+tables exactly, check out commit `faaa13b`. Today's commands:
+
 ```
 cargo build --release -p buildorder
-target/release/buildorder optimize --side arm --factory lab --start nw --objective mix --minutes 10 --iterations 200000
-target/release/buildorder simulate --plan my-plan.txt --wind 8          # plan text: "com: mex win lab", "fac0: ck pw", "con0: mex"
-target/release/buildorder calibrate run/matches/<batch>/<NN>/record-0.jsonl... [--trace]
-target/release/buildorder study --out docs/studies/data --iterations 200000 --restarts 8 --seed 1    # everything below
+target/release/buildorder optimize --game <record.jsonl> --factory lab --objective mix --minutes 10 --iterations 200000
+target/release/buildorder simulate --game <record.jsonl> --plan my-plan.txt --wind 8   # plan text: "com: mex win lab", "fac0: ck pw", "con0: mex"
+target/release/buildorder calibrate run/matches/<batch>/<NN>/record-0.jsonl... [--trace] [--detour 1.05]
 crates/buildorder/tools/census_curves.py --costs <a record> <match dirs>   # BARb's and our curves from the census
-crates/buildorder/tools/extract_units.py upstream/Beyond-All-Reason > crates/buildorder/data/units.csv
 cargo test --release -p buildorder
 ```
+
+What follows describes the study as it was run.
 
 Unit numbers (cost, build time, build power, reach, speed, energy, storage, converter rates; 60 units: both commanders,
 tier-1 land economy, bot lab, vehicle plant and what they build) are derived from the game's own `units/**/*.lua` at

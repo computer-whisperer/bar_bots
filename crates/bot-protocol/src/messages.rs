@@ -131,10 +131,33 @@ pub struct UnitDefInfo {
     pub energy_cost: f32,
     pub speed: f32,
     pub build_speed: f32,
+    /// Work one unit of `build_speed` does on it for one second adds `1 / build_time` of it.
+    pub build_time: f32,
+    /// How far from itself a builder builds, measured to the target's edge.
+    pub build_distance: f32,
     pub extracts_metal: f32,
+    /// Made every second whatever happens.
+    pub metal_make: f32,
+    pub energy_make: f32,
+    /// Energy used every second; negative for what produces this way (solar collectors).
+    pub energy_upkeep: f32,
+    /// A wind generator makes the current wind speed in energy up to this.
+    pub wind_cap: f32,
+    pub metal_storage: f32,
+    pub energy_storage: f32,
+    /// For an energy converter (the game's `energyconv_*` custom parameters).
+    pub converter: Option<Converter>,
     pub weapon_count: i32,
     pub build_options: Vec<UnitDefId>,
     pub move_class: Option<MoveClass>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Converter {
+    /// Energy per second it can take.
+    pub capacity: f32,
+    /// Metal returned per energy.
+    pub efficiency: f32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -91,4 +91,9 @@ time lost to walking, by minute, across settings of the knobs in arena batches; 
 3. The search, the objective, the budget. 4. The commander rules. Each step is a commit with its measurement.
 
 ## Status
-Nothing built (2026-09-20).
+- 2026-09-20, step 1, library half: `Hello` and the record's header carry the simulator's numbers for every unit type
+  (build time, reach, generator output, wind cap, storage, converter rates, movement class) and each spot's amount;
+  `crates/buildorder` reads a game from either (`game::Game`), chooses what to offer the search by what units do and
+  not by name, enforces build menus, and walks over the map's own ground (`game::Walked` on the new `crates/terrain`,
+  moved out of the bot). Its compiled-in unit table, Quicksilver constants and `study` command are deleted.
+  Calibration and everything after it: not done.

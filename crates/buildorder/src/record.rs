@@ -3,8 +3,10 @@
 
 use std::collections::HashMap;
 
+use bot_protocol::{Converter, MoveClass, MoveKind, Terrain, UnitDefId, UnitDefInfo};
 use serde_json::Value;
 
+use crate::game::Game;
 use crate::plan::{Plan, Step};
 use crate::units::{Role, Units};
 
@@ -27,9 +29,7 @@ pub struct Observed {
 }
 
 pub struct Replay {
-    pub side: String,
-    pub home: (f64, f64),
-    pub spots: Vec<(f64, f64)>,
+    pub game: Game,
     pub plan: Plan,
     pub observed: Vec<Observed>,
     /// Wind per turbine, per second, inferred from energy income; `None` where no turbine stood.
@@ -45,14 +45,79 @@ fn pair(v: &Value) -> (f64, f64) {
     (v[0].as_f64().unwrap_or(0.0), v[1].as_f64().unwrap_or(0.0))
 }
 
-pub fn read(path: &str, units: &Units, seconds: f64) -> Result<Replay, String> {
+/// The unit table of a record's header. Records written before 2026-09-20 lack the numbers.
+fn unit_table(header: &Value) -> Result<Units, String> {
+    let defs = header["unit_defs"].as_array().ok_or("no unit_defs")?;
+    if defs.first().is_none_or(|d| d["build_time"].is_null()) {
+        return Err("this record's header lacks the units' build numbers (written before 2026-09-20): play the game again".to_string());
+    }
+    let number = |d: &Value, key: &str| d[key].as_f64().unwrap_or(0.0) as f32;
+    let kind = |name: &str| match name {
+        "tank" => Some(MoveKind::Tank),
+        "bot" => Some(MoveKind::Bot),
+        "hover" => Some(MoveKind::Hover),
+        "ship" => Some(MoveKind::Ship),
+        _ => None,
+    };
+    let defs: Vec<UnitDefInfo> = defs
+        .iter()
+        .map(|d| UnitDefInfo {
+            id: UnitDefId(d["id"].as_i64().unwrap_or(-1) as i32),
+            name: d["name"].as_str().unwrap_or("").to_string(),
+            metal_cost: number(d, "metal"),
+            energy_cost: number(d, "energy"),
+            speed: number(d, "speed"),
+            build_speed: number(d, "build_speed"),
+            build_time: number(d, "build_time"),
+            build_distance: number(d, "build_distance"),
+            extracts_metal: number(d, "extracts_metal"),
+            metal_make: number(d, "metal_make"),
+            energy_make: number(d, "energy_make"),
+            energy_upkeep: number(d, "energy_upkeep"),
+            wind_cap: number(d, "wind_cap"),
+            metal_storage: number(d, "metal_storage"),
+            energy_storage: number(d, "energy_storage"),
+            converter: d["converter"].as_array().map(|c| Converter { capacity: c[0].as_f64().unwrap_or(0.0) as f32, efficiency: c[1].as_f64().unwrap_or(0.0) as f32 }),
+            weapon_count: d["weapons"].as_i64().unwrap_or(0) as i32,
+            build_options: d["builds"].as_array().map(|b| b.iter().filter_map(|id| id.as_i64().map(|id| UnitDefId(id as i32))).collect()).unwrap_or_default(),
+            move_class: d["move"].as_array().and_then(|m| {
+                Some(MoveClass { kind: kind(m[0].as_str()?)?, max_slope: m[1].as_f64()? as f32, depth: m[2].as_f64()? as f32 })
+            }),
+        })
+        .collect();
+    Ok(Units::new(&defs))
+}
+
+/// The terrain grid in the file beside the record (`docs/harness/record-format.md`); empty when it is missing.
+fn terrain(path: &str, header: &Value) -> Terrain {
+    let t = &header["terrain"];
+    let (width, height) = (t["width"].as_u64().unwrap_or(0) as u32, t["height"].as_u64().unwrap_or(0) as u32);
+    let cells = (width * height) as usize;
+    let file = std::path::Path::new(path).with_file_name(t["file"].as_str().unwrap_or(""));
+    match std::fs::read(file) {
+        Ok(bytes) if cells > 0 && bytes.len() == cells * 3 => Terrain {
+            cell: t["cell"].as_f64().unwrap_or(0.0) as f32,
+            width,
+            height,
+            heights: bytes[..cells * 2].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect(),
+            slopes: bytes[cells * 2..].to_vec(),
+        },
+        _ => Terrain::default(),
+    }
+}
+
+pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
     // A killed match may end in a partial line; skip whatever does not parse.
     let mut lines = text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok());
     let header = lines.next().ok_or("empty record")?;
     let names: Vec<String> = header["unit_defs"].as_array().ok_or("no unit_defs")?.iter().map(|d| d["name"].as_str().unwrap_or("").to_string()).collect();
-    let side = header["side"].as_str().unwrap_or("arm").to_string();
-    let spots: Vec<(f64, f64)> = header["metal_spots"].as_array().ok_or("no metal_spots")?.iter().map(pair).collect();
+    let table = unit_table(&header)?;
+    let units = &table;
+    let spots: Vec<((f64, f64), f64)> =
+        header["metal_spots"].as_array().ok_or("no metal_spots")?.iter().map(|s| (pair(s), s[2].as_f64().unwrap_or(0.0))).collect();
+    let map = &header["map"];
+    let number = |v: &Value| v.as_f64().unwrap_or(0.0);
     let records: Vec<Value> = lines.take_while(|r| r["f"].as_f64().unwrap_or(0.0) <= seconds * 30.0).collect();
 
     let finished_ids: HashMap<u64, f64> = records
@@ -75,7 +140,7 @@ pub fn read(path: &str, units: &Units, seconds: f64) -> Result<Replay, String> {
     }
     let mut slot_of: HashMap<u64, Slot> = HashMap::new(); // builder unit id -> its queue
     let mut pending: HashMap<u64, Vec<Step>> = HashMap::new();
-    let (mut home, mut unknown, mut abandoned, mut first_factory_finished) = (None, Vec::new(), 0, None);
+    let (mut home, mut commander, mut unknown, mut abandoned, mut first_factory_finished) = (None, None, Vec::new(), 0, None);
     for r in records.iter().filter(|r| r["t"] == "ev") {
         let id = r["u"].as_u64().unwrap_or(0);
         let name = names.get(r["d"].as_i64().unwrap_or(-1) as usize).cloned().unwrap_or_default();
@@ -84,6 +149,7 @@ pub fn read(path: &str, units: &Units, seconds: f64) -> Result<Replay, String> {
             Some("created") => {
                 let Some(by) = r["by"].as_u64() else {
                     home.get_or_insert(site);
+                    commander = commander.or(units.index(&name));
                     continue;
                 };
                 let still_building = !finished_ids.contains_key(&id) && !destroyed_ids.contains_key(&id);
@@ -172,5 +238,14 @@ pub fn read(path: &str, units: &Units, seconds: f64) -> Result<Replay, String> {
             _ => {}
         }
     }
-    Ok(Replay { side, home: home.ok_or("no commander in the record")?, spots, plan, observed, wind, unknown, abandoned, first_factory_finished })
+    let game = Game {
+        commander: commander.ok_or("no commander in the record")?,
+        home: home.ok_or("no commander in the record")?,
+        size: (number(&map["width"]), number(&map["height"])),
+        spots,
+        wind: (number(&map["wind_min"]), number(&map["wind_max"])),
+        units: table,
+        terrain: terrain(path, &header),
+    };
+    Ok(Replay { game, plan, observed, wind, unknown, abandoned, first_factory_finished })
 }

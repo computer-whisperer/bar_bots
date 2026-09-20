@@ -83,6 +83,7 @@ dependencies = [
  "bot-protocol",
  "serde",
  "serde_json",
+ "terrain",
  "tiny_http",
 ]
 
@@ -98,7 +99,9 @@ dependencies = [
 name = "buildorder"
 version = "0.1.0"
 dependencies = [
+ "bot-protocol",
  "serde_json",
+ "terrain",
 ]
 
 [[package]]
@@ -507,6 +510,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "terrain"
+version = "0.1.0"
+dependencies = [
+ "bot-protocol",
 ]
 
 [[package]]

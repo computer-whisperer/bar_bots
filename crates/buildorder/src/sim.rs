@@ -5,7 +5,9 @@
 //! same factor (the scarcer resource decides); converters then burn stored energy above 75 % of storage; what does not
 //! fit in storage is lost.
 
-use crate::map::distance;
+use std::sync::Arc;
+
+use crate::game::{distance, Ground, Spot};
 use crate::plan::{Item, Plan, Step};
 use crate::units::{Role, Units};
 
@@ -27,26 +29,24 @@ impl Wind {
 
 #[derive(Clone, Debug)]
 pub struct Scenario {
-    /// Faction prefix: `arm` or `cor`.
-    pub side: String,
+    /// The commander's unit type (index into the unit table): the first builder, standing at `home`.
+    pub commander: usize,
     pub home: (f64, f64),
     /// Metal spots an extractor without an explicit site may take.
-    pub spots: Vec<(f64, f64)>,
-    pub spot_metal: f64,
+    pub spots: Vec<Spot>,
+    pub ground: Arc<dyn Ground>,
     pub wind: Wind,
     pub start_metal: f64,
     pub start_energy: f64,
     /// Team storage before any building adds to it.
     pub base_storage: f64,
     pub dt: f64,
-    /// Walked distance = straight line times this. 1.05 and the two overheads below fit 565 builder trips in 12
-    /// recorded games on Quicksilver (median time beyond the straight-line walk: 1.2-1.5 s when the site was in reach,
-    /// 2.4-3.4 s when not; walks over 1000 elmos took 8 % longer than the straight line).
-    pub detour: f64,
     /// Elmos added to every builder's build distance: the engine measures reach to the target's edge (its model radius),
     /// not its centre. One constant for all buildings; the table carries no radii.
     pub reach_bonus: f64,
-    /// Seconds a mobile builder loses per build besides walking (order latency, opening the nano spray).
+    /// Seconds a mobile builder loses per build besides walking (order latency, opening the nano spray). This and
+    /// `walk_overhead` fit 565 builder trips in 12 recorded games on Quicksilver (median time beyond the walk itself:
+    /// 1.2-1.5 s when the site was in reach, 2.4-3.4 s when not).
     pub mobile_overhead: f64,
     /// Further seconds lost on a walk (turning, accelerating, stopping); a walk shorter than this only doubles.
     pub walk_overhead: f64,
@@ -62,18 +62,17 @@ pub struct Scenario {
 }
 
 impl Scenario {
-    pub fn new(side: &str, home: (f64, f64), spots: Vec<(f64, f64)>) -> Scenario {
+    pub fn new(commander: usize, home: (f64, f64), spots: Vec<Spot>, ground: Arc<dyn Ground>, wind: f64) -> Scenario {
         Scenario {
-            side: side.to_string(),
+            commander,
             home,
             spots,
-            spot_metal: crate::map::SPOT_METAL,
-            wind: Wind::Constant(crate::map::WIND_MEAN),
+            ground,
+            wind: Wind::Constant(wind),
             start_metal: 1000.0,
             start_energy: 1000.0,
             base_storage: 1000.0,
             dt: 0.5,
-            detour: 1.05,
             reach_bonus: 40.0,
             mobile_overhead: 1.5,
             walk_overhead: 1.5,
@@ -145,16 +144,17 @@ impl Outcome {
 
 enum State {
     Idle,
-    Travel { left: f64, then: Option<(usize, (f64, f64))> },
-    Build { unit: usize, site: (f64, f64), progress: f64 },
+    Travel { left: f64, then: Option<(usize, (f64, f64), f64)> },
+    /// `pays`: metal per second once it stands, for an extractor.
+    Build { unit: usize, site: (f64, f64), pays: f64, progress: f64 },
     Assist { left: f64 },
     Done,
 }
 
 impl State {
     /// On the way to a build, or already building when there is no way to go.
-    fn begin(left: f64, unit: usize, site: (f64, f64)) -> State {
-        if left > 1e-9 { State::Travel { left, then: Some((unit, site)) } } else { State::Build { unit, site, progress: 0.0 } }
+    fn begin(left: f64, unit: usize, site: (f64, f64), pays: f64) -> State {
+        if left > 1e-9 { State::Travel { left, then: Some((unit, site, pays)) } } else { State::Build { unit, site, pays, progress: 0.0 } }
     }
 }
 
@@ -165,8 +165,9 @@ struct Builder {
     speed: f64,
     range: f64,
     place: (f64, f64),
-    /// For factories: the unit index of the factory itself. `None` for mobile builders.
-    factory: Option<usize>,
+    /// Its own unit type.
+    unit: usize,
+    is_factory: bool,
     state: State,
 }
 
@@ -180,8 +181,10 @@ fn base_site(home: (f64, f64), n: usize) -> (f64, f64) {
 
 pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -> Outcome {
     let sc = scenario;
-    let commander = units.get(&format!("{}com", sc.side));
-    let extractor = units.index(&format!("{}mex", sc.side)).expect("extractor in the unit table");
+    let commander = &units.list[sc.commander];
+    let extractor = units.extractor(sc.commander).expect("the commander builds an extractor");
+    // An extractor on a site outside the scenario's spots (a replay's) pays what the scenario's spots do on average.
+    let mean_spot = sc.spots.iter().map(|s| s.metal).sum::<f64>() / sc.spots.len().max(1) as f64;
     let mut builders = vec![Builder {
         queue: 0,
         next: 0,
@@ -189,7 +192,8 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
         speed: commander.speed,
         range: commander.build_distance,
         place: sc.home,
-        factory: None,
+        unit: sc.commander,
+        is_factory: false,
         state: State::Idle,
     }];
     let mut first_factory: Option<usize> = None;
@@ -234,37 +238,39 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                 let builder = &builders[b];
                 match next.item {
                     Item::Assist => {
-                        if builder.factory.is_some() {
+                        if builder.is_factory {
                             continue;
                         }
-                        let walk = (distance(builder.place, sc.home) * sc.detour - builder.range - sc.reach_bonus).max(0.0) / builder.speed;
+                        let walk = (sc.ground.walk(builder.place, sc.home) - builder.range - sc.reach_bonus).max(0.0) / builder.speed;
                         builders[b].state = State::Travel { left: walk, then: None };
                         outcome.effective[queue].push(*next);
                     }
                     Item::Build(unit) => {
                         let def = &units.list[unit];
-                        if let Some(factory) = builder.factory {
-                            if def.factory.is_empty() || !units.list[factory].name.ends_with(&def.factory) {
-                                continue;
-                            }
+                        if !units.list[builder.unit].builds.contains(&unit) {
+                            continue;
+                        }
+                        if builder.is_factory {
                             let site = builder.place;
-                            builders[b].state = State::begin(sc.factory_overhead, unit, site);
+                            builders[b].state = State::begin(sc.factory_overhead, unit, site, 0.0);
                             outcome.effective[queue].push(*next);
                             continue;
                         }
-                        let surplus_factory = def.role == Role::Factory && factories_planned(&builders, units) >= plan.factories.len();
-                        if !def.factory.is_empty() || def.role == Role::Commander || surplus_factory {
+                        if def.role == Role::Factory && factories_planned(&builders, units) >= plan.factories.len() {
                             continue;
                         }
+                        let mut pays = 0.0;
                         let site = if def.extracts_metal > 0.0 {
+                            pays = mean_spot;
                             let from = next.site.unwrap_or(builder.place);
                             let free = (0..sc.spots.len())
                                 .filter(|i| !claimed[*i])
-                                .min_by(|a, b| distance(sc.spots[*a], from).total_cmp(&distance(sc.spots[*b], from)));
+                                .min_by(|a, b| distance(sc.spots[*a].at, from).total_cmp(&distance(sc.spots[*b].at, from)));
                             match free {
-                                Some(i) if next.site.is_none() || distance(sc.spots[i], from) < 100.0 => {
+                                Some(i) if next.site.is_none() || distance(sc.spots[i].at, from) < 100.0 => {
                                     claimed[i] = true;
-                                    sc.spots[i]
+                                    pays = sc.spots[i].metal;
+                                    sc.spots[i].at
                                 }
                                 _ => match next.site {
                                     // A replayed extractor on a spot outside the scenario's list.
@@ -286,14 +292,14 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                         let builder = &builders[b];
                         let gap = distance(builder.place, site);
                         let reach = builder.range + sc.reach_bonus;
-                        let walked = (gap * sc.detour - reach).max(0.0);
+                        let walked = if gap > reach { (sc.ground.walk(builder.place, site) - reach).max(0.0) } else { 0.0 };
                         if gap > reach {
                             let keep = reach / gap;
                             builders[b].place = (site.0 + (builder.place.0 - site.0) * keep, site.1 + (builder.place.1 - site.1) * keep);
                         }
                         let walk = walked / builders[b].speed;
                         let left = walk + walk.min(sc.walk_overhead) + sc.mobile_overhead;
-                        builders[b].state = State::begin(left, unit, site);
+                        builders[b].state = State::begin(left, unit, site, pays);
                         outcome.effective[queue].push(*next);
                     }
                 }
@@ -350,12 +356,12 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
 
         // 5. Progress and completions.
         for (b, gain) in asks {
-            let State::Build { unit, site, progress } = &mut builders[b].state else { unreachable!() };
+            let State::Build { unit, site, pays, progress } = &mut builders[b].state else { unreachable!() };
             *progress += gain * factor;
             if *progress < 1.0 - 1e-9 {
                 continue;
             }
-            let (unit, site) = (*unit, *site);
+            let (unit, site, pays) = (*unit, *site, *pays);
             let queue = builders[b].queue;
             builders[b].state = State::Idle;
             outcome.finished.push(Finished { t: t + sc.dt, unit, queue });
@@ -367,7 +373,7 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
             energy_storage += def.energy_storage;
             if def.extracts_metal > 0.0 {
                 extractors += 1;
-                steady_metal += sc.spot_metal;
+                steady_metal += pays;
             }
             if def.wind_cap > 0.0 {
                 wind_caps.push(def.wind_cap);
@@ -377,14 +383,15 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                 conv_capacity += def.conv_capacity;
                 conv_efficiency = def.conv_efficiency;
             }
-            let recruit = |queue: usize, factory: Option<usize>| Builder {
+            let recruit = |queue: usize, is_factory: bool| Builder {
                 queue,
                 next: 0,
                 power: def.worker_time,
                 speed: def.speed,
                 range: def.build_distance,
                 place: site,
-                factory,
+                unit,
+                is_factory,
                 state: State::Idle,
             };
             match def.role {
@@ -392,14 +399,14 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                     let queue = plan.factory_queue(factories);
                     factories += 1;
                     first_factory.get_or_insert(builders.len());
-                    builders.push(recruit(queue, Some(unit)));
+                    builders.push(recruit(queue, true));
                 }
                 Role::Builder => {
                     // Constructors beyond the plan's queues still exist (and cost), they just stand idle.
                     let queue = plan.constructor_queue(constructors);
                     constructors += 1;
                     if queue < plan.queue_count() {
-                        builders.push(recruit(queue, None));
+                        builders.push(recruit(queue, false));
                     }
                 }
                 Role::Nano => {
@@ -421,7 +428,7 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                     *left -= sc.dt;
                     if *left <= 1e-9 {
                         builder.state = match then {
-                            Some((unit, site)) => State::Build { unit: *unit, site: *site, progress: 0.0 },
+                            Some((unit, site, pays)) => State::Build { unit: *unit, site: *site, pays: *pays, progress: 0.0 },
                             None => State::Assist { left: sc.assist_chunk },
                         };
                     }
@@ -482,8 +489,8 @@ fn factories_planned(builders: &[Builder], units: &Units) -> usize {
     builders
         .iter()
         .filter(|b| {
-            b.factory.is_some()
-                || matches!(b.state, State::Travel { then: Some((unit, _)), .. } | State::Build { unit, .. } if units.list[unit].role == Role::Factory)
+            b.is_factory
+                || matches!(b.state, State::Travel { then: Some((unit, _, _)), .. } | State::Build { unit, .. } if units.list[unit].role == Role::Factory)
         })
         .count()
 }

@@ -2,7 +2,7 @@
 
 use crate::plan::{Item, Plan, QueueKind, Step};
 use crate::sim::{simulate, Outcome, Scenario};
-use crate::units::{Role, Units};
+use crate::units::{Role, Unit, Units};
 
 /// splitmix64: small, seedable, good enough for annealing.
 pub struct Rng(u64);
@@ -87,23 +87,38 @@ pub struct Palette {
 const NOT_FIGHTERS: [&str; 7] = ["jeth", "crash", "sam", "mist", "flea", "armfav", "corfav"];
 
 impl Palette {
-    /// `factory`: `lab` or `vp`. `nanos`: whether construction turrets are on offer.
-    pub fn new(units: &Units, side: &str, factory: &str, nanos: bool) -> Palette {
-        let index = |suffix: &str| units.index(&format!("{side}{suffix}")).unwrap_or_else(|| panic!("{side}{suffix}"));
-        let constructor = index(if factory == "lab" { "ck" } else { "cv" });
-        let mut mobile: Vec<Item> = ["mex", "win", "solar", "makr", "estor", factory].iter().map(|s| Item::Build(index(s))).collect();
-        if nanos {
-            mobile.push(Item::Build(index("nanotc")));
-        }
+    /// `commander`, `factory`: unit types. `nanos`: whether construction turrets are on offer. What goes on offer is
+    /// chosen by what a unit does, not by its name: the cheapest extractor, wind generator, steady generator, converter
+    /// and energy storage in the commander's or the constructor's menu.
+    pub fn new(units: &Units, commander: usize, factory: usize, nanos: bool) -> Palette {
+        let constructor = units
+            .cheapest(factory, |u| u.role == Role::Builder && u.builds.contains(&factory))
+            .unwrap_or_else(|| panic!("{} builds no constructor", units.list[factory].name));
+        let offer = |test: &dyn Fn(&Unit) -> bool| units.cheapest(commander, test).or_else(|| units.cheapest(constructor, test));
+        let plain = |u: &Unit| u.role == Role::Eco && u.extracts_metal == 0.0 && u.conv_capacity == 0.0;
+        let mut mobile: Vec<Item> = [
+            offer(&|u| u.extracts_metal > 0.0),
+            offer(&|u| u.wind_cap > 0.0),
+            offer(&|u| plain(u) && u.wind_cap == 0.0 && u.energy_make > 0.0),
+            offer(&|u| u.conv_capacity > 0.0),
+            offer(&|u| plain(u) && u.energy_storage >= 1000.0),
+            Some(factory),
+            offer(&|u| nanos && u.role == Role::Nano),
+        ]
+        .into_iter()
+        .flatten()
+        .map(Item::Build)
+        .collect();
+        assert!(mobile.len() >= 3, "the commander of this game builds neither an extractor nor a wind generator");
         mobile.push(Item::Assist);
         let mut from_factory = vec![Item::Build(constructor)];
-        for (i, unit) in units.list.iter().enumerate() {
-            let fighter = !NOT_FIGHTERS.iter().any(|s| unit.name.ends_with(s));
-            if unit.name.starts_with(side) && unit.factory == factory && unit.role == Role::Army && fighter {
-                from_factory.push(Item::Build(i));
+        for unit in &units.list[factory].builds {
+            let def = &units.list[*unit];
+            if def.role == Role::Army && !NOT_FIGHTERS.iter().any(|s| def.name.ends_with(s)) {
+                from_factory.push(Item::Build(*unit));
             }
         }
-        Palette { mobile, factory: from_factory, constructor, factory_unit: index(factory) }
+        Palette { mobile, factory: from_factory, constructor, factory_unit: factory }
     }
 
     fn pick(&self, kind: QueueKind, rng: &mut Rng) -> Step {

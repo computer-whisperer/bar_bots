@@ -5,7 +5,7 @@ use bot_protocol::Vec3;
 
 use super::Brain;
 use super::roster::Kit;
-use crate::terrain::{self, Field};
+use terrain::Field;
 
 /// The enemy-side field is rebuilt when our estimate of where an enemy lives has moved this far.
 const ENEMY_MOVED: f32 = 600.0;

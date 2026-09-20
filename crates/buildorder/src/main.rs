@@ -1,19 +1,20 @@
 use std::fmt::Write as _;
 
 use buildorder::anneal::{anneal_restarts, Objective, Palette, Search};
-use buildorder::map;
+use std::sync::Arc;
+
+use buildorder::game::{Game, Ground, Straight};
 use buildorder::plan::Plan;
 use buildorder::record;
 use buildorder::sim::{simulate, Outcome, Sample, Scenario, Wind};
-use buildorder::units::Units;
 
-const USAGE: &str = "usage:
-  buildorder optimize  [--side arm|cor] [--factory lab|vp] [--start nw|se] [--objective income|army|mix] [--minutes 10]
-                       [--iterations 40000] [--restarts 8] [--seed 1] [--wind 12.7] [--detour 1.05] [--factories 2] [--constructors 6]
-                       [--no-nano] [--csv FILE] [--plan-out FILE]
-  buildorder simulate  --plan FILE [--side ..] [--start ..] [--minutes ..] [--wind ..] [--detour ..] [--csv FILE]
-  buildorder calibrate RECORD.jsonl... [--minutes 10] [--constant-wind] [--trace] [--csv-dir DIR]
-  buildorder study     --out DIR [--iterations ..] [--restarts ..] [--seed ..]   (the grid behind docs/studies/build-order.md)";
+const USAGE: &str = "usage: (the game, that is map, start, faction and unit numbers, comes from a match record's header)
+  buildorder optimize  --game RECORD.jsonl [--factory lab|vp] [--objective income|army|mix] [--minutes 10]
+                       [--iterations 40000] [--restarts 8] [--seed 1] [--wind MEAN] [--detour X] [--factories 2] [--constructors 6]
+                       [--no-nano] [--csv FILE] [--plan-out FILE]      (--detour X: open ground, every walk X straight lines,
+                                                                        in place of the map's own ground)
+  buildorder simulate  --game RECORD.jsonl --plan FILE [--minutes ..] [--wind ..] [--detour X] [--csv FILE]
+  buildorder calibrate RECORD.jsonl... [--minutes 10] [--detour X] [--constant-wind] [--trace] [--csv-dir DIR]";
 
 struct Args(Vec<String>);
 
@@ -52,15 +53,23 @@ fn die(message: &str) -> ! {
     std::process::exit(2)
 }
 
-fn scenario(side: &str, start: &str, wind: f64, detour: f64) -> Scenario {
-    let (home, enemy) = match start {
-        "nw" => (map::NW_HOME, map::SE_HOME),
-        "se" => (map::SE_HOME, map::NW_HOME),
-        other => die(&format!("unknown start {other}")),
-    };
-    let mut scenario = Scenario::new(side, home, map::own_half(home, enemy));
-    scenario.wind = Wind::Constant(wind);
-    scenario.detour = detour;
+/// The game of `--game`'s record, and the search's scenario in it: our half of the spots over open ground.
+fn game(args: &Args) -> Game {
+    let path = args.value("--game").unwrap_or_else(|| die("--game RECORD.jsonl is required"));
+    record::read(path, 60.0).unwrap_or_else(|e| die(&e)).game
+}
+
+/// The map's own ground; with `--detour X`, open ground where every walk is X straight lines.
+fn ground(game: &Game, args: &Args) -> Arc<dyn Ground> {
+    match args.value("--detour") {
+        Some(_) => Arc::new(Straight { detour: args.number("--detour", 1.05) }),
+        None => game.ground(),
+    }
+}
+
+fn scenario(game: &Game, args: &Args) -> Scenario {
+    let mut scenario = game.scenario(game.own_half(), ground(game, args));
+    scenario.wind = Wind::Constant(args.number("--wind", game.mean_wind()));
     scenario.constructors_default_to_extractors = true;
     scenario
 }
@@ -106,14 +115,14 @@ fn milestone_rows(label: &str, outcome: &Outcome) -> String {
 const MILESTONE_HEADER: &str = "| run | min | mex | metal/s | energy/s | build power | labs | cons | nanos | conv | army metal | army n | mean stall | wasted M / E |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n";
 
 fn optimize(args: &Args) {
-    let units = Units::load();
-    let side = args.text("--side", "arm");
+    let game = game(args);
+    let units = &game.units;
     let factory = args.text("--factory", "lab");
-    let start = args.text("--start", "nw");
     let objective = Objective::parse(&args.text("--objective", "mix")).unwrap_or_else(|| die("unknown objective"));
     let minutes: f64 = args.number("--minutes", 10.0);
-    let scenario = scenario(&side, &start, args.number("--wind", map::WIND_MEAN), args.number("--detour", 1.05));
-    let palette = Palette::new(&units, &side, &factory, !args.has("--no-nano"));
+    let scenario = scenario(&game, args);
+    let factory_unit = game.factory(&factory).unwrap_or_else(|| die(&format!("the commander builds no {factory}")));
+    let palette = Palette::new(units, game.commander, factory_unit, !args.has("--no-nano"));
     let search = Search {
         objective,
         horizon: minutes * 60.0,
@@ -123,26 +132,25 @@ fn optimize(args: &Args) {
         constructors: args.number("--constructors", 6),
         hot: args.number("--hot", 0.02),
     };
-    let found = anneal_restarts(&units, &scenario, &palette, &search, args.number("--restarts", 8));
-    println!("# {side} {factory} {start}, objective {} at {minutes} min, score {:.1}", objective.name(), found.score);
-    print!("{}", found.plan.to_text(&units));
+    let found = anneal_restarts(units, &scenario, &palette, &search, args.number("--restarts", 8));
+    println!("# {} {factory} from {:.0},{:.0}, objective {} at {minutes} min, score {:.1}", game.side(), game.home.0, game.home.1, objective.name(), found.score);
+    print!("{}", found.plan.to_text(units));
     print!("\n{MILESTONE_HEADER}{}", milestone_rows("best", &found.outcome));
     if let Some(path) = args.value("--csv") {
         write_csv(path, &found.outcome);
     }
     if let Some(path) = args.value("--plan-out") {
-        std::fs::write(path, found.plan.to_text(&units)).unwrap_or_else(|e| die(&format!("{path}: {e}")));
+        std::fs::write(path, found.plan.to_text(units)).unwrap_or_else(|e| die(&format!("{path}: {e}")));
     }
 }
 
 fn run_plan(args: &Args) {
-    let units = Units::load();
-    let side = args.text("--side", "arm");
+    let game = game(args);
+    let units = &game.units;
     let path = args.value("--plan").unwrap_or_else(|| die("--plan FILE is required"));
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| die(&format!("{path}: {e}")));
-    let plan = Plan::from_text(&text, &side, &units).unwrap_or_else(|e| die(&e));
-    let scenario = scenario(&side, &args.text("--start", "nw"), args.number("--wind", map::WIND_MEAN), args.number("--detour", 1.05));
-    let outcome = simulate(&units, &scenario, &plan, args.number("--minutes", 10.0) * 60.0);
+    let plan = Plan::from_text(&text, game.side(), units).unwrap_or_else(|e| die(&e));
+    let outcome = simulate(units, &scenario(&game, args), &plan, args.number("--minutes", 10.0) * 60.0);
     print!("{MILESTONE_HEADER}{}", milestone_rows(path, &outcome));
     for done in &outcome.finished {
         println!("{:6.1} s  {}  (queue {})", done.t, units.list[done.unit].name, done.queue);
@@ -153,7 +161,6 @@ fn run_plan(args: &Args) {
 }
 
 fn calibrate(args: &Args) {
-    let units = Units::load();
     let minutes: f64 = args.number("--minutes", 10.0);
     let records = args.positional(&["--constant-wind", "--trace"]);
     if records.is_empty() {
@@ -166,16 +173,16 @@ fn calibrate(args: &Args) {
     // Per minute, per record: recorded (extractors alive, metal/s, energy/s, army metal built), for the medians.
     let mut recorded = vec![Vec::<[f64; 4]>::new(); minutes as usize + 1];
     for path in &records {
-        let replay = record::read(path, &units, minutes * 60.0).unwrap_or_else(|e| die(&e));
-        let enemy = if map::distance(replay.home, map::NW_HOME) < map::distance(replay.home, map::SE_HOME) { map::SE_HOME } else { map::NW_HOME };
-        let mut scenario = Scenario::new(&replay.side, replay.home, map::own_half(replay.home, enemy));
+        let replay = record::read(path, minutes * 60.0).unwrap_or_else(|e| die(&e));
+        let (game, units) = (&replay.game, &replay.game.units);
+        let mut scenario = game.scenario(game.own_half(), ground(game, args));
         if !args.has("--constant-wind") {
-            let mut last = map::WIND_MEAN;
+            let mut last = game.mean_wind();
             scenario.wind = Wind::Trace(std::iter::once(last).chain(replay.wind.iter().map(|w| { last = w.unwrap_or(last); last })).collect());
         }
-        let outcome = simulate(&units, &scenario, &replay.plan, minutes * 60.0);
+        let outcome = simulate(units, &scenario, &replay.plan, minutes * 60.0);
         println!("\n## {path}\nside {}, home {:.0},{:.0}; builds outside the unit table: {:?}; started but never finished (left out): {}",
-            replay.side, replay.home.0, replay.home.1, replay.unknown, replay.abandoned);
+            game.side(), game.home.0, game.home.1, replay.unknown, replay.abandoned);
         let sim_factory = outcome.finished.iter().find(|f| units.list[f.unit].role == buildorder::units::Role::Factory).map(|f| f.t);
         println!("first factory finished: recorded {:?} s, simulated {:?} s", replay.first_factory_finished, sim_factory);
         println!("| min | mex alive (built) rec / sim | metal/s rec/sim | energy/s rec/sim | cons rec/sim | army metal built rec/sim | units lost (rec) |\n|---|---|---|---|---|---|---|");
@@ -199,7 +206,7 @@ fn calibrate(args: &Args) {
             }
         }
         if args.has("--trace") {
-            print!("replayed plan:\n{}", replay.plan.to_text(&units));
+            print!("replayed plan:\n{}", replay.plan.to_text(units));
             for done in &outcome.finished {
                 println!("{:6.1} s  {}  (queue {})", done.t, units.list[done.unit].name, done.queue);
             }
@@ -231,93 +238,12 @@ fn calibrate(args: &Args) {
     }
 }
 
-/// One optimisation of the study grid.
-#[derive(Clone, Copy)]
-struct Case<'a> {
-    side: &'a str,
-    factory: &'a str,
-    start: &'a str,
-    objective: Objective,
-    minutes: f64,
-    wind: f64,
-    detour: f64,
-    factories: usize,
-    nanos: bool,
-}
-
-fn study(args: &Args) {
-    let units = Units::load();
-    let out = args.value("--out").unwrap_or_else(|| die("--out DIR is required"));
-    std::fs::create_dir_all(out).unwrap_or_else(|e| die(&format!("{out}: {e}")));
-    let iterations = args.number("--iterations", 40_000);
-    let restarts = args.number("--restarts", 8);
-    let seed = args.number("--seed", 1);
-    let mut report = format!("Generated by `buildorder study --iterations {iterations} --restarts {restarts} --seed {seed}`. Do not edit.\n");
-    let mut summary = format!("run,{CSV_HEADER}\n");
-    let base = Case { side: "arm", factory: "lab", start: "nw", objective: Objective::Mix, minutes: 10.0, wind: map::WIND_MEAN, detour: 1.05, factories: 2, nanos: true };
-    let mut run = |case: &Case| {
-        let scenario = scenario(case.side, case.start, case.wind, case.detour);
-        let palette = Palette::new(&units, case.side, case.factory, case.nanos);
-        let search = Search { objective: case.objective, horizon: case.minutes * 60.0, iterations, seed, factories: case.factories, constructors: 6, hot: 0.02 };
-        let found = anneal_restarts(&units, &scenario, &palette, &search, restarts);
-        let label = format!(
-            "{}-{}-{}-{}-{:.0}min-wind{:.0}-detour{:.2}-{}fac-{}",
-            case.side, case.factory, case.start, case.objective.name(), case.minutes, case.wind, case.detour, case.factories,
-            if case.nanos { "nano" } else { "nonano" }
-        );
-        write_csv(&format!("{out}/{label}.csv"), &found.outcome);
-        let _ = write!(report, "\n### {label} (score {:.1})\n```\n{}```\n{MILESTONE_HEADER}{}", found.score, found.plan.to_text(&units), milestone_rows("", &found.outcome));
-        for minute in MILESTONES {
-            if let Some(s) = found.outcome.samples.iter().find(|s| s.t == minute * 60.0) {
-                let _ = writeln!(summary, "{label},{}", csv_row(s));
-            }
-        }
-        eprintln!("done {label}");
-        found
-    };
-    // The main line: Armada bot lab from the north-west, every objective and horizon.
-    let mut reference = None;
-    for objective in [Objective::Income, Objective::Army, Objective::Mix] {
-        for minutes in MILESTONES {
-            let found = run(&Case { objective, minutes, ..base });
-            if objective == Objective::Mix && minutes == 10.0 {
-                reference = Some(found);
-            }
-        }
-    }
-    // The other start, factions and factory.
-    run(&Case { start: "se", ..base });
-    for (side, factory) in [("arm", "vp"), ("cor", "lab"), ("cor", "vp")] {
-        run(&Case { side, factory, ..base });
-    }
-    // Build power: one lab or two, with and without construction turrets (the fourth combination is the main line).
-    for objective in [Objective::Mix, Objective::Army] {
-        for (factories, nanos) in [(1, false), (1, true), (2, false)] {
-            run(&Case { objective, factories, nanos, ..base });
-        }
-    }
-    // Harsher worlds: poor wind, and every walk 40 % longer than the straight line.
-    run(&Case { wind: 8.0, ..base });
-    run(&Case { detour: 1.4, ..base });
-    // And the main line's best plan replayed unchanged in those worlds: how brittle is an order tuned to the mean?
-    let reference = reference.expect("the main line ran");
-    let _ = write!(report, "\n### The arm-lab-nw mix 10 min plan replayed unchanged in harsher worlds\n{MILESTONE_HEADER}");
-    for (label, wind, detour) in [("as optimised", map::WIND_MEAN, 1.05), ("wind 8", 8.0, 1.05), ("wind 5", 5.0, 1.05), ("detour 1.4", map::WIND_MEAN, 1.4), ("wind 8, detour 1.4", 8.0, 1.4)] {
-        let outcome = simulate(&units, &scenario("arm", "nw", wind, detour), &reference.plan, 600.0);
-        report.push_str(&milestone_rows(label, &outcome));
-    }
-    std::fs::write(format!("{out}/optima.md"), report).unwrap_or_else(|e| die(&format!("{out}/optima.md: {e}")));
-    std::fs::write(format!("{out}/summary.csv"), summary).unwrap_or_else(|e| die(&format!("{out}/summary.csv: {e}")));
-    println!("wrote {out}/optima.md, {out}/summary.csv and one curve CSV per run");
-}
-
 fn main() {
     let args = Args(std::env::args().skip(1).collect());
     match args.0.first().map(String::as_str) {
         Some("optimize") => optimize(&args),
         Some("simulate") => run_plan(&args),
         Some("calibrate") => calibrate(&args),
-        Some("study") => study(&args),
         _ => die("missing or unknown command"),
     }
 }

@@ -3,7 +3,9 @@ name = "buildorder"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-2.0-or-later"
-description = "Study tool: a crude tier-1 economy simulator and a simulated-annealing build-order search over it"
+description = "A tier-1 economy simulator over a game's own unit numbers and ground, and a build-order search over it"
 
 [dependencies]
+bot-protocol = { path = "../bot-protocol" }
+terrain = { path = "../terrain" }
 serde_json = "1"

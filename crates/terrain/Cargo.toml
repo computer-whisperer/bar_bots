@@ -1,0 +1,9 @@
+[package]
+name = "terrain"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Walking distances over the map's ground: passable cells per movement class, distance fields, passages"
+
+[dependencies]
+bot-protocol = { path = "../bot-protocol" }
