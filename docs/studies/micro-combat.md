@@ -1,9 +1,12 @@
 # Unit micro: which policies pay when our soldiers meet theirs (2026-09-20)
 
 Six candidate policies for what a soldier does once the shooting starts, priced in `crates/combatsim`, then checked
-in the engine with the duel runner and in the arena. One survived: **fight as a loose block, not as a blob**
-(H-MICRO-SPREAD). It is worth about a fifth of the metal traded in the engine's duels. Kiting, focus fire,
-not chasing and pulling damaged units out all failed, three of them for reasons worth writing down.
+in the engine with the duel runner and in the arena. One survived the first two stages: **fight as a loose block,
+not as a blob** (H-MICRO-SPREAD), worth about a fifth of the metal traded over 336 engine duels. **In the arena it
+did nothing at all**, and the measurement of why is the most useful thing here: our waves already fight at 200-320
+elmos of dispersion, more than the duel harness's spread arm reaches, so there is no blob left to unpack. Kiting,
+focus fire, not chasing and pulling damaged units out all failed earlier, three of them for reasons worth writing
+down.
 
 ## What the bot can actually order
 
@@ -105,8 +108,9 @@ same lever from the other end — both sides loose instead of ours. Simulated at
 | armrock v corak | −0.03 → −0.23 (−0.20) | +0.08 → −0.34 (−0.42) |
 | armrock v corthud | −0.46 → −0.52 (−0.06) | −0.24 → −0.40 (−0.16) |
 
-Six signs of six, and the simulator overstates the size by about a factor of two in all six — the same direction
-as the bias `combat-sim.md` already records for area damage in dense formations.
+Six signs of six — though `armpw v corak` is a sign in name only, +0.01 against +0.09, both of them nothing — and
+the simulator overstates the size by about a factor of two in all six, the same direction as
+the bias `combat-sim.md` already records for area damage in dense formations.
 
 ### 2. Duels with the spread *orders*
 
@@ -116,7 +120,8 @@ same `loose_block` layout the bot uses, copied into `crates/arena/src/bin/duel/d
 gained `spread_x` / `spread_y`: how far each army's units stood from their own centre, RMS, when the first shot
 landed. That is the probe `combat-sim.md` asked for first, and it is what tells us the behaviour happened.
 
-**First probe** (batches `micro-spread-off` / `micro-spread-on`, 3 pairings x 8 duels, a single line 110 apart):
+**First probe** (batches `micro-spread-off` / `micro-spread-on`, 3 pairings x 8 duels, a single line 110 apart,
+which for 23-26 Pawns is 2500 elmos of front):
 dispersion at contact 86-100 → 288-303 elmos for us, 93-104 unchanged for them. The behaviour happens.
 Margins: armpw v armham −0.437 → −0.258, armpw v corthud −0.455 → −0.321, armpw v corak +0.150 → +0.253. The
 baseline reproduced the recorded table row for armpw v armham to three decimals (−0.437 against −0.436).
@@ -150,7 +155,7 @@ So there are two mechanisms, not one, and only the first was designed for:
    Mace, Thug, Rocketeer and Aggravator.
 2. **Getting more short-range guns into range at once.** The two biggest cells in the whole matrix are raiders
    against a *light tower line*, where there is no area damage to dodge (the towers' beam is impact-only, area 11).
-   A blob of 26 Pawns cannot all stand within 180 elmos of one tower — the crowding the simulator pins as
+   A blob of 20 Pawns cannot all stand within 180 elmos of one Guard — the crowding the simulator pins as
    `collision_saturates_a_short_range_blob` — while a block can. The simulator has that mechanism and still
    predicts nothing here (below): what it is missing is that a *blob* also walks in as a column and feeds itself
    to a tower a few at a time.
@@ -196,9 +201,49 @@ Details and why:
   business, and `army.rs` is being rewritten elsewhere.
 - Squad orders and the home group's defence orders are untouched: only committed attackers.
 
-## Arena A/B
+## Arena A/B: no effect, and the reason is worth more than the rule
 
-See the row in `docs/experiments.md` (`micro-spread`).
+`arena --matches 48 --parallel 4 --speed 50 --profile medium --ab-disable H-MICRO-SPREAD --label micro-spread`,
+with `WITHIN_REASON_OBSERVE=1` so both sides' deaths are known. Arm A is the rule on, arm B the same binary with it
+off; 24 games each, interleaved in blocks of four on the same seeds.
+
+| | games | W-L-T | army metal killed / lost | NW | SE |
+|---|---|---|---|---|---|
+| arm A, rule on | 24 | 11-10-3 | **0.97** | 0.77 | 1.30 |
+| arm B, rule off | 24 | 11-13-0 | **0.96** | 0.76 | 1.28 |
+
+Nothing. Not "a small gain we cannot resolve" — the mechanism measure is flat to two decimals in both corners, and
+the win counts are inside the noise this harness is known to have (two arms of identical code have scored 8-3-1
+against 4-4-4). The ablation itself is clean: H-MICRO-SPREAD fired 0 times in all 24 arm-B games.
+
+Two measurements say why, and the second is the interesting one.
+
+**Exposure.** The rule acted in 15 of the 24 arm-A games, 7 orders a game on average
+(0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 3, 3, 5, 6, 7, 7, 8, 12, 13, 23, 24, 43, 51). The nine games where it never fired
+are the nine where no wave ever launched — the wave gate held the army at home for the whole game, and those nine
+went 0-9. So the rule only reaches the games we were winning anyway.
+
+**Our army is not a blob in the first place.** `analyze_match.py` reports, for every engagement, how far our
+soldiers stood from their own centre (root mean square — the same definition as the duel harness's `spread_x`).
+Over the 858 engagements of this batch with at least 300 metal of ours present:
+
+| | engagements | mean spread | median |
+|---|---|---|---|
+| arm A (rule on) | 420 | 315 | 290 |
+| arm B (rule off) | 438 | 325 | 294 |
+| arm A, in their half or at their base | 140 | 258 | 214 |
+| arm B, in their half or at their base | 117 | 241 | 186 |
+
+**A real wave already fights at 200-320 elmos of dispersion, which is more than the duel harness's *spread* arm
+reaches (61-184) and two to six times its blob (46-140).** The formation the policy fixes is an artefact of
+spawning 24 units in ranks 56 apart and sending them all at one point. By the time one of our waves is in contact
+it has walked a thousand elmos through terrain, been marched and regrouped, lost its fastest, and is scattered
+anyway. There is no blob left to unpack, which is why ordering one not to be a blob changes nothing measurable.
+
+So the honest reading of the whole study is: **the policy is real and the problem is not ours.** It is kept —
+it costs nothing, it is right in every stand-up fight the engine will run, and the day our waves do arrive
+together (H-ARMY-MARCH and H-ARMY-STAGE both push that way) it will start to matter. But the duel harness
+overstates what any formation policy can buy in a real game, for the same reason it overstates area damage.
 
 ## What was not done
 
@@ -210,9 +255,25 @@ See the row in `docs/experiments.md` (`micro-spread`).
 - **Uneven metal was only tested in the simulator.** The duel harness sizes both sides to one budget; the engine
   A/B is entirely at equal metal.
 - **Mixed forces were only tested in the simulator** (`armham:2+armrock:1` and `corthud:2+corstorm:1`), where
-  spreading gains +0.10 and +0.13 — between the raider's +0.32 and the skirmisher's −0.00. The duel harness pairs
+  spreading gains +0.10 and +0.13, between the same simulator's Pawn (+0.32) and its Rocketeer (+0.12). The duel harness pairs
   one type against one type, which is precisely the case the engine gain splits on, so the number our real
   mixed waves should expect is unmeasured in the engine.
 - **The obvious refinement is untested**: the engine says the gain is entirely the raiders'. Spreading only the
   short-ranged units would keep it and drop the Rocketeer cost. The bot cannot see weapon range
   (`UnitDefInfo` has no range field), so this needs either the roster's role names or a protocol field.
+
+## What to do next, in the order the numbers argue for
+
+1. **Stop pricing formation rules on the duel tables.** Any future spacing, concave or frontage rule should be
+   measured against `our_fighters_spread` in real games first (K-army-a-real-wave-is-not-a-blob). The duel harness
+   answers "which unit beats which", not "which formation a wave arrives in".
+2. **The wave gate, not the fighting, is what loses these games.** Nine of 24 arm-A games never launched a wave at
+   all and went 0-9. No micro policy can reach a game the army spends at home.
+3. **Repair soldiers, then re-price withdrawal.** It is the best metal-efficiency policy measured (1.41 to 2.41)
+   and the only reason to discount it is that a hurt soldier never heals. That is a change to `H-ECO-REPAIR`, not
+   to micro.
+4. **If a formation rule is wanted anyway, spread only the raiders.** The engine says the whole gain is Pawn's and
+   Grunt's and the one real cost is the Rocketeer's. `UnitDefInfo` carries no weapon range, so this needs the
+   roster's role names or a protocol field.
+5. **Do not add an attack-unit command for focus fire.** Simulated, naive focus fire is 0.165 of margin worse than
+   the engine's own targeting.

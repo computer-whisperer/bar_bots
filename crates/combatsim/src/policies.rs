@@ -229,14 +229,14 @@ fn report(
     opponents.dedup();
     print!("{:<16}", "policy");
     for them in &opponents {
-        print!("{them:>11}");
+        print!(" {them:>20}");
     }
     println!();
     for (p, name) in names.iter().enumerate().skip(1) {
         print!("{name:<16}");
         for them in &opponents {
             let gains: Vec<f32> = cells.iter().filter(|(_, t, _, _)| t == them).map(|(_, _, _, s)| s[p].gain).collect();
-            print!("{:>+11.3}", mean(&gains));
+            print!(" {:>20}", format!("{:+.3}", mean(&gains)));
         }
         println!();
     }
@@ -265,14 +265,14 @@ fn report(
     mine.dedup();
     print!("{:<16}", "policy");
     for ours in &mine {
-        print!("{:>19}", ours);
+        print!(" {ours:>20}");
     }
     println!();
     for (p, name) in names.iter().enumerate().skip(1) {
         print!("{name:<16}");
         for ours in &mine {
             let gains: Vec<f32> = cells.iter().filter(|(o, _, _, _)| o == ours).map(|(_, _, _, s)| s[p].gain).collect();
-            print!("{:>19.3}", mean(&gains));
+            print!(" {:>20}", format!("{:+.3}", mean(&gains)));
         }
         println!();
     }

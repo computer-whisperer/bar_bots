@@ -229,8 +229,8 @@ every area shell (Mace and Thud 36 elmos, Rocketeer and Aggravator 48), and — 
 180-range raiders cannot get more than its front rank inside its own range of a target, so it walks into a tower line
 a few at a time. Rocketeers are the exception and lose by spreading (−0.25 against Grunts): a slow fragile
 long-ranged unit needs its neighbours.
-**Status.** supported (2026-09-20) in the engine duel harness; the arena effect is the `micro-spread` row of
-`docs/experiments.md`.
+**Status.** supported (2026-09-20) in the engine duel harness; **it does not reach the arena** — the
+`micro-spread` A/B is flat (K-army-a-real-wave-is-not-a-blob says why).
 **Evidence.** `docs/studies/micro-combat.md`; batches `micro-block-off` / `micro-block-on` (28 pairings x 6 duels an
 arm, equal metal at 1200, spawn spacing 56), compared with `run/duel_ab.py`. Biggest cells: Grunt against Sentry
 −0.193 to +0.652, Pawn against Guard −0.150 to +0.560. The behaviour was confirmed before the result: `spread_x` in
@@ -266,3 +266,22 @@ nothing stops a salvo already in the air and the overkill is most of a Rocketeer
 **Would be wrong if.** A focus rule that avoided overkill (counting damage already in the air towards a target)
 priced out positive; the policy tested is the naive one.
 **Used by.** (nothing — it is a reason not to extend the protocol)
+
+### K-army-a-real-wave-is-not-a-blob
+**Claim.** Our waves already fight spread out, so a formation policy has nothing to fix. Measured over the 858
+engagements of the `micro-spread` batch with at least 300 metal of ours present, our soldiers stood at a mean 315
+elmos from their own centre (median 290; 241-258 in the enemy's half). The duel harness, which spawns an army in
+ranks 56 apart and sends it at one point, fights at 46-140 of the same measure, and the spread orders that beat it
+by a fifth of the metal traded only reach 61-184. **The blob the duel tables price is an artefact of the harness.**
+By the time a wave is in contact it has walked a thousand elmos, been marched, regrouped and lost its fastest, and
+it is scattered whether we ask for it or not.
+**Status.** supported (2026-09-20). Both numbers are the same statistic (RMS distance from the group's own centre):
+`present_before.our_fighters_spread` in `run/analyze_match.py --json`, and `spread_x` in the duel harness's
+`duels.csv`.
+**Evidence.** Batch `micro-spread` (48 games, `WITHIN_REASON_OBSERVE=1`) against batches `micro-block-off` /
+`micro-block-on` (336 duels). `docs/studies/micro-combat.md`.
+**Would be wrong if.** The arena measure were inflated by the way engagements are cut out (fighters within 1100 of
+the centre are counted, so the statistic is bounded well above what was seen — but 290 is far from that bound), or
+if waves that arrive together after H-ARMY-MARCH and H-ARMY-STAGE improve showed a lower number.
+**Used by.** H-MICRO-SPREAD (explains why its engine gain does not reach the arena); a caution for any future
+formation or spacing rule priced on the duel tables.
