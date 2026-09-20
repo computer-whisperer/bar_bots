@@ -27,6 +27,23 @@ impl Brain {
             eprintln!("[ai {}] no terrain data; distances are straight lines", self.ai());
             return;
         };
+        // H-MAP-ENEMY-START: the mirror image of our start is only where the enemy would be on a symmetric map. On
+        // Quicksilver it is a beach across the water from the real base, 700 elmos off, and armies sent "to the enemy
+        // start" stood there looking at the sea. A start is always beside metal: take the spot we can walk to that is
+        // nearest the mirror point (here 140 from the real start).
+        if self.enabled("H-MAP-ENEMY-START") {
+            let mirror = self.enemy_start;
+            let beside_metal = self
+                .world
+                .hello
+                .metal_spots
+                .iter()
+                .filter(|s| from_home.distance(**s).is_some())
+                .min_by(|a, b| a.dist2d(mirror).total_cmp(&b.dist2d(mirror)));
+            if let Some(spot) = beside_metal {
+                self.enemy_start = Vec3 { y: 0.0, ..*spot };
+            }
+        }
         let from_enemy = Field::from(terrain, &passable, self.enemy_start);
         let spots = &self.world.hello.metal_spots;
         let reachable = spots.iter().filter(|s| from_home.distance(**s).is_some()).count();

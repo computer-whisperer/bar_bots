@@ -133,3 +133,17 @@ converters (30). North-west heuristic batches stall at 4-5 extractors from minut
 **Would be wrong if.** The A/B shows the same extractor curve with the base located by factories only.
 **Used by.** H-MAP-ENEMY-BASE; the commander's `expansion_radius` now replaces the own-half rule.
 
+### K-maps-mirror-start-is-a-beach
+**Claim.** On Quicksilver the point mirror of our north-west start, (5136, 5980), is a beach across an inlet from the
+real south-east base at about (5576, 5360): armies ordered "to the enemy start" walk there and stand on the shore, out
+of sight of the base. The walkable metal spot nearest the mirror point, (5448, 5240), is 140 from the real start.
+**Status.** observed (2026-09-20); the user recognised it as a recurring failure while watching commander-7.
+**Evidence.** commander-7-raid-expansion/00, minute 25: 57 soldiers of squad `farguard` at (4750-5250, 5750-6250) on a
+`fight` order to (5136, 5980), the report still saying "its commander has never been seen; its factories seen: none".
+commander-5: a strike "reached presumed enemy start F7 but found nothing". The heuristic's fallback target and the
+scout use the same point.
+**Would be wrong if.** On other maps the nearest-spot rule lands farther from the real start than the mirror does;
+start positions are not exposed to a skirmish AI (`Map_getStartPos` gives only our own), so this stays a guess until
+a factory is seen (H-MAP-ENEMY-BASE).
+**Used by.** H-MAP-ENEMY-START.
+
