@@ -69,7 +69,13 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
 - Keep the army out of the base: 40 soldiers among the buildings on the peninsula jam, and everything they do starts
   with a walk through the neck.
 
-**What earlier commanders did wrong.** [experiments ledger: commander-1 to -5]
+**What earlier commanders did, right and wrong.** [experiments ledger: commander-1 to -6]
+- Game 6, won in 23 minutes: held the mouth of the peninsula and the near spots, judged from the usual curve and from
+  what kept dying at its posts that the opponent's army was below par, scouted its base, then sent the whole main body
+  (59 soldiers) at the commander's last sighting while one squad held home. That is the pattern.
+- Game 6, the other one, lost: three squads ordered to one rally point arrived one after another and fought alone,
+  while the base they had left was raided. Squads of different units walk at different speeds: bring them together
+  at a point well short of the enemy and check they are all there before the next order.
 - Game 5: by minute 33 our army was worth 19,400 metal and theirs 2,800, and the game was not ended. The commander
   believed the lead was 1.4 to 1 (the report's count of enemy soldiers never forgot the ones that died out of sight;
   fixed), kept 100 soldiers in garrisons on quiet ground, and sent strikes of 8-20 that ground themselves down on
