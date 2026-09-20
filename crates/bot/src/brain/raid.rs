@@ -152,19 +152,33 @@ impl Brain {
         let in_sight: Vec<&bot_protocol::EnemyUnit> = tick.snapshot.enemies.iter().filter(|e| e.pos.dist2d(centre) < CONTACT_RADIUS).collect();
         let armed_in_sight = in_sight.iter().any(|e| armed(e) && !is_commander(e));
         let commander_in_sight = in_sight.iter().any(|e| is_commander(e));
-        let commander_near = in_sight.iter().any(|e| is_commander(e) && e.pos.dist2d(centre) < COMMANDER_REACH);
+        let commander_at = in_sight.iter().find(|e| is_commander(e)).map(|e| e.pos);
+        let commander_near = commander_at.is_some_and(|at| at.dist2d(centre) < COMMANDER_REACH);
         let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES;
         let party_metal: f32 = party.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
         let too_small_for_commander = commander_near && party_metal < COMMANDER_PARTY_METAL;
-        let outmatched = too_small_for_commander
-            || if reprice {
+        let outmatched = if reprice {
                 self.raid.priced_at = tick.frame;
                 let verdict = self.assault_verdict(&party, target.unwrap_or(centre), CONTACT_RADIUS, tick);
                 verdict.gain < GO_GAIN
             } else {
                 false
             };
+        let outmatched = outmatched && !too_small_for_commander;
         match target {
+            Some(target) if too_small_for_commander && party.len() >= 2 => {
+                // Too few for the commander: wait for the rest out of its reach, as a player gathers at the edge of a
+                // base, rather than walk home and lose the ground already covered.
+                self.raid.target = Some(target);
+                let Some(commander) = commander_at else { return };
+                let (dx, dz) = (centre.x - commander.x, centre.z - commander.z);
+                let len = dx.hypot(dz).max(1.0);
+                let wait = Vec3 { x: commander.x + dx / len * (COMMANDER_REACH + 300.0), y: 0.0, z: commander.z + dz / len * (COMMANDER_REACH + 300.0) };
+                if tick.frame - self.raid.last_order_frame >= REPRICE_FRAMES {
+                    self.raid.last_order_frame = tick.frame;
+                    commands.extend(party.iter().map(|u| Command::Move { unit: u.id, to: wait, queue: false }));
+                }
+            }
             Some(target) if !outmatched && party.len() >= 2 => {
                 if self.raid.target != Some(target) {
                     self.raid.last_order_frame = 0;

@@ -62,14 +62,18 @@ pub struct Contact {
 }
 
 impl Contact {
-    /// The share of `weight` a soldier of this speed, finished at `t`, earns.
+    /// The share of `weight` a soldier of this speed, finished at `t`, earns: in time or not, and a raider's share of
+    /// it for anything slower than one (a Rocketeer at the opponent's base is not the pressure a Pawn is: the
+    /// experienced players' rushes are Pawns only, and with metal alone the search led with Rocketeers).
     pub fn presence(self, t: f64, speed: f64) -> f64 {
         let arrives = t + self.walk / speed.max(1.0);
-        (1.0 - (arrives - self.at) / self.window).clamp(0.0, 1.0)
+        (1.0 - (arrives - self.at) / self.window).clamp(0.0, 1.0) * (speed / RAIDER_SPEED).min(1.0)
     }
 }
 
 pub const TEMPO_INCOME_SECONDS: f64 = 90.0;
+/// A tier-1 raider's speed (Pawn 87, Grunt 81), the pace the first contact is made at.
+pub const RAIDER_SPEED: f64 = 80.0;
 pub const TEMPO_STALL_METAL: f64 = 3.0;
 
 /// In `Objective::Mix` one metal/s of income at the horizon counts as this much army metal.

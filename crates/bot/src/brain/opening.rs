@@ -31,10 +31,11 @@ const SEARCHED_CONSTRUCTORS: usize = 4;
 /// soldier that can stand there by then is worth this much of its metal on top, falling to nothing over the window.
 /// At 8 the search on Quicksilver's north start builds 10 soldiers by minute 3 and 16 by 5 beside 5 extractors and no constructor, near
 /// the experienced player's 7 / 15 beside 4 / 6 (`docs/design/2026-09-20-rush-benchmark.md`); at 5 it keeps four
-/// constructors and has 6 soldiers at minute 3, at 20 it stalls for soldiers.
+/// constructors and has 6 soldiers at minute 3, at 20 it stalls for soldiers. The window was 120 s until rush-2-ab,
+/// where it let Rocketeers arriving a minute late lead every plan.
 const CONTACT_AT: f64 = 150.0;
 const CONTACT_WEIGHT: f64 = 6.0;
-const CONTACT_WINDOW: f64 = 120.0;
+const CONTACT_WINDOW: f64 = 60.0;
 
 pub(super) struct Opening {
     plan: Plan,
