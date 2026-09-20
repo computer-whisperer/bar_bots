@@ -48,7 +48,7 @@ impl Brain {
             .values()
             .filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0))
             .map(|(_, pos, _)| *pos)
-            .filter(|pos| pos.dist2d(self.enemy_start) > BASE_RADIUS && self.reachable_on_foot(*pos))
+            .filter(|pos| pos.dist2d(self.enemy_base(*pos)) > BASE_RADIUS && self.reachable_on_foot(*pos))
             .collect();
         targets.sort_by(|a, b| self.walk_from_home(*a).total_cmp(&self.walk_from_home(*b)));
         targets

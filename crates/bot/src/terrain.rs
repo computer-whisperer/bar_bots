@@ -7,7 +7,7 @@ use std::collections::BinaryHeap;
 
 use bot_protocol::{MoveClass, MoveKind, Terrain, Vec3};
 
-/// Walking distances from one origin for one movement class, over the terrain grid.
+/// Walking distances from the nearest of its origins for one movement class, over the terrain grid.
 pub struct Field {
     cell: f32,
     width: usize,
@@ -40,15 +40,26 @@ pub fn passable(terrain: &Terrain, class: MoveClass) -> Vec<bool> {
 impl Field {
     /// Distances from `origin` for a class that can stand where `passable` says. `None` without terrain data.
     pub fn from(terrain: &Terrain, passable: &[bool], origin: Vec3) -> Option<Field> {
+        Field::from_many(terrain, passable, &[origin])
+    }
+
+    /// Distances from whichever of `origins` is nearest on foot. `None` when none of them is near passable ground.
+    pub fn from_many(terrain: &Terrain, passable: &[bool], origins: &[Vec3]) -> Option<Field> {
         let (width, height) = (terrain.width as usize, terrain.height as usize);
         if width == 0 || passable.len() != width * height {
             return None;
         }
         let mut field = Field { cell: terrain.cell, width, height, cost: vec![UNREACHABLE; width * height] };
-        let start = field.nearest(origin, |index| passable[index])?;
         let mut queue = BinaryHeap::new();
-        field.cost[start] = 0;
-        queue.push(Reverse((0u32, start)));
+        for origin in origins {
+            if let Some(start) = field.nearest(*origin, |index| passable[index]) {
+                field.cost[start] = 0;
+                queue.push(Reverse((0u32, start)));
+            }
+        }
+        if queue.is_empty() {
+            return None;
+        }
         while let Some(Reverse((cost, index))) = queue.pop() {
             if cost > field.cost[index] {
                 continue;

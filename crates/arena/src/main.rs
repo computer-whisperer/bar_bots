@@ -4,7 +4,10 @@
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
 //!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out]
-//!              [--side armada|cortex] [--corner nw|se]   (default: alternate)
+//!              [--side armada|cortex] [--corner nw|se]   (default: alternate; `nw` is the first start box, whatever --boxes says)
+//!              [--ours N] [--allies N] [--enemies N] [--ffa]   (seats of ours, allied BARb seats, enemy BARb seats, default 1 0 1;
+//!                                                               --ffa: every enemy seat is its own team)
+//!              [--boxes corners|north-south|west-east]   (where the ally teams start; default corners)
 //!              [--bot PATH]   (bot binary from another build, for A/B runs)
 //!              [--disable H-ID,H-ID]   (ablation: switch heuristics off by registry ID)
 //!              [--ab-disable H-ID,H-ID]   (interleaved A/B: arm B also switches these off; blocks of four matches)
@@ -34,7 +37,7 @@ use arena::harness::{
     ENGINE_MEMORY_GB, GAME_TAG, LOAD_ALLOWANCE, REPO, available_memory_gb, copy_tree, git_commit, last_frame,
     refresh_cache_template, resolve_game, stop,
 };
-use script::MatchSetup;
+use script::{Boxes, MatchSetup};
 
 const BASE_PORT: u16 = 9100;
 /// Backstop for a match whose game clock stops advancing.
@@ -58,6 +61,11 @@ struct Options {
     side: Option<&'static str>,
     /// Fixes our start corner; otherwise it alternates.
     corner: Option<bool>,
+    ours: usize,
+    allies: usize,
+    enemies: usize,
+    free_for_all: bool,
+    boxes: Boxes,
     /// Bot binary to run instead of this workspace's, for A/B runs against an older build.
     bot: Option<std::path::PathBuf>,
     /// Comma-separated heuristic IDs the bot should switch off (ablation).
@@ -135,7 +143,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -227,6 +235,11 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         our_side: options.side.unwrap_or(if (index / 2).is_multiple_of(2) { "Armada" } else { "Cortex" }),
         mirror: options.mirror,
         swap_corners: options.swap_corners,
+        ours: options.ours,
+        allies: options.allies,
+        enemies: options.enemies,
+        free_for_all: options.free_for_all,
+        boxes: options.boxes,
     };
     copy_tree(&repo.join("run/match-template"), &dir)?;
     let cache_template = repo.join("run/cache-template");
@@ -292,7 +305,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         arm,
         outcome,
         our_side: setup.our_side,
-        our_corner: if setup.we_are_first != setup.swap_corners { "NW" } else { "SE" },
+        our_corner: setup.our_box(),
         game_minutes,
         wall_seconds: started.elapsed().as_secs_f32(),
         called,
@@ -496,6 +509,11 @@ fn parse_args() -> Options {
         commander: false,
         side: None,
         corner: None,
+        ours: 1,
+        allies: 0,
+        enemies: 1,
+        free_for_all: false,
+        boxes: Boxes::Corners,
         bot: None,
         disable: String::new(),
         ab_disable: None,
@@ -515,6 +533,10 @@ fn parse_args() -> Options {
             }
             "--play-out" => {
                 options.call_settled = false;
+                continue;
+            }
+            "--ffa" => {
+                options.free_for_all = true;
                 continue;
             }
             "--swap-corners" => {
@@ -566,16 +588,30 @@ fn parse_args() -> Options {
                     _ => usage("--corner takes nw or se"),
                 })
             }
+            "--ours" => options.ours = value().parse().ok().filter(|n| *n >= 1).unwrap_or_else(|| usage("--ours takes 1 or more")),
+            "--allies" => options.allies = value().parse().unwrap_or_else(|_| usage("--allies")),
+            "--enemies" => options.enemies = value().parse().ok().filter(|n| *n >= 1).unwrap_or_else(|| usage("--enemies takes 1 or more")),
+            "--boxes" => {
+                options.boxes = match value().as_str() {
+                    "corners" => Boxes::Corners,
+                    "north-south" => Boxes::NorthSouth,
+                    "west-east" => Boxes::WestEast,
+                    _ => usage("--boxes takes corners, north-south or west-east"),
+                }
+            }
             "--map" => options.map = value(),
             "--label" => options.label = value(),
             _ => usage(&format!("unknown argument {flag}")),
         }
     }
+    if options.free_for_all && 1 + options.enemies > options.boxes.capacity() {
+        usage("--ffa needs a start box per enemy seat: at most 3 enemies, with --boxes corners");
+    }
     options
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
     std::process::exit(2)
 }
 

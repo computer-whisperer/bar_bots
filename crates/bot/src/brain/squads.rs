@@ -256,7 +256,7 @@ impl Brain {
             .metal_spots
             .iter()
             .filter(|s| self.reachable_on_foot(**s))
-            .filter(|s| !held(**s, &our_extractors) && !held(**s, &enemy_extractors))
+            .filter(|s| !held(**s, &our_extractors) && !held(**s, &enemy_extractors) && !self.allied_extractor_on(**s))
             .copied()
             .collect();
         let recent = |seen: &i32| tick.frame - seen < 3 * 60 * FRAMES_PER_SECOND;
@@ -292,7 +292,7 @@ impl Brain {
             traded_3_min: traded(&|frame| recent(&frame)),
             traded: traded(&|_| true),
             seconds_since_turn: (self.wake.last_turn_frame > 0).then(|| (tick.frame - self.wake.last_turn_frame) / FRAMES_PER_SECOND),
-            enemy_base_found: self.enemy_base_found.map(|pos| self.place(pos)),
+            enemy_base_found: self.found_enemy_base().map(|pos| self.place(pos)),
             enemy_spots_seen: enemy_extractors.len(),
             enemy_factories: self
                 .enemy_buildings
@@ -307,7 +307,7 @@ impl Brain {
                 .map(|t| (self.place(t), self.known_enemy_force(t, 500.0, &[]).turret_metal as u32))
                 .collect(),
             guess_disproved: {
-                let guess = self.enemy_start;
+                let guess = self.enemy_base(self.home);
                 let standing_there = soldiers.iter().any(|u| u.pos.dist2d(guess) < 500.0);
                 let base_known = self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(guess) < 900.0);
                 (standing_there && !base_known).then(|| {

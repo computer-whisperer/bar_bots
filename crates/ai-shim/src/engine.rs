@@ -5,8 +5,8 @@
 use std::ffi::{CStr, c_int, c_void};
 
 use bot_protocol::{
-    BuildSite, Command, EnemyUnit, Hello, MapInfo, MoveClass, MoveKind, OwnUnit, Resource, Snapshot, Terrain,
-    UnitDefId, UnitDefInfo, UnitId, Vec3,
+    AllyUnit, BuildSite, Command, EnemyUnit, Hello, MapInfo, MoveClass, MoveKind, OwnUnit, Resource, Snapshot, Terrain,
+    StartBox, TeamInfo, UnitDefId, UnitDefInfo, UnitId, Vec3,
 };
 use recoil_ai_sys as sys;
 
@@ -91,10 +91,30 @@ impl Engine {
             floats.chunks_exact(3).map(|s| Vec3 { x: s[0], y: s[1], z: s[2] }).collect();
         self.metal_spots = metal_spots.clone();
 
+        let teams = (0..call!(self, Game_getTeams()))
+            .map(|team| TeamInfo {
+                team,
+                ally_team: call!(self, Game_getTeamAllyTeam(team)),
+                side: self.string(call!(self, Game_getTeamSide(team))),
+            })
+            .collect();
+        let start_boxes = crate::script::start_rects(&self.string(call!(self, Game_getSetupScript())))
+            .into_iter()
+            .map(|(ally_team, [left, top, right, bottom])| StartBox {
+                ally_team,
+                left: left * map.width,
+                top: top * map.height,
+                right: right * map.width,
+                bottom: bottom * map.height,
+            })
+            .collect();
+
         Hello {
             ai_id: self.ai_id,
             team: call!(self, SkirmishAI_getTeamId()),
             ally_team: call!(self, Game_getMyAllyTeam()),
+            teams,
+            start_boxes,
             frame,
             map,
             unit_defs,
@@ -179,6 +199,22 @@ impl Engine {
             })
             .collect();
 
+        let my_team = call!(self, SkirmishAI_getTeamId());
+        let friendly_count = call!(self, getFriendlyUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        let allies = self.id_buf[..friendly_count]
+            .iter()
+            .filter_map(|&id| {
+                let team = call!(self, Unit_getTeam(id));
+                (team != my_team).then(|| AllyUnit {
+                    id: UnitId(id),
+                    def: UnitDefId(call!(self, Unit_getDef(id))),
+                    pos: self.unit_pos(id),
+                    team,
+                    being_built: call!(self, Unit_isBeingBuilt(id)),
+                })
+            })
+            .collect();
+
         let enemy_count = call!(self, getEnemyUnitsInRadarAndLos(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
         let enemies = self.id_buf[..enemy_count]
             .iter()
@@ -189,11 +225,12 @@ impl Engine {
                     def: (def >= 0).then_some(UnitDefId(def)),
                     pos: self.unit_pos(id),
                     health: call!(self, Unit_getHealth(id)),
+                    team: Some(call!(self, Unit_getTeam(id))).filter(|team| *team >= 0),
                 }
             })
             .collect();
 
-        Snapshot { metal: self.resource(self.metal), energy: self.resource(self.energy), own_units, enemies }
+        Snapshot { metal: self.resource(self.metal), energy: self.resource(self.energy), own_units, allies, enemies }
     }
 
     fn resource(&self, id: c_int) -> Resource {
@@ -260,11 +297,11 @@ impl Engine {
         census
     }
 
-    /// Soldiers' metal value and finished extractors for both sides, `(ours, theirs)`: what the arena's referee judges
+    /// Soldiers' metal value and finished extractors for both sides (our whole ally team, every enemy), `(ours, theirs)`: what the arena's referee judges
     /// a settled game by. Like the census, read with cheat access for the length of the call and never sent to the bot.
     pub fn balance(&mut self) -> ((f32, u32), (f32, u32)) {
         let max = self.id_buf.len() as c_int;
-        let own = call!(self, getTeamUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        let own = call!(self, getFriendlyUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
         let ours = self.strength(own);
         call!(self, Cheats_setEnabled(true));
         let enemy = call!(self, getEnemyUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;

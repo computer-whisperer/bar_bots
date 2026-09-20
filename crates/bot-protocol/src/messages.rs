@@ -33,11 +33,44 @@ pub struct Hello {
     pub ai_id: i32,
     pub team: i32,
     pub ally_team: i32,
+    /// Every team in the game, ours included.
+    pub teams: Vec<TeamInfo>,
+    /// Where each ally team may start, for the ally teams whose box the start script gives.
+    pub start_boxes: Vec<StartBox>,
     pub frame: i32,
     pub map: MapInfo,
     pub unit_defs: Vec<UnitDefInfo>,
     pub metal_spots: Vec<Vec3>,
     pub terrain: Terrain,
+}
+
+/// One seat: a team has one commander and one economy; teams on one ally team fight together.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TeamInfo {
+    pub team: i32,
+    pub ally_team: i32,
+    /// Faction name as the start script gives it; may be empty.
+    pub side: String,
+}
+
+/// An ally team's start box, in elmos. The engine tells nobody where another team actually started.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct StartBox {
+    pub ally_team: i32,
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+impl StartBox {
+    pub fn centre(&self) -> Vec3 {
+        Vec3 { x: (self.left + self.right) / 2.0, y: 0.0, z: (self.top + self.bottom) / 2.0 }
+    }
+
+    pub fn contains(&self, pos: Vec3) -> bool {
+        pos.x >= self.left && pos.x <= self.right && pos.z >= self.top && pos.z <= self.bottom
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -110,6 +143,8 @@ pub struct Snapshot {
     pub metal: Resource,
     pub energy: Resource,
     pub own_units: Vec<OwnUnit>,
+    /// Units of the other teams on our ally team: seen, never commanded.
+    pub allies: Vec<AllyUnit>,
     /// Enemies currently in line of sight or radar.
     pub enemies: Vec<EnemyUnit>,
 }
@@ -135,12 +170,23 @@ pub struct OwnUnit {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AllyUnit {
+    pub id: UnitId,
+    pub def: UnitDefId,
+    pub pos: Vec3,
+    pub team: i32,
+    pub being_built: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EnemyUnit {
     pub id: UnitId,
     /// Unknown for radar-only contacts.
     pub def: Option<UnitDefId>,
     pub pos: Vec3,
     pub health: f32,
+    /// Whose it is, when the engine tells (it does for units in sight).
+    pub team: Option<i32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

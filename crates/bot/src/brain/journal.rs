@@ -74,7 +74,7 @@ impl Brain {
     pub(super) fn journal_intent(&mut self) {
         self.journal.intent = Intent {
             home: self.home,
-            enemy_start: self.enemy_start,
+            enemy_start: self.enemy_base(self.home),
             station: self.last_station,
             target: self.army.target(),
             staging: self.army.staging_point(),

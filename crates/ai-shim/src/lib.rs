@@ -6,6 +6,7 @@
 
 mod engine;
 mod link;
+mod script;
 
 use std::collections::BTreeMap;
 use std::ffi::{c_int, c_void};

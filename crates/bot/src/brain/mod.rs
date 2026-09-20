@@ -4,7 +4,9 @@
 //! home; constructors do the expanding. Builders coordinate through `jobs` so that two of them
 //! never pick the same one-off building in the same breath.
 
+mod allies;
 mod army;
+mod bases;
 mod briefing;
 mod combat;
 mod economy;
@@ -34,8 +36,13 @@ pub struct Brain {
     world: World,
     kit: Option<Kit>,
     home: Vec3,
-    /// Where the enemy is presumed to have started.
-    enemy_start: Vec3,
+    /// This tick's allied units, where each allied team's commander was first seen, and when each metal spot last
+    /// held an allied extractor (`allies.rs`).
+    allies: Vec<bot_protocol::AllyUnit>,
+    ally_starts: HashMap<i32, Vec3>,
+    ally_spot_held: HashMap<usize, i32>,
+    /// One per enemy seat: guessed, found or dead (`bases.rs`).
+    enemy_bases: Vec<bases::EnemyBase>,
     /// What each busy builder was last told to build, so others can plan around it.
     jobs: HashMap<UnitId, UnitDefId>,
     /// Metal spot index to the frame it was claimed at.
@@ -88,8 +95,6 @@ pub struct Brain {
     trade_log: Vec<(i32, f32, f32)>,
     /// Extractors lost so far at each metal spot (its index in the map's list).
     spot_losses: HashMap<usize, u32>,
-    /// Where we have seen a factory of the opponent's: its base is found, whether or not that factory still stands.
-    enemy_base_found: Option<Vec3>,
     /// This minute's soldier move failures by 200-elmo cell.
     stuck_cells: HashMap<(i32, i32), u32>,
     /// Frames at which we lost an extractor, within the trigger cooldown.
@@ -119,7 +124,10 @@ impl Brain {
             world,
             kit: None,
             home: Vec3::default(),
-            enemy_start: Vec3::default(),
+            allies: Vec::new(),
+            ally_starts: HashMap::new(),
+            ally_spot_held: HashMap::new(),
+            enemy_bases: Vec::new(),
             jobs: HashMap::new(),
             spot_claims: HashMap::new(),
             routes: None,
@@ -149,7 +157,6 @@ impl Brain {
             fight_ledger: Default::default(),
             trade_log: Vec::new(),
             spot_losses: HashMap::new(),
-            enemy_base_found: None,
             stuck_cells: HashMap::new(),
             extractor_losses: VecDeque::new(),
             last_station: Vec3::default(),
@@ -169,7 +176,9 @@ impl Brain {
         }
         let Some(kit) = self.kit else { return Vec::new() };
         self.read_directives(tick.frame);
+        self.note_allies(tick);
         self.track_enemy_buildings(tick);
+        self.track_enemy_bases(tick);
         self.track_losses(tick, &kit);
         let mut commands = Vec::new();
         self.protect_commander(tick, &kit, &mut commands);
@@ -195,7 +204,7 @@ impl Brain {
                 }
             }
             self.home = unit.pos;
-            self.enemy_start = self.world.mirrored(unit.pos);
+            self.guess_enemy_bases();
             eprintln!("[ai {}] playing {} from ({:.0}, {:.0})", self.ai(), roster.commander, unit.pos.x, unit.pos.z);
             if let Some(kit) = self.kit {
                 self.survey(&kit);
@@ -214,15 +223,16 @@ impl Brain {
         self.journal.rule(rule);
     }
 
-    /// A point `distance` elmos from home towards the enemy: along the walking route when we know the terrain, and
+    /// A point `distance` elmos from home towards the nearest enemy base: along the walking route when we know the terrain, and
     /// always on ground our soldiers can reach. A negative distance is behind home, away from the enemy.
     fn forward_of_home(&self, distance: f32) -> Vec3 {
         if distance > 0.0
-            && let Some(point) = self.on_the_way_to(self.enemy_start, distance)
+            && let Some(point) = self.on_the_way_to(self.enemy_base(self.home), distance)
         {
             return point;
         }
-        let (dx, dz) = (self.enemy_start.x - self.home.x, self.enemy_start.z - self.home.z);
+        let enemy = self.enemy_base(self.home);
+        let (dx, dz) = (enemy.x - self.home.x, enemy.z - self.home.z);
         let len = dx.hypot(dz).max(1.0);
         self.snap_to_reachable(Vec3 { x: self.home.x + dx / len * distance, y: 0.0, z: self.home.z + dz / len * distance })
     }

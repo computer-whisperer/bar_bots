@@ -146,7 +146,7 @@ impl Brain {
             .own_units
             .iter()
             .filter(|u| kit.is_extractor(u.def) && u.pos.dist2d(self.home) > OUTPOST_DISTANCE)
-            .min_by(|a, b| a.pos.dist2d(self.enemy_start).total_cmp(&b.pos.dist2d(self.enemy_start)));
+            .min_by(|a, b| a.pos.dist2d(self.enemy_base(a.pos)).total_cmp(&b.pos.dist2d(self.enemy_base(b.pos))));
         // Candidates in order of preference. The outpost station sits on the home side of the extractor, on ground
         // our constructor walked to build it; a point ahead of it towards the enemy was often unreachable, and
         // units that cannot reach their station pile up at the factory exit.
@@ -239,7 +239,7 @@ impl Brain {
                 force.add(def);
             }
         }
-        if place.dist2d(self.enemy_start) < radius {
+        if place.dist2d(self.enemy_base(place)) < radius {
             force.turret_metal += COMMANDER_WORTH / super::combat::TURRET_WORTH;
         }
         force
@@ -332,27 +332,8 @@ impl Brain {
             self.army.target_since = tick.frame;
             self.army.target_failures = 0;
         }
-        // Where the enemy's base is: its factories once we have seen one; the game's start guess until then.
-        // H-MAP-ENEMY-BASE: this used to be the mean of every enemy building we remember, and what we see most of
-        // is its forward turrets and extractors in our half, so the "base" crept toward us, and with it the line
-        // between its spots and ours: by minute 20 of commander game 5 our side held 9 spots of 38.
-        let base_marks: Vec<Vec3> = if self.enabled("H-MAP-ENEMY-BASE") {
-            let is_factory = |def: &bot_protocol::UnitDefId| self.world.def(*def).is_some_and(|d| !d.build_options.is_empty());
-            self.enemy_buildings.values().filter(|(def, _, _)| is_factory(def)).map(|(_, pos, _)| *pos).collect()
-        } else if self.enemy_buildings.len() >= 3 {
-            self.enemy_buildings.values().map(|(_, pos, _)| *pos).collect()
-        } else {
-            Vec::new()
-        };
-        if !base_marks.is_empty() {
-            let n = base_marks.len() as f32;
-            self.enemy_start = base_marks.iter().fold(Vec3::default(), |sum, pos| Vec3 { x: sum.x + pos.x / n, y: 0.0, z: sum.z + pos.z / n });
-            self.resurvey_enemy();
-            if self.enabled("H-MAP-ENEMY-BASE") {
-                self.enemy_base_found = Some(self.enemy_start);
-            }
-        }
-        let mut target = nearest_building.or(self.army.target).unwrap_or(self.enemy_start);
+        // No building known: the nearest live base (`bases.rs`), found or guessed.
+        let mut target = nearest_building.or(self.army.target).unwrap_or(self.enemy_base(self.home));
         if let Some(ordered) = self.directives.attack_target {
             self.fire("D-ATTACK-TARGET");
             target = ordered.value;
@@ -391,7 +372,9 @@ impl Brain {
             self.fire("H-ARMY-SCOUT");
             self.army.scout = Some((scout.id, tick.frame));
             commands.push(Command::Move { unit: scout.id, to: target, queue: false });
-            commands.push(Command::Move { unit: scout.id, to: self.enemy_start, queue: true });
+            // On to a base nobody has seen yet, if there is one.
+            let unseen = self.enemy_bases.iter().filter(|b| !b.found && !b.dead).map(|b| b.at).min_by(|a, b| a.dist2d(target).total_cmp(&b.dist2d(target)));
+            commands.push(Command::Move { unit: scout.id, to: unseen.unwrap_or(self.enemy_base(target)), queue: true });
         }
         let scout_id = self.army.scout.map(|(id, _)| id);
         let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| Some(u.id) != scout_id).collect();
@@ -609,7 +592,7 @@ impl Brain {
         if nothing_here && self.directives.attack_target.is_none() && self.enemy_buildings.is_empty() {
             // Sweep metal spots, starting from the enemy's side of the map.
             let mut spots = self.world.hello.metal_spots.clone();
-            spots.sort_by(|a, b| a.dist2d(self.enemy_start).total_cmp(&b.dist2d(self.enemy_start)));
+            spots.sort_by(|a, b| a.dist2d(self.enemy_base(*a)).total_cmp(&b.dist2d(self.enemy_base(*b))));
             if !spots.is_empty() {
                 next = Vec3 { y: 0.0, ..spots[self.army.sweep_index % spots.len()] };
                 self.army.sweep_index += 1;

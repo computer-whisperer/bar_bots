@@ -564,9 +564,9 @@ impl Brain {
             .metal_spots
             .iter()
             .enumerate()
-            .filter(|(i, s)| !self.spot_claims.contains_key(i) && reachable(**s) && !self.is_unreachable(**s) && !self.spot_avoid.contains(i))
+            .filter(|(i, s)| !self.spot_claims.contains_key(i) && reachable(**s) && !self.is_unreachable(**s) && !self.spot_avoid.contains(i) && self.spot_open_to_us(*i, **s, frame))
             .filter(|(_, s)| !self.is_hot(**s, frame) || self.is_covered(**s, own, kit))
-            .filter(|(_, s)| !own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
+            .filter(|(_, s)| !self.spot_taken(**s, own, kit))
             .min_by(|(_, a), (_, b)| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))?;
         self.spot_claims.insert(index, frame);
         // The engine stores the spot's metal value in `y`.
@@ -606,7 +606,7 @@ impl Brain {
     }
 
     fn spot_taken(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
-        own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
+        own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < SPOT_OCCUPIED_RADIUS) || self.allied_extractor_on(spot)
     }
 
     /// Whether we lost an extractor or a constructor at this metal spot lately.
@@ -614,10 +614,12 @@ impl Brain {
         self.hot_spots.iter().any(|(hot, until)| *until > frame && hot.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
     }
 
-    /// A turret beside the spot, or a few soldiers standing by it.
+    /// A turret beside the spot, or a few soldiers standing by it; an ally's count as ours do.
     fn is_covered(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
+        let allied_soldiers = self.allied_cover(spot, COVER_RADIUS).0;
         own.iter().any(|u| u.def == kit.turret && !u.being_built && u.pos.dist2d(spot) < OUTPOST_GUARD_RADIUS)
-            || own.iter().filter(|u| self.is_army(u, kit) && u.pos.dist2d(spot) < COVER_RADIUS).count() >= COVER_SOLDIERS
+            || self.allied_cover(spot, OUTPOST_GUARD_RADIUS).1
+            || own.iter().filter(|u| self.is_army(u, kit) && u.pos.dist2d(spot) < COVER_RADIUS).count() + allied_soldiers >= COVER_SOLDIERS
     }
 
     /// Notes the metal spot nearest a lost extractor or constructor as hot.

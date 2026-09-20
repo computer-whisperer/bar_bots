@@ -92,7 +92,7 @@ impl Brain {
                 self.wreck_sites.push((pos, tick.frame));
             }
             let killer = attacker.and_then(|id| self.enemy_defs.get(&id)).map_or("unseen", |d| self.name(*d));
-            let place = if pos.dist2d(self.home) < super::army::BASE_RADIUS { "at home" } else if pos.dist2d(self.home) < pos.dist2d(self.enemy_start) { "in our half" } else { "in their half" };
+            let place = if pos.dist2d(self.home) < super::army::BASE_RADIUS { "at home" } else if pos.dist2d(self.home) < pos.dist2d(self.enemy_base(pos)) { "in our half" } else { "in their half" };
             let line = format!("lost {} to {killer} {place}", self.name(def));
             if let Some(shared) = &self.strategist {
                 *shared.fights.lock().unwrap().entry(line.clone()).or_default() += 1;
@@ -129,7 +129,7 @@ impl Brain {
         for enemy in &tick.snapshot.enemies {
             let Some(def) = enemy.def else { continue };
             let Some(info) = self.world.def(def) else { continue };
-            if info.name.ends_with("com") && info.speed > 0.0 && info.build_speed > 0.0 {
+            if self.is_commander_def(def) {
                 self.enemy_commander_seen = Some((enemy.pos, tick.frame));
             }
             if info.speed == 0.0 {
@@ -203,7 +203,7 @@ impl Brain {
                 army: soldiers.len(),
             },
             home: self.place(self.home),
-            presumed_enemy_start: self.place(self.enemy_start),
+            presumed_enemy_start: self.place(self.enemy_base(self.home)),
             home_group: self.group(&home_group),
             attackers: self.group(&attackers),
             waves_sent: self.army.waves_sent(),
@@ -232,7 +232,7 @@ impl Brain {
         json!({
             "name": map.name, "width": map.width, "height": map.height,
             "grid": "8x8 cells; columns A-H run west to east (x), rows 1-8 run north to south (z)",
-            "our_start": self.place(self.home), "presumed_enemy_start": self.place(self.enemy_start),
+            "our_start": self.place(self.home), "presumed_enemy_start": self.place(self.enemy_base(self.home)),
             "metal_spots": spots,
             "metal_spots_note": "n is the spot's number for the `expansion` tool; walk_from_home is the walking distance for our bots; null means they cannot walk there",
             "terrain": self.terrain_sketch(),

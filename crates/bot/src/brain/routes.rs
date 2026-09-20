@@ -7,13 +7,14 @@ use super::Brain;
 use super::roster::Kit;
 use crate::terrain::{self, Field};
 
-/// The enemy-side field is rebuilt when our estimate of where the enemy lives has moved this far.
+/// The enemy-side field is rebuilt when our estimate of where an enemy lives has moved this far.
 const ENEMY_MOVED: f32 = 600.0;
 
 pub struct Routes {
     from_home: Field,
+    /// Distance from the nearest live enemy base.
     from_enemy: Option<Field>,
-    enemy_origin: Vec3,
+    enemy_origins: Vec<Vec3>,
     passable: Vec<bool>,
 }
 
@@ -29,34 +30,25 @@ impl Brain {
         };
         // H-MAP-ENEMY-START: the mirror image of our start is only where the enemy would be on a symmetric map. On
         // Quicksilver it is a beach across the water from the real base, 700 elmos off, and armies sent "to the enemy
-        // start" stood there looking at the sea. A start is always beside metal: take the spot we can walk to that is
-        // nearest the mirror point (here 140 from the real start).
+        // start" stood there looking at the sea (the spot we can walk to nearest it is 140 from the real start).
         if self.enabled("H-MAP-ENEMY-START") {
-            let mirror = self.enemy_start;
-            let beside_metal = self
-                .world
-                .hello
-                .metal_spots
-                .iter()
-                .filter(|s| from_home.distance(**s).is_some())
-                .min_by(|a, b| a.dist2d(mirror).total_cmp(&b.dist2d(mirror)));
-            if let Some(spot) = beside_metal {
-                self.enemy_start = Vec3 { y: 0.0, ..*spot };
-            }
+            self.snap_guesses_to_metal(|spot| from_home.distance(spot).is_some());
         }
-        let from_enemy = Field::from(terrain, &passable, self.enemy_start);
+        let terrain = &self.world.hello.terrain;
+        let enemy_origins = self.live_enemy_bases();
+        let from_enemy = Field::from_many(terrain, &passable, &enemy_origins);
         let spots = &self.world.hello.metal_spots;
         let reachable = spots.iter().filter(|s| from_home.distance(**s).is_some()).count();
         let ours = spots.iter().filter(|s| is_ours(&from_home, from_enemy.as_ref(), **s)).count();
         eprintln!(
             "[ai {}] terrain: {} of {} metal spots reachable on foot, {} nearer to us than to the enemy; enemy start {:.0} away on foot, {:.0} in a straight line",
             self.ai(), reachable, spots.len(), ours,
-            from_home.distance(self.enemy_start).unwrap_or(f32::INFINITY), self.home.dist2d(self.enemy_start)
+            from_home.distance(self.enemy_base(self.home)).unwrap_or(f32::INFINITY), self.home.dist2d(self.enemy_base(self.home))
         );
         let cut_off: Vec<String> =
             spots.iter().filter(|s| from_home.distance(**s).is_none()).map(|s| format!("({:.0}, {:.0})", s.x, s.z)).collect();
         eprintln!("[ai {}] terrain: spots we cannot walk to: {}", self.ai(), cut_off.join(" "));
-        self.routes = Some(Routes { from_home, from_enemy, enemy_origin: self.enemy_start, passable });
+        self.routes = Some(Routes { from_home, from_enemy, enemy_origins, passable });
         if let Some(sketch) = self.terrain_sketch() {
             for row in sketch["rows"].as_array().into_iter().flatten() {
                 eprintln!("[ai {}] terrain: {}", self.ai(), row.as_str().unwrap_or_default());
@@ -64,15 +56,15 @@ impl Brain {
         }
     }
 
-    /// Call when `enemy_start` may have changed.
+    /// Call when an enemy base may have moved, died or come back.
     pub(super) fn resurvey_enemy(&mut self) {
-        let enemy_start = self.enemy_start;
+        let origins = self.live_enemy_bases();
         let terrain = &self.world.hello.terrain;
         if let Some(routes) = &mut self.routes
-            && routes.enemy_origin.dist2d(enemy_start) > ENEMY_MOVED
+            && (routes.enemy_origins.len() != origins.len() || routes.enemy_origins.iter().zip(&origins).any(|(a, b)| a.dist2d(*b) > ENEMY_MOVED))
         {
-            routes.from_enemy = Field::from(terrain, &routes.passable, enemy_start);
-            routes.enemy_origin = enemy_start;
+            routes.from_enemy = Field::from_many(terrain, &routes.passable, &origins);
+            routes.enemy_origins = origins;
         }
     }
 
@@ -90,7 +82,7 @@ impl Brain {
     pub(super) fn spot_is_ours(&self, spot: Vec3) -> bool {
         match &self.routes {
             Some(routes) => is_ours(&routes.from_home, routes.from_enemy.as_ref(), spot),
-            None => spot.dist2d(self.home) < spot.dist2d(self.enemy_start),
+            None => spot.dist2d(self.home) < spot.dist2d(self.enemy_base(spot)),
         }
     }
 
