@@ -26,15 +26,17 @@ pub struct Tuning {
     /// (`MobileCAI.cpp` `ExecuteAttack`).
     pub stop_at: f32,
     /// Seconds between acquiring a target and the first shot: turret slew and the engine's aiming tolerance.
+    /// Zero by default — the duel tables do not ask for one, and every value tried made agreement worse.
     pub aim_seconds: f32,
-    /// Units take up ground and cannot stand in each other: the front rank halts at its range and the ranks behind
-    /// it are stuck there. Off for measuring what that costs.
+    /// Units take up ground and cannot stand in each other, at the radius the engine pushes them apart with
+    /// (`CGroundMoveType` uses `unit->radius`, the collision volume, which is wider than the build footprint):
+    /// the front rank halts at its range and the ranks behind it are stuck there. Off for measuring what it costs.
     pub collide: bool,
 }
 
 impl Default for Tuning {
     fn default() -> Tuning {
-        Tuning { spread: 1.0, stop_at: 0.9, aim_seconds: 0.4, collide: true }
+        Tuning { spread: 1.0, stop_at: 0.9, aim_seconds: 0.0, collide: true }
     }
 }
 
@@ -147,7 +149,6 @@ struct Body {
     hp: f32,
     max_hp: f32,
     radius: f32,
-    foot: f32,
     speed: f32,
     sight: f32,
     metal: f32,
@@ -155,6 +156,14 @@ struct Body {
     target: u32,
     /// Frame this unit's weapons may first fire at its current target.
     aimed_at: u32,
+}
+
+impl Body {
+    /// Alive and already on the field: a group with an arrival delay is counted as the side's value from the
+    /// start but is neither shot at nor in the way until it turns up.
+    fn here(&self, frame: u32) -> bool {
+        self.alive && frame >= self.spawn
+    }
 }
 
 struct Gun {
@@ -222,7 +231,6 @@ struct Sim<'a> {
     seen: Vec<bool>,
     buckets: Vec<Vec<u32>>,
     grid: (i32, i32, i32, i32),
-    widest_foot: f32,
     widest_radius: f32,
     /// Energy in store per side, and the cap it recharges towards.
     energy: [f32; 2],
@@ -255,7 +263,6 @@ impl<'a> Sim<'a> {
                         hp: unit.health,
                         max_hp: unit.health,
                         radius: unit.radius,
-                        foot: unit.footprint,
                         speed: unit.speed / FPS,
                         sight: unit.sight,
                         metal: unit.metal,
@@ -266,18 +273,16 @@ impl<'a> Sim<'a> {
                 }
             }
         }
-        let goal = [centre(&bodies, 1), centre(&bodies, 0)];
+        let goal = [centre(&bodies, 1, u32::MAX), centre(&bodies, 0, u32::MAX)];
         let flows = [0, 1].map(|side| {
             let field = scenario.terrain.as_ref()?;
             // One field per side, for the least agile unit on it: a choke that stops the tanks stops the group.
-            let slope = (scenario.sides[side].iter())
-                .map(|g| rules.units.list[g.def].max_slope)
-                .filter(|&s| s > 0)
-                .min()?;
-            Some(field.flow(field.passable(slope), goal[side]))
+            let mobile = || scenario.sides[side].iter().map(|g| &rules.units.list[g.def]).filter(|u| u.mobile());
+            let slope = mobile().map(|u| u.max_slope).min()?;
+            let depth = mobile().map(|u| u.max_depth).fold(f32::MAX, f32::min);
+            Some(field.flow(field.passable(slope, depth), goal[side]))
         });
         let seen = vec![false; bodies.len()];
-        let widest_foot = bodies.iter().map(|b| b.foot).fold(0.0, f32::max);
         let widest_radius = bodies.iter().map(|b| b.radius).fold(0.0, f32::max);
         Sim {
             rules,
@@ -291,7 +296,6 @@ impl<'a> Sim<'a> {
             seen,
             buckets: Vec::new(),
             grid: (0, 0, 0, 0),
-            widest_foot,
             widest_radius,
             energy: [0, 1].map(|s| scenario.energy[s].stored),
             energy_cap: [0, 1].map(|s| scenario.energy[s].stored),
@@ -308,14 +312,14 @@ impl<'a> Sim<'a> {
         let mut frame = 0;
         let reason = loop {
             // The grid carries collision as well as damage, so it has to be current every frame.
-            self.rebuild_grid();
+            self.rebuild_grid(frame);
             if frame % RETARGET == 0 {
                 // The engine redraws how far each weapon misjudges target speed on the same slow clock.
                 for gun in 0..self.guns.len() {
                     self.guns[gun].predict_mod = self.rng.unit() * 2.0;
                 }
                 self.retarget(frame);
-                self.goal = [centre(&self.bodies, 1), centre(&self.bodies, 0)];
+                self.goal = [centre(&self.bodies, 1, frame), centre(&self.bodies, 0, frame)];
             }
             if frame % (5 * FPS as u32) == 0 {
                 timeline.push(self.value_left());
@@ -382,9 +386,10 @@ impl<'a> Sim<'a> {
         [0, 1].map(|s| if self.metal[s] > 0.0 { left[s] / self.metal[s] } else { 0.0 })
     }
 
-    /// Neighbour buckets over the living units, rebuilt with targeting; damage and crowding read them.
-    fn rebuild_grid(&mut self) {
-        let live = self.bodies.iter().filter(|b| b.alive);
+    /// Neighbour buckets over the units that are here now: reinforcements still on their way take up no ground
+    /// and cannot be shot at. Damage, crowding and targeting all read these.
+    fn rebuild_grid(&mut self, frame: u32) {
+        let live = self.bodies.iter().filter(|b| b.here(frame));
         let (mut x0, mut z0, mut x1, mut z1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
         for body in live {
             (x0, z0) = (x0.min(body.pos.x), z0.min(body.pos.z));
@@ -402,7 +407,7 @@ impl<'a> Sim<'a> {
             bucket.clear();
         }
         for i in 0..self.bodies.len() {
-            if self.bodies[i].alive {
+            if self.bodies[i].here(frame) {
                 let cell = self.bucket_of(self.bodies[i].pos);
                 self.buckets[cell].push(i as u32);
             }
@@ -434,23 +439,23 @@ impl<'a> Sim<'a> {
     fn retarget(&mut self, frame: u32) {
         for i in 0..self.bodies.len() {
             let body = &self.bodies[i];
-            if !body.alive || frame < body.spawn {
+            if !body.here(frame) {
                 self.seen[i] = false;
                 continue;
             }
             // Sight is shared across a team, so one scout in front lets the whole line shoot.
             let (pos, side) = (body.pos, body.side);
             self.seen[i] = (self.bodies.iter())
-                .any(|o| o.alive && o.side != side && frame >= o.spawn && o.pos.dist2(pos) <= o.sight * o.sight);
+                .any(|o| o.here(frame) && o.side != side && o.pos.dist2(pos) <= o.sight * o.sight);
         }
         for i in 0..self.bodies.len() {
-            if !self.bodies[i].alive || frame < self.bodies[i].spawn || self.rules.shots[self.bodies[i].def as usize].is_empty() {
+            if !self.bodies[i].here(frame) || self.rules.shots[self.bodies[i].def as usize].is_empty() {
                 continue;
             }
             let (pos, side, old) = (self.bodies[i].pos, self.bodies[i].side, self.bodies[i].target);
             let mut best = (f32::MAX, NONE);
             for (j, other) in self.bodies.iter().enumerate() {
-                if other.alive && other.side != side && self.seen[j] {
+                if other.here(frame) && other.side != side && self.seen[j] {
                     let d = pos.dist2(other.pos);
                     if d < best.0 {
                         best = (d, j as u32);
@@ -469,7 +474,7 @@ impl<'a> Sim<'a> {
     fn advance(&mut self, frame: u32) {
         for i in 0..self.bodies.len() {
             let body = &self.bodies[i];
-            if !body.alive || body.hold || body.speed <= 0.0 || frame < body.spawn {
+            if !body.here(frame) || body.hold || body.speed <= 0.0 {
                 continue;
             }
             let (pos, side, target, reach, speed) = (body.pos, body.side as usize, body.target, body.reach, body.speed);
@@ -506,14 +511,14 @@ impl<'a> Sim<'a> {
         if !self.rules.tuning.collide {
             return true;
         }
-        let foot = self.bodies[me as usize].foot;
+        let radius = self.bodies[me as usize].radius;
         let mut clear = true;
-        self.near(at, foot + self.widest_foot, |j| {
+        self.near(at, radius + self.widest_radius, |j| {
             if j == me {
                 return;
             }
             let other = &self.bodies[j as usize];
-            let want = foot + other.foot;
+            let want = radius + other.radius;
             if at.dist2(other.pos) < want * want {
                 clear = false;
             }
@@ -525,7 +530,7 @@ impl<'a> Sim<'a> {
         for gun in 0..self.guns.len() {
             let (body_index, shot_index) = (self.guns[gun].body as usize, self.guns[gun].shot as usize);
             let body = &self.bodies[body_index];
-            if !body.alive || frame < body.spawn || frame < body.aimed_at || body.target == NONE {
+            if !body.here(frame) || frame < body.aimed_at || body.target == NONE {
                 continue;
             }
             let (target, from, def) = (body.target, body.pos, body.def as usize);
@@ -663,10 +668,10 @@ impl<'a> Sim<'a> {
     }
 }
 
-fn centre(bodies: &[Body], side: usize) -> Vec2 {
+fn centre(bodies: &[Body], side: usize, frame: u32) -> Vec2 {
     let mut sum = Vec2::default();
     let mut n = 0.0;
-    for body in bodies.iter().filter(|b| b.alive && b.side as usize == side) {
+    for body in bodies.iter().filter(|b| b.here(frame) && b.side as usize == side) {
         sum = sum + body.pos;
         n += 1.0;
     }

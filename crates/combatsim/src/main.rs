@@ -9,10 +9,11 @@ use combatsim::sim::{Rules, Tuning, odds, simulate};
 use combatsim::units::Units;
 
 const USAGE: &str = "\
-combatsim --a <type:count[,...]> --b <type:count[,...]>
+combatsim --a <type:count[@delay][,...]> --b <type:count[@delay][,...]>
           [--spacing 56] [--apart 1100] [--reps 1] [--seed 0] [--delay-a S] [--delay-b S]
           [--hold-a] [--hold-b] [--terrain FILE:W:H] [--at X,Z] [--from X,Z] [--no-collide] [--verbose]
-combatsim validate [--spacing 56|100|both] [--reps 4] [--worst 15] [--no-collide]
+          [--stored 500] [--income 30] (the side's energy, which is what laser towers fire with)
+combatsim validate [--spacing 56|100|both] [--reps 4] [--worst 15] [--no-collide] [--stored E] [--income E]
 combatsim speed [--reps 200]
 
 Unit names are the game's internal ones (armham, corllt). Side A stands in the west, B in the east.
@@ -79,11 +80,13 @@ fn force(rules: &Rules, spec: &str, front: Vec2, facing: Vec2, flags: &Flags, si
     spec.split(',')
         .filter(|part| !part.is_empty())
         .map(|part| {
+            // `armham:6@12` is six Maces turning up twelve seconds in.
+            let (part, late) = part.split_once('@').unwrap_or((part, ""));
             let (name, count) = part.split_once(':').unwrap_or((part, "1"));
             let def = rules.units.index(name).unwrap_or_else(|| panic!("unknown unit {name}"));
             let mut group = Group::new(def, count.parse().expect("count"), front, facing);
             group.spacing = flags.num("spacing", 56.0);
-            group.delay = flags.num(&format!("delay-{side}"), 0.0);
+            group.delay = late.parse().unwrap_or_else(|_| flags.num(&format!("delay-{side}"), 0.0));
             group.hold = flags.has(&format!("hold-{side}"));
             group
         })
@@ -99,6 +102,7 @@ fn query(rules: &Rules, flags: &Flags) {
     let (from, at) = (flags.point("from").unwrap_or(Vec2::new(0.0, 0.0)), flags.point("at"));
     let at = at.unwrap_or(Vec2::new(from.x + apart, from.z));
     let mut scenario = Scenario::new();
+    scenario.energy = [energy(flags); 2];
     scenario.sides[0] = force(rules, a, from, from.towards(at), flags, "a");
     scenario.sides[1] = force(rules, b, at, at.towards(from), flags, "b");
     if let Some(spec) = flags.get("terrain") {
@@ -112,7 +116,13 @@ fn query(rules: &Rules, flags: &Flags) {
     }
     let outcome = simulate(rules, &scenario, flags.num("seed", 0));
     let name = |def: usize| rules.units.names[def].clone();
-    println!("{:?} after {:.1}s ({:?})", outcome.winner.map_or("draw".to_string(), |s| ["A", "B"][s].to_string()), outcome.seconds, outcome.reason);
+    println!(
+        "{} after {:.1}s ({:?}), first damage at {}",
+        outcome.winner.map_or("draw".to_string(), |s| ["A", "B"][s].to_string()),
+        outcome.seconds,
+        outcome.reason,
+        outcome.contact_seconds.map_or("never".to_string(), |s| format!("{s:.1}s"))
+    );
     for (side, label) in ["A", "B"].iter().enumerate() {
         let left: Vec<String> = outcome.survivors[side].iter().map(|(def, n)| format!("{}x{n}", name(*def))).collect();
         println!(
@@ -148,10 +158,13 @@ fn terrain(spec: &str) -> Field {
     Field::from_bytes(&bytes, width, height, 16.0).expect("terrain file too short")
 }
 
+fn energy(flags: &Flags) -> Energy {
+    Energy { stored: flags.num("stored", Energy::default().stored), income: flags.num("income", Energy::default().income) }
+}
+
 fn validate(rules: &Rules, flags: &Flags) {
     let reps: u32 = flags.num("reps", 4);
     let worst: usize = flags.num("worst", 15);
-    let energy = Energy { stored: flags.num("stored", Energy::default().stored), income: flags.num("income", 30.0) };
     let wanted = flags.get("spacing").unwrap_or("both");
     let tables: Vec<(&str, f32, Vec<duels::Pair>)> = [("tight", 56.0, duels::tight()), ("wide", 100.0, duels::wide())]
         .into_iter()
@@ -159,10 +172,10 @@ fn validate(rules: &Rules, flags: &Flags) {
         .collect();
     for (name, spacing, pairs) in tables {
         let started = std::time::Instant::now();
-        let agreement = duels::validate(rules, &pairs, spacing, reps, energy);
+        let agreement = duels::validate(rules, &pairs, spacing, reps, energy(flags));
         println!(
             "{name} (spacing {spacing:.0}, {} pairings, {reps} seeds each, {:.1}s):\n  \
-             sign agreement {}/{} decisive (|margin| >= {DECISIVE:.2}) = {:.0}%, mean |error| {:.3}, correlation {:.3}",
+             sign agreement {}/{} decisive (|margin| >= {DECISIVE:.2}) = {:.0}%, mean |error| {:.3}, correlation {:.3}, slope {:.2}",
             agreement.pairings,
             started.elapsed().as_secs_f32(),
             agreement.same_sign,
@@ -170,6 +183,7 @@ fn validate(rules: &Rules, flags: &Flags) {
             agreement.same_sign as f32 / agreement.decisive.max(1) as f32 * 100.0,
             agreement.mean_absolute_error,
             agreement.correlation,
+            agreement.slope,
         );
         println!("  worst misses (table -> simulated):");
         for (unit, against, table, got) in agreement.misses.iter().take(worst) {

@@ -12,7 +12,7 @@ default mod options (every `multiplier_*` is 1): reload and burst times are roun
 and a BeamLaser with `impactonly` becomes areaofeffect 11 / edgeeffectiveness 1. Nothing else in `_post` touches
 health, damage, range or speed; the rest is graphics, mod options and categories.
 """
-import json, re, subprocess, sys, pathlib
+import json, math, re, subprocess, sys, pathlib
 
 root = pathlib.Path(sys.argv[1])
 FPS = 30
@@ -77,25 +77,46 @@ def armor_classes():
     return {name: cls for cls, names in defs.items() for name in names}
 
 
+def move_classes():
+    """Movement class -> (slope it can climb in the engine's 0-255 slope units, deepest water it wades).
+
+    The unit file's own `maxslope` is legacy; what the engine uses comes from the class named by `movementclass`
+    in gamedata/movedefs.lua, in degrees, which the engine stores as 1 - cos(angle). The record format's
+    `move_classes` confirms it: bots 0.412 = 1 - cos(54 degrees). The file ends in engine-only code, so only its
+    tables are read, by pattern."""
+    text = (root / "gamedata" / "movedefs.lua").read_text()
+
+    def constants(name):
+        block = re.search(r"^local %s = \{(.*?)^\}" % name, text, re.M | re.S)
+        return {k: float(v) for k, v in re.findall(r"(\w+) = ([\d.]+)", block[1])}
+
+    slopes, depths = constants("SLOPE"), constants("DEPTH")
+    classes = {}
+    for name, body in re.findall(r"^\t(\w+) = \{$(.*?)^\t\},$", text, re.M | re.S):
+        slope = re.search(r"maxslope = SLOPE\.(\w+)", body)
+        depth = re.search(r"maxwaterdepth = DEPTH\.(\w+)", body)
+        degrees = slopes.get(slope[1], 0.0) if slope else 0.0
+        classes[name] = (
+            round((1.0 - math.cos(math.radians(degrees))) * 255.0),
+            depths.get(depth[1], 0.0) if depth else 0.0,
+        )
+    return classes
+
+
 def frames(value):
     """The engine runs reloads in whole frames and `alldefs_post` rounds the def to match."""
     return max(1, int(value * FPS + 1e-3)) / FPS
 
 
 def radius(udef):
-    """Hit radius in elmos: half the mean of the collision volume's x and z scales, or the footprint when the unit
-    has no volume. Projectiles collide with the volume, so this decides whether a shot aimed slightly off still
-    lands on the unit."""
+    """Collision radius in elmos: half the mean of the collision volume's x and z scales, falling back to the
+    build footprint (8 elmos a square) for a unit with no volume. Projectiles collide with this volume, and it is
+    also what the engine pushes units apart with, so it decides both whether a near miss lands and how tightly a
+    blob can pack. It is nearly twice the footprint for most units."""
     scales = udef.get("collisionvolumescales")
     if scales:
         x, _, z = (float(v) for v in scales.split())
         return (x + z) / 4.0
-    return footprint(udef)
-
-
-def footprint(udef):
-    """Radius of the ground the unit stands on, in elmos: the footprint is in 8-elmo build squares and is what the
-    engine blocks movement with. Two units cannot get closer than the sum of these."""
     return max(udef.get("footprintx", 1), udef.get("footprintz", 1)) * 8.0 / 2.0
 
 
@@ -125,14 +146,12 @@ def weapon(wdef, mount):
         # `accuracy` is drawn once a salvo, `sprayangle` once a projectile.
         "accuracy": wdef.get("accuracy", 0.0),
         "spray": wdef.get("sprayangle", 0.0),
-        "moving_accuracy": wdef.get("movingaccuracy", wdef.get("accuracy", 0.0)),
         # How well the shot leads a moving target: at 0 (the engine's default, and most BAR ground weapons) the
         # unit over- or under-estimates the target's speed by anything from 0 to 2x, redrawn twice a second.
         "predict_boost": wdef.get("predictboost", 0.0),
         "lead_limit": wdef.get("leadlimit", -1.0),
         "energy_per_shot": wdef.get("energypershot", 0.0),
         "only_targets": mount.get("onlytargetcategory", ""),
-        "bad_targets": mount.get("badtargetcategory", ""),
     }
 
 
@@ -153,6 +172,7 @@ def main():
 
     defs = load([files[n] for n in wanted])
     classes = armor_classes()
+    moves = move_classes()
     commit = subprocess.run(["git", "-C", str(root), "log", "-1", "--format=%H %ad", "--date=short"],
                             capture_output=True, text=True).stdout.strip()
     units = {}
@@ -171,12 +191,11 @@ def main():
             "speed": udef.get("speed", 0.0),
             "sight": udef.get("sightdistance", 0.0),
             "radius": round(radius(udef), 2),
-            "footprint": round(footprint(udef), 2),
             "armor": classes.get(name, "standard"),
             "air": bool(udef.get("canfly")),
             "builder": bool(udef.get("workertime")),
-            # `alldefs_post` widens every unit's slope tolerance by half before the engine sees it.
-            "max_slope": int(udef["maxslope"] * 1.5 + 0.5) if "maxslope" in udef else 0,
+            "max_slope": moves.get(udef.get("movementclass", ""), (0, 0.0))[0],
+            "max_depth": moves.get(udef.get("movementclass", ""), (0, 0.0))[1],
             "weapons": weapons,
         }
     print(json.dumps({

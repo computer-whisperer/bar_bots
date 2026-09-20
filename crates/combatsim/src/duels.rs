@@ -79,6 +79,8 @@ pub struct Agreement {
     pub same_sign: usize,
     pub mean_absolute_error: f32,
     pub correlation: f32,
+    /// Slope of simulated margin against table margin: above 1 the simulation is more decisive than the engine.
+    pub slope: f32,
     /// Table margin against simulated margin, per pairing, worst first.
     pub misses: Vec<(String, String, f32, f32)>,
 }
@@ -103,8 +105,20 @@ pub fn validate(rules: &Rules, pairs: &[Pair], spacing: f32, reps: u32, energy: 
     let n = points.len().max(1) as f32;
     agreement.mean_absolute_error = points.iter().map(|(a, b)| (a - b).abs()).sum::<f32>() / n;
     agreement.correlation = correlation(&points);
+    agreement.slope = slope(&points);
     agreement.misses.sort_by(|a, b| (b.2 - b.3).abs().total_cmp(&(a.2 - a.3).abs()));
     agreement
+}
+
+fn slope(points: &[(f32, f32)]) -> f32 {
+    let n = points.len() as f32;
+    if n < 2.0 {
+        return 0.0;
+    }
+    let (mx, my) = (points.iter().map(|p| p.0).sum::<f32>() / n, points.iter().map(|p| p.1).sum::<f32>() / n);
+    let sxy: f32 = points.iter().map(|(x, y)| (x - mx) * (y - my)).sum();
+    let sxx: f32 = points.iter().map(|(x, _)| (x - mx) * (x - mx)).sum();
+    if sxx <= 0.0 { 0.0 } else { sxy / sxx }
 }
 
 fn correlation(points: &[(f32, f32)]) -> f32 {

@@ -53,14 +53,12 @@ pub struct Weapon {
     /// salvo, `spray` once a projectile.
     pub accuracy: f32,
     pub spray: f32,
-    pub moving_accuracy: f32,
     /// 0 (the engine's default) means the shot leads a moving target by 0 to 2x the right amount; 1 means exactly.
     pub predict_boost: f32,
     /// Elmos of lead the weapon will not exceed; negative is unlimited.
     pub lead_limit: f32,
     pub energy_per_shot: f32,
     pub only_targets: String,
-    pub bad_targets: String,
 }
 
 /// The engine's own conversion from a weapondef's aim-error number to an angle, `WeaponDef.cpp`'s `AccuracyToSin`.
@@ -107,16 +105,17 @@ pub struct Unit {
     /// Elmos per second.
     pub speed: f32,
     pub sight: f32,
-    /// Hit radius: a shot that lands within it hits the unit itself.
+    /// Collision radius, from the unit's collision volume: a shot that lands within it hits the unit, and two
+    /// units cannot get closer than the sum of two of these.
     pub radius: f32,
-    /// Radius of the ground it occupies (footprint squares are 8 elmos). Units cannot get closer than the sum of
-    /// two of these, which is what stops a blob from stacking on the front rank.
-    pub footprint: f32,
     pub armor: String,
     pub air: bool,
     pub builder: bool,
-    /// Engine slope units (255 = vertical), already widened by `alldefs_post`.
+    /// The steepest ground this unit's movement class can stand on, in the engine's slope units (the terrain
+    /// grid's own scale), and the deepest water it can wade. Both come from `gamedata/movedefs.lua`, not from the
+    /// unit file's legacy `maxslope`.
     pub max_slope: i32,
+    pub max_depth: f32,
     pub weapons: Vec<Weapon>,
 }
 

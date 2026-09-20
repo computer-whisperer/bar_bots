@@ -44,13 +44,6 @@ impl Field {
         Field { cell, width, height, heights: vec![0; width * height], slopes: vec![0; width * height] }
     }
 
-    pub fn height_at(&self, at: Vec2) -> f32 {
-        match self.index(at) {
-            Some(i) => f32::from(self.heights[i]),
-            None => 0.0,
-        }
-    }
-
     fn index(&self, at: Vec2) -> Option<usize> {
         let (x, z) = ((at.x / self.cell) as i32, (at.z / self.cell) as i32);
         if x < 0 || z < 0 || x >= self.width as i32 || z >= self.height as i32 {
@@ -59,10 +52,10 @@ impl Field {
         Some(z as usize * self.width + x as usize)
     }
 
-    /// Cells a unit of this slope tolerance can stand in. Water is impassable: land fights only.
-    pub fn passable(&self, max_slope: i32) -> Vec<bool> {
+    /// Cells a unit of this movement class can stand in: gentle enough, and not deeper than it can wade.
+    pub fn passable(&self, max_slope: i32, max_depth: f32) -> Vec<bool> {
         (self.heights.iter().zip(&self.slopes))
-            .map(|(&height, &slope)| i32::from(slope) <= max_slope && height >= 0)
+            .map(|(&height, &slope)| i32::from(slope) <= max_slope && f32::from(height) >= -max_depth)
             .collect()
     }
 
