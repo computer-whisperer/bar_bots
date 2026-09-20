@@ -7,7 +7,7 @@ records who is left. It exists to fill the matchup table the brain and the LLM c
 ```
 duel (--units a,b,c | --ours a,b --theirs c,d | --pairs a:b,c:d)
      [--reps 4] [--budget 1200 | --count N] [--parallel 2] [--sites 3] [--duels-per-match 45] [--time-limit 240]
-     [--sweep-waves 3] [--speed 50] [--map NAME] [--label TEXT] [--base-port 9500]
+     [--sweep-waves 3] [--spacing 56] [--speed 50] [--map NAME] [--label TEXT] [--base-port 9500]
 duel --report DIR [duels.csv ...]      rebuild the tables in DIR (from its own duels.csv, or merge the files named)
 ```
 `--units` runs every pair from the list, each unit against itself included; `--ours/--theirs` the cross product;
@@ -43,7 +43,10 @@ against column unit, mean margin x 100), `batch.json`, and one directory per eng
   army's metal, each survivor weighted by its health. **Margin** = own `value_left` minus the enemy's: +1 is a flawless
   win, -1 a wipe without scratching them. `damage_taken` sums the engine's damage events (hit points, overkill
   included). `contact_seconds` is the time to the first damage.
-- **Clearing.** Survivors self-destruct; then crawling bombs (`corroach`) are spawned on a 200-elmo grid over where
+- **Clearing.** Survivors self-destruct. BAR's "Self-Destruct Resign" gadget (`luarules/gadgets/game_selfd_resign.lua`)
+  cancels a team's first two attempts to destroy 95% of its units at once, which a large surviving army beside one
+  commander is, so an order not carried out after 8 s is given again (never sooner: a second order while the 5 s
+  countdown runs cancels the first). Then crawling bombs (`corroach`) are spawned on a 200-elmo grid over where
   units died and set off, `--sweep-waves` times, to destroy the wrecks. Without this, results drift within a match:
   80 duels on one site took 27 s -> 41 s each as wrecks piled up, and Rocketeer-against-Incisor read -0.10 instead of
   -0.36 (wrecks stop rockets). With three waves both stay flat over 80 duels (batches `wrecks`, `wrecks-swept`).
@@ -55,9 +58,15 @@ against column unit, mean margin x 100), `batch.json`, and one directory per eng
 | Wrecks | `wrecks` / `wrecks-swept` | drift without sweeping, none with (above) |
 | Site and speed | `speed200`: 3 pairings x 30 at speed 200 on two sites | margins per site -0.46 / -0.43, -0.35 / -0.37, -0.21 / -0.22; same as speed 50 (-0.43, -0.36) |
 
+| Formation spacing | `sp56`..`sp160`, `t1-matrix-wide` | decides area-damage matchups: Pawn against Mace -0.45 / -0.02 / +0.09 / +0.19 at 56 / 100 / 120 / 160. Run both `--spacing 56` and `--spacing 100` before believing a row |
+| Large armies at wide spacing | `scouts-wide` | 48 of 48 spawned, 57-Tick armies included. Units are claimed within the formation's own extent + 150; a fixed 600 radius missed rear ranks, and the first wide matrix had 112 `spawn_failed` of 1092 (deleted, not used) |
+
+Known flaw: the site rectangle leaves 170 elmos behind the front rank, so rear ranks of big or widely spaced armies
+stand outside the ground that was checked for flatness.
+
 ## Cost
-An engine start is ~30 s; after that two sites together finish about two duels a second of wall time at `--speed 200`
-(a duel is 20-60 game seconds plus ~10 of clearing). One engine uses ~3 GB and about two cores.
+An engine start is ~30 s. The full 23-unit table (2184 duels) took 568 s of wall time on two engines at `--speed 200`
+with nine other engines busy on the machine: ~4 duels a second (a duel is ~25 game seconds plus ~10 of clearing). One engine uses ~3 GB and about two cores.
 
 ## What a duel is not
 No micro (no kiting, no retreat, no focus fire beyond the engine's own targeting), no terrain, no mixed armies, no

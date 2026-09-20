@@ -105,10 +105,9 @@ fn rect_distance(centre: Vec3, point: Vec3) -> f32 {
 }
 
 /// Positions for `count` units: ranks run north-south through `front`, further ranks stack away from the enemy.
-pub fn formation(front: Vec3, faces_east: bool, count: u32) -> Vec<Vec3> {
-    const SPACING: f32 = 56.0;
+pub fn formation(front: Vec3, faces_east: bool, count: u32, spacing: f32) -> Vec<Vec3> {
     const PER_RANK: u32 = 8;
-    let back = if faces_east { -SPACING } else { SPACING };
+    let back = if faces_east { -spacing } else { spacing };
     (0..count)
         .map(|i| {
             let (rank, file) = (i / PER_RANK, i % PER_RANK);
@@ -116,7 +115,7 @@ pub fn formation(front: Vec3, faces_east: bool, count: u32) -> Vec<Vec3> {
             Vec3 {
                 x: front.x + back * rank as f32,
                 y: front.y,
-                z: front.z + (file as f32 - (in_rank - 1) as f32 / 2.0) * SPACING,
+                z: front.z + (file as f32 - (in_rank - 1) as f32 / 2.0) * spacing,
             }
         })
         .collect()

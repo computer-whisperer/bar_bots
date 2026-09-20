@@ -29,8 +29,9 @@ const DESTRUCT_RETRY: i32 = 8 * FPS;
 const SWEEP_BOMBS: [&str; 2] = ["corroach", "armvader"];
 /// Self-destruct takes a few seconds, retries and bombing a few more; a site still not clear by now is abandoned.
 const CLEANUP_ALLOWANCE: i32 = 120 * FPS;
-/// A spawned army stands within this distance of its front rank's centre.
-const CLAIM_RADIUS: f32 = 600.0;
+/// Spawned units are recognised by type and by standing no further than this beyond their formation's furthest
+/// place; bombs by standing this near the wreckage.
+const CLAIM_MARGIN: f32 = 150.0;
 
 /// What the matches of a batch share: the duels still to run and where results go.
 pub struct Batch {
@@ -41,6 +42,8 @@ pub struct Batch {
     pub time_limit: i32,
     /// Rounds of bombing after each duel: wrecks take one or two to become heaps, heaps another.
     pub sweep_waves: u32,
+    /// Elmos between neighbours in a spawned formation; tight ranks flatter area damage.
+    pub spacing: f32,
     pub on_result: Box<dyn Fn(&DuelResult) + Send + Sync>,
 }
 
@@ -197,7 +200,7 @@ impl Director {
             let Some(duel) = &mut field.duel else { continue };
             let bomb = SWEEP_BOMBS.iter().find_map(|name| self.defs.get(*name)).map(|def| def.id);
             let sweep = bomb.map(|bomb| (bomb, self.batch.sweep_waves));
-            if let Some(result) = advance(duel, team, tick, self.batch.time_limit, sweep, &mut commands) {
+            if let Some(result) = advance(duel, team, tick, self.batch.time_limit, sweep, self.batch.spacing, &mut commands) {
                 let result = DuelResult { match_index: self.match_index, site: index, ..result };
                 (self.batch.on_result)(&result);
                 self.batch.results.lock().unwrap().push(result);
@@ -288,6 +291,7 @@ fn advance(
     tick: &Tick,
     time_limit: i32,
     sweep: Option<(UnitDefId, u32)>,
+    spacing: f32,
     commands: &mut Vec<Command>,
 ) -> Option<DuelResult> {
     let frame = tick.frame;
@@ -298,7 +302,9 @@ fn advance(
     // What this team's snapshot says about its army.
     if matches!(duel.phase, Phase::Spawning { .. }) {
         // Spawned units are recognised by type and place; the previous duel's are all gone by now.
-        let arrivals = tick.snapshot.own_units.iter().filter(|u| u.def == army.def && u.pos.dist2d(army.front) < CLAIM_RADIUS);
+        let places = sites::formation(army.front, army.faces_east, army.count, spacing);
+        let reach = places.iter().map(|p| p.dist2d(army.front)).fold(0.0, f32::max) + CLAIM_MARGIN;
+        let arrivals = tick.snapshot.own_units.iter().filter(|u| u.def == army.def && u.pos.dist2d(army.front) < reach);
         for unit in arrivals {
             if army.units.len() < army.count as usize {
                 army.units.insert(unit.id);
@@ -339,7 +345,7 @@ fn advance(
             }
             if !army.spawn_ordered {
                 army.spawn_ordered = true;
-                let places = sites::formation(army.front, army.faces_east, army.count);
+                let places = sites::formation(army.front, army.faces_east, army.count, spacing);
                 commands.extend(places.into_iter().map(|at| Command::GiveUnit { def: army.def, at }));
             }
             let since = *since;
@@ -400,7 +406,7 @@ fn advance(
                 Sweep::Bombs { waves_left, spawned_at, set_off } if sweeper => {
                     let (Some((bomb, _)), Some([x0, z0, x1, z1])) = (sweep, duel.wreckage) else { unreachable!("checked on entry") };
                     let bombs = tick.snapshot.own_units.iter().filter(|u| {
-                        u.def == bomb && u.pos.x > x0 - CLAIM_RADIUS && u.pos.x < x1 + CLAIM_RADIUS && (u.pos.z - front.z).abs() < 2.0 * CLAIM_RADIUS
+                        u.def == bomb && u.pos.x > x0 - CLAIM_MARGIN && u.pos.x < x1 + CLAIM_MARGIN && u.pos.z > z0 - CLAIM_MARGIN && u.pos.z < z1 + CLAIM_MARGIN
                     });
                     match *spawned_at {
                         None => {
