@@ -95,7 +95,8 @@ impl Brain {
     /// at an empty spot for five minutes while the home group was committed to it.
     fn unscouted_box_spots(&self, from: Vec3, frame: i32) -> Vec<Vec3> {
         let mut spots = self.spots_to_look_at(from, frame, 0.0, 1.0);
-        spots.sort_by(|a, b| a.dist2d(from).total_cmp(&b.dist2d(from)));
+        // Round the presumed base first (rush-15: the first Pawn went to a stale spot in the middle of the box).
+        spots.sort_by(|a, b| self.spot_likelihood(*b).total_cmp(&self.spot_likelihood(*a)).then(a.dist2d(from).total_cmp(&b.dist2d(from))));
         spots
     }
 
