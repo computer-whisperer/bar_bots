@@ -107,3 +107,11 @@ contact response replaces the defend rules (deleted first). 3. Posture replaces 
   the guard answer, walking distances (chases are priced over straight lines), the threat memory for intent, asset
   prices from measurement (1.7, 3 and 20 are guesses). First A/B ran against BARb easy by mistake (contact-1): no
   clear difference; re-run against medium as contact-2.
+- 2026-09-20, part 2 measured (contact-2, 56 games an arm on three maps against BARb medium, results within noise):
+  the response cuts what dies at home (army metal lost within 1500 of home per game-minute 88 / 219 / 54 against
+  109 / 287 / 150 on Quicksilver / Mithril / Isidis) and barely the extractors (0.97 / 1.55 / 1.30 lost a minute
+  against 0.99 / 1.63 / 1.51), and pays for it 1500-3000 out (303 / 288 / 329 against 308 / 117 / 189): answers
+  chased into what follows the party, the loss the simulator under-predicts. 80 decisions a game on lone units. What
+  to change before part 3: price the answer against the party plus the enemy soldiers remembered within reach of it
+  (`enemy_soldiers` with places, or the threat memory), no chase beyond held ground, and a floor of two on an answer.
+

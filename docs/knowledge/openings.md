@@ -213,3 +213,24 @@ minute 6 on. The claim stands for the opening measures only; an opening objectiv
 (`Objective::Tempo`'s `exposed`, open-search-3-ab).
 **Used by.** H-OPEN-SEARCH.
 
+
+### K-open-early-pawn-pressure-is-standard
+**Claim.** Early raider pressure (a lab by about 0:50, then a handful of Pawns or Grunts before anything else, arriving
+at the opponent's base before 2:30) is standard 1v1 play on maps like Quicksilver, in basically every game; 1v1 games
+rarely reach 20 minutes. Against BARb medium the handful is enough to win outright: it has two LLTs and no soldier at
+2:30 and offers the kill. Long macro games, the kind our bot is meant to be capable of, come from 2v2 or bigger on
+larger maps, where the game stabilises long enough.
+**Status.** stated by the user 2026-09-20 from watching an experienced player's replay and his own knowledge of the
+game; the replay's record agrees (below). Not measured over many games.
+**Evidence.** `run/matches/*-replay-player2-vs-medium` (run/replay_match.py on the player's demo): lab by 0:50, 5
+Pawns at minute 2 and 12 at minute 3 with metal income held at 6, BARb's first extractor dead at 2:28, its lab at
+3:30, its commander at 4:45; the player lost 15 Pawns; BARb built no soldier. The second replay (Ben vs medium, `*-replay-ben-vs-medium`) is the
+same shape with expansion beside it: 3 / 7 / 10 / 15 Pawns at minutes 2-5 while extractors go 2 to 9 by minute 6
+(income 6 to 16); BARb, raided from 2:25, never left 2 extractors and income 6, had 2-5 Pawns and 3 LLTs, and its
+commander died at 6:08; Ben lost 22 Pawns and one resurrection bot. Neither player's commander left its base.
+**Would be wrong if.** Experienced players opened with constructors and a turret against each other on this map and
+raided only from minute 4; or the same rush lost to BARb medium in half of a batch.
+**Used by.** (candidates) the opening search's army term: raiders early, weighted by a first-contact time near 2:30
+rather than metal alone (the design's leftover); H-ARMY-CONTACT: the first parties to answer are 5-12 Pawns at 2:30
+with two turrets and no army of ours, which is a turret and commander question; the commander-unit rules of the
+opening design, step 4 (BARb's commander does not fight either).
