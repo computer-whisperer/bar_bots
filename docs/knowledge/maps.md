@@ -124,7 +124,8 @@ The map site lists 12.7.
 **Claim.** Placing the enemy's base at the mean of every enemy building we remember drags it toward us, because what we
 see is mostly its forward turrets and extractors; the walking-distance line between "its" spots and "ours" follows, and
 the constructors (H-ECO-OWN-HALF) are left with almost nothing to take.
-**Status.** observed once (2026-09-20), mechanism read in the code; A/B running (v24).
+**Status.** supported for the south-east (2026-09-20, v24: 14.8 v 4.2 extractors at minute 15 with the fix, 9.6 v 9.8 without; 5-0-1 against 4-0-2);
+not the north-west's limit, whose extractor curve did not move.
 **Evidence.** commander-5-tempo-brief, minute 23: "free spots on our side 2" with 7 extractors held, of 38 reachable
 spots (15 are ours at game start); army 11,200 v 4,100 and extractors flat for 19 minutes; the commander's
 `expansion_radius` 3000 changed nothing because the own-half rule applied beneath it; constructors fell through to
