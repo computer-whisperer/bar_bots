@@ -220,7 +220,6 @@ impl Brain {
         let is_commander = |e: &bot_protocol::EnemyUnit| e.def.is_some_and(|d| self.world.def(d).is_some_and(|d| d.name.ends_with("com") && d.build_speed > 0.0));
         let in_sight: Vec<&bot_protocol::EnemyUnit> = tick.snapshot.enemies.iter().filter(|e| e.pos.dist2d(centre) < CONTACT_RADIUS).collect();
         let armed_in_sight = in_sight.iter().any(|e| armed(e) && !is_commander(e));
-        let commander_in_sight = in_sight.iter().any(|e| is_commander(e));
         let commander_at = in_sight.iter().find(|e| is_commander(e)).map(|e| e.pos);
         let armed_in_sight_at: Vec<Vec3> = in_sight.iter().filter(|e| armed(e)).map(|e| e.pos).collect();
         let commander_near = commander_at.is_some_and(|at| at.dist2d(centre) < COMMANDER_REACH);
