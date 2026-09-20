@@ -144,6 +144,11 @@ fn tool_list() -> Value {
           "description": "Ask for a light defence turret at a position; the next free constructor builds it near there.",
           "inputSchema": { "type": "object", "additionalProperties": false, "required": ["x", "z"],
               "properties": { "x": { "type": "number" }, "z": { "type": "number" } } } },
+        { "name": "expansion",
+          "description": "Which metal spots the constructors take. Spots are numbered as in the map's metal_spots list (`n`). `take_first`: spots taken before any other, in this order, wherever they lie and even if they were raided before (this is also how you order a lost extractor rebuilt, or leave it lost by not listing it). `leave_alone`: spots never taken, e.g. ones you cannot hold. Other spots follow the bot's rule (nearest first, within expansion_radius, skipping recently raided ones without cover). Each call replaces the whole plan; {} clears it.",
+          "inputSchema": { "type": "object", "additionalProperties": false, "properties": {
+              "take_first": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+              "leave_alone": { "type": "array", "items": { "type": "integer", "minimum": 0 } } } } },
         { "name": "wait",
           "description": "Set when you are next woken; the settings hold until you change them. The game is paused during your turn and runs fast between turns, so a long quiet wait costs nothing and a raid still wakes you at once. You are always woken for a base attack, the commander under fire, or a wiped-out wave.",
           "inputSchema": { "type": "object", "additionalProperties": false, "properties": {
@@ -201,17 +206,25 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, S
         }
         "request_turret" => {
             let at = position(arguments, "request_turret")?.ok_or("needs x and z")?;
-            let (home, enemy) = {
-                let briefing = shared.briefing.lock().unwrap();
-                (briefing.home.clone(), briefing.presumed_enemy_start.clone())
-            };
-            let distance = |p: &super::shared::Place| (p.x as f32 - at.x).hypot(p.z as f32 - at.z);
-            if distance(&enemy) < distance(&home) {
-                return Err("that is on the enemy's half of the map; a constructor would die walking there".into());
+            // Anywhere we already stand: a turret asked for on ground we hold nothing near is a constructor sent to die.
+            let field = shared.field.lock().unwrap().clone();
+            let held = field.extractors.iter().map(|x| &x.at).chain(field.squads.iter().filter_map(|q| q.centre.as_ref())).chain(field.turrets.iter());
+            let near = held.map(|p| (p.x as f32 - at.x).hypot(p.z as f32 - at.z)).fold(f32::INFINITY, f32::min);
+            if near > 1000.0 {
+                return Err(format!("nothing of ours (extractor, turret or squad) within 1000 of there (nearest is {near:.0} away); a constructor would walk there alone. Move a squad there first"));
             }
             let mut orders = shared.field_orders.lock().unwrap();
             orders.turret_requests.push(at);
             Ok("turret requested".into())
+        }
+        "expansion" => {
+            let list = |key: &str| -> Vec<usize> {
+                arguments.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).map(|n| n as usize).collect()).unwrap_or_default()
+            };
+            let mut orders = shared.field_orders.lock().unwrap();
+            orders.spot_priority = list("take_first");
+            orders.spot_avoid = list("leave_alone");
+            Ok(format!("expansion plan set: {} to take first, {} left alone", orders.spot_priority.len(), orders.spot_avoid.len()))
         }
         "set_directives" => set_directives(arguments, shared),
         _ => Err(format!("unknown tool {name}")),

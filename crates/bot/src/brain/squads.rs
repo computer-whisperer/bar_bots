@@ -43,6 +43,8 @@ impl Brain {
             let mut orders = shared.field_orders.lock().unwrap();
             self.turret_requests.append(&mut orders.turret_requests);
             self.production_weights = orders.production.clone();
+            self.spot_priority = orders.spot_priority.clone();
+            self.spot_avoid = orders.spot_avoid.clone();
             let names: Vec<String> = orders.squads.keys().cloned().collect();
             for name in names {
                 let request = orders.squads.get_mut(&name).expect("key just listed");
@@ -189,6 +191,7 @@ impl Brain {
             .filter(|u| u.def == kit.extractor)
             .map(|x| ExtractorStatus {
                 at: self.place(x.pos),
+                spot: self.world.hello.metal_spots.iter().position(|s| s.dist2d(x.pos) < 100.0),
                 enemies_within_600: tick.snapshot.enemies.iter().filter(|e| e.pos.dist2d(x.pos) < 600.0).count(),
                 turret_within_300: turrets.iter().any(|t| t.dist2d(x.pos) < 300.0),
             })
@@ -256,6 +259,14 @@ impl Brain {
             buildable,
             production_weights: self.production_weights.clone().into_iter().collect(),
             turret_requests_pending: self.turret_requests.len(),
+            spot_plan: {
+                let name = |i: &usize| self.world.hello.metal_spots.get(*i).map_or(format!("#{i}"), |s| format!("#{i} {}", self.world.grid(*s)));
+                let list = |spots: &[usize]| spots.iter().map(name).collect::<Vec<_>>().join(", ");
+                match (self.spot_priority.is_empty(), self.spot_avoid.is_empty()) {
+                    (true, true) => String::new(),
+                    _ => format!("take first: {}; leave alone: {}", list(&self.spot_priority), list(&self.spot_avoid)),
+                }
+            },
         };
     }
 }

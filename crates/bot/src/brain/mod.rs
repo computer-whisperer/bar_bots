@@ -55,6 +55,9 @@ pub struct Brain {
     production_weights: std::collections::BTreeMap<String, u32>,
     /// Turrets the commander asked for, oldest first.
     turret_requests: Vec<Vec3>,
+    /// D-EXPANSION-PLAN: the commander's spots to take first, in order, and spots to leave alone (indices into the map's list).
+    spot_priority: Vec<usize>,
+    spot_avoid: Vec<usize>,
     /// How often each heuristic (docs/heuristics.md) acted since the last status line.
     fired: BTreeMap<&'static str, u32>,
     /// Present when a strategist is attached; the brain publishes to it and reads directives from it.
@@ -117,6 +120,8 @@ impl Brain {
             wake: Default::default(),
             production_weights: Default::default(),
             turret_requests: Vec::new(),
+            spot_priority: Vec::new(),
+            spot_avoid: Vec::new(),
             fired: BTreeMap::new(),
             strategist,
             directives: Directives::default(),

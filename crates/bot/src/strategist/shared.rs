@@ -204,6 +204,10 @@ pub struct FieldOrders {
     /// Unit name to weight. Empty: the heuristic batch.
     pub production: BTreeMap<String, u32>,
     pub turret_requests: Vec<Vec3>,
+    /// Metal spots by their number in the map's list: taken first and in this order (wherever they are, raided or
+    /// not), and never taken.
+    pub spot_priority: Vec<usize>,
+    pub spot_avoid: Vec<usize>,
 }
 
 /// What the commander is shown each turn, beyond the briefing.
@@ -219,6 +223,8 @@ pub struct Field {
     pub buildable: Vec<(String, u32)>,
     pub production_weights: Vec<(String, u32)>,
     pub turret_requests_pending: usize,
+    /// The expansion plan in force, as spot numbers with their grid cells, for the report.
+    pub spot_plan: String,
     pub score: Score,
 }
 
@@ -267,6 +273,8 @@ pub struct SquadStatus {
 #[derive(Clone, Debug, Serialize)]
 pub struct ExtractorStatus {
     pub at: Place,
+    /// The spot's number in the map's list, as the `expansion` tool takes it.
+    pub spot: Option<usize>,
     pub enemies_within_600: usize,
     pub turret_within_300: bool,
 }

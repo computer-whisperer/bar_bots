@@ -154,7 +154,11 @@ LLM levers belong. BARb is the reference for economy and army hoarding, not for 
   there, engage enemies that come inside the radius, go back. An **order** `{kind: move|fight, x, z}` is a one-off.
 - **Unit mix.** `set_production {weights: {unit name: n}}`: factories pick the type furthest below its share. The
   constructor floor stays heuristic.
-- **Turrets.** `request_turret {x, z}`: the next free constructor builds one there.
+- **Turrets.** `request_turret {x, z}`: the next free constructor builds one there. Refused where nothing of ours stands
+  within 1000.
+- **Expansion.** `expansion {take_first: [n], leave_alone: [n]}` by the spot numbers of the map's list: which ground
+  is taken, retaken or given up is the commander's call; the rest follows the bot's nearest-first rule inside
+  `expansion_radius`, which replaces the bot's own-half rule when set.
 - **Turns (revised the same day after watching a real-time run: most turns were "no change", and the repeated
   identical reports are poor context).** Lockstep: with `WITHIN_REASON_LOCKSTEP` the shim waits for the bot's answer
   to every tick, so the bot pauses the game by holding its reply while the commander thinks, and the game runs at

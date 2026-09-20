@@ -214,9 +214,10 @@ impl Brain {
             .hello
             .metal_spots
             .iter()
-            .map(|s| {
+            .enumerate()
+            .map(|(n, s)| {
                 let walk = self.reachable_on_foot(*s).then(|| self.walk_from_home(*s) as i32);
-                json!({ "grid": self.world.grid(*s), "x": s.x as i32, "z": s.z as i32, "walk_from_home": walk })
+                json!({ "n": n, "grid": self.world.grid(*s), "x": s.x as i32, "z": s.z as i32, "walk_from_home": walk })
             })
             .collect();
         json!({
@@ -224,7 +225,7 @@ impl Brain {
             "grid": "8x8 cells; columns A-H run west to east (x), rows 1-8 run north to south (z)",
             "our_start": self.place(self.home), "presumed_enemy_start": self.place(self.enemy_start),
             "metal_spots": spots,
-            "metal_spots_note": "walk_from_home is the walking distance for our bots; null means they cannot walk there",
+            "metal_spots_note": "n is the spot's number for the `expansion` tool; walk_from_home is the walking distance for our bots; null means they cannot walk there",
             "terrain": self.terrain_sketch(),
         })
     }

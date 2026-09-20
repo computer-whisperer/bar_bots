@@ -12,6 +12,7 @@ pub struct Seen {
     turrets: usize,
     pool: String,
     production: String,
+    spot_plan: String,
 }
 
 fn counted(items: &[(String, usize)]) -> String {
@@ -117,7 +118,7 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     let extractors: Vec<String> = field
         .extractors
         .iter()
-        .map(|x| format!("{} ({}, {}){}", x.at.grid, x.at.x, x.at.z, if x.turret_within_300 { " T" } else { "" }))
+        .map(|x| format!("{}{} ({}, {}){}", x.spot.map_or(String::new(), |n| format!("#{n} ")), x.at.grid, x.at.x, x.at.z, if x.turret_within_300 { " T" } else { "" }))
         .collect();
     if full {
         lines.push(format!("our extractors (T = turret within 300): {}", extractors.join("; ")));
@@ -132,6 +133,10 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         }
     }
     seen.extractors = extractors;
+    if !field.spot_plan.is_empty() && (full || field.spot_plan != seen.spot_plan) {
+        lines.push(format!("expansion plan: {}", field.spot_plan));
+    }
+    seen.spot_plan = field.spot_plan.clone();
     if full || field.turrets.len() != seen.turrets {
         let turrets: Vec<String> = field.turrets.iter().map(|t| format!("{} ({}, {})", t.grid, t.x, t.z)).collect();
         lines.push(format!("turrets: {}; requests pending {}", if turrets.is_empty() { "none".into() } else { turrets.join("; ") }, field.turret_requests_pending));

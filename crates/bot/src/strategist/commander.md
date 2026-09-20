@@ -68,13 +68,18 @@ Your levers:
 - `set_production`: the unit mix, by unit name and weight. Look at what is killing us in the fights list and at `buildable`
   (with metal costs) and choose counters; cheap raiders do not hold a line against tanks. Constructors are built by the bot
   as it needs them (`min_constructors` in `set_directives` raises the floor).
-- `request_turret`: a light turret near a position, built by the next free constructor. Squads fight far better under one.
+- `request_turret`: a light turret near a position, built by the next free constructor; refused where nothing of ours
+  stands within 1000. Squads fight far better under one.
 - `set_directives`: the bot's standing orders. `economy_focus` (expand, production, defence, energy) reorders what
   constructors do. `expansion_radius` is how far on foot from home constructors take spots; left unset the bot keeps to the half of the
   map nearer to us than to the opponent, and a radius replaces that rule, so it is also how you take the opponent's side: a small radius means no
   growth, so set it to what you intend to hold, and move the army out to hold it, rather than shrinking it to what the army
   covers from home. `commander_station` puts the commander somewhere (it is a strong builder and fighter, and the game is
   lost the moment it dies). Also wave size, stance, army station, attack target. Directives expire; renew the ones you mean.
+- `expansion`: which metal spots the constructors take, by their number `n` in the map's list: `take_first` (in your
+  order, wherever they lie, raided before or not: also how a lost extractor gets rebuilt, or is given up by leaving it
+  out) and `leave_alone` (ground you cannot hold). Everything else follows the bot's nearest-first rule inside
+  `expansion_radius`. Name the ground your squads already stand on or are moving to; a constructor walks alone.
 - `wait`: when to wake you next (see below). Call it last; it ends your turn.
 - `note`: a sentence of reasoning, kept across your session restarts. Record what you have learned about this opponent and
   what your plan is. A note is a belief, not a fact: when a session starts with old notes, check the plan in them against
