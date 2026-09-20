@@ -19,18 +19,21 @@ pub struct Roster {
     raider: &'static str,
     skirmisher: &'static str,
     artillery: &'static str,
+    /// The unit the line is made of, and a second one to go with it (K-units-duel-*).
+    line: &'static str,
+    second: &'static str,
 }
 
 pub const ROSTERS: [Roster; 2] = [
     Roster {
         commander: "armcom", extractor: "armmex", solar: "armsolar", wind: "armwin", advanced_solar: "armadvsol",
         converter: "armmakr", lab: "armlab", turret: "armllt", nano: "armnanotc", constructor: "armck",
-        raider: "armpw", skirmisher: "armrock", artillery: "armham",
+        raider: "armpw", skirmisher: "armrock", artillery: "armham", line: "armham", second: "armwar",
     },
     Roster {
         commander: "corcom", extractor: "cormex", solar: "corsolar", wind: "corwin", advanced_solar: "coradvsol",
         converter: "cormakr", lab: "corlab", turret: "corllt", nano: "cornanotc", constructor: "corck",
-        raider: "corak", skirmisher: "corstorm", artillery: "corthud",
+        raider: "corak", skirmisher: "corstorm", artillery: "corthud", line: "corthud", second: "corstorm",
     },
 ];
 
@@ -51,6 +54,8 @@ pub struct Kit {
     pub raider: UnitDefId,
     pub skirmisher: UnitDefId,
     pub artillery: UnitDefId,
+    pub line: UnitDefId,
+    pub second: UnitDefId,
 }
 
 impl Roster {
@@ -71,6 +76,8 @@ impl Roster {
             raider: id(self.raider)?,
             skirmisher: id(self.skirmisher)?,
             artillery: id(self.artillery)?,
+            line: id(self.line)?,
+            second: id(self.second)?,
         })
     }
 }

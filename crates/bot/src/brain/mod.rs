@@ -6,6 +6,7 @@
 
 mod army;
 mod briefing;
+mod combat;
 mod economy;
 pub mod journal;
 mod squads;
@@ -46,6 +47,7 @@ pub struct Brain {
     repair_claims: HashMap<UnitId, i32>,
     /// When something of ours last died on our side of the map; no wave leaves while that is fresh.
     last_loss_at_home_frame: i32,
+    matchups: combat::Matchups,
     army: army::Army,
     squads: squads::Squads,
     wake: wake::WakeState,
@@ -105,6 +107,7 @@ impl Brain {
             hot_spots: Vec::new(),
             repair_claims: HashMap::new(),
             last_loss_at_home_frame: i32::MIN / 2,
+            matchups: Default::default(),
             army: army::Army::default(),
             squads: Default::default(),
             wake: Default::default(),

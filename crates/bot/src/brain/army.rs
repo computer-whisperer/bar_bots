@@ -7,6 +7,7 @@ use std::collections::HashSet;
 
 use bot_protocol::{Command, EnemyUnit, OwnUnit, Tick, UnitId, Vec3};
 
+use super::combat::Force;
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
 use crate::strategist::shared::Stance;
@@ -35,18 +36,25 @@ const BAD_STATION_RADIUS: f32 = 200.0;
 const OUTPOST_DISTANCE: f32 = 600.0;
 /// H-ARMY-HOME-GUARD: a wave leaves this many soldiers (those nearest the station) at home.
 const HOME_GUARD: usize = 6;
-/// H-ARMY-WAVE-GATE: a wave goes only at a target whose known defenders it outweighs by this factor. Turrets count
-/// for more than their metal, and an enemy commander for a fixed value.
+/// H-ARMY-WAVE-GATE: a wave goes only at a target where its predicted odds (`combat.rs`) against the known defenders
+/// are at least this. An enemy commander at home counts as a fixed value of turret.
 const WAVE_ADVANTAGE: f32 = 1.3;
-const TURRET_WORTH: f32 = 1.5;
 const COMMANDER_WORTH: f32 = 1500.0;
+/// H-ARMY-RETREAT: attackers whose odds against what they can see fall below this break off and go home; they
+/// are judged this often, against enemies within this distance of their leading group.
+const RETREAT_ODDS: f32 = 0.6;
+/// After breaking off, the army masses for this long before it may go again.
+const AFTER_RETREAT_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
+const RETREAT_CHECK_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
+const CONTACT_RADIUS: f32 = 1000.0;
+/// Responders are added until the odds against the raiders reach this.
+const RESPONSE_ODDS: f32 = 1.5;
 /// Known defenders are the remembered armed buildings and the soldiers in sight this close to the target.
 const DEFENDED_RADIUS: f32 = 900.0;
 /// No wave leaves within this long of losing something on our side of the map.
 const QUIET_BEFORE_WAVE_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
-/// H-ARMY-RESPONDERS: a few raiders are met by the nearest soldiers, this many per raider and at least this many,
+/// H-ARMY-RESPONDERS: raiders are met by the nearest soldiers, at least this many and as many as good odds take,
 /// not by the whole home group trailing across the map.
-const RESPONDERS_PER_RAIDER: usize = 3;
 const MIN_RESPONDERS: usize = 4;
 /// An idle attacker this close to the attack target has arrived and needs a new one.
 const ARRIVED_RADIUS: f32 = 400.0;
@@ -80,6 +88,8 @@ pub struct Army {
     /// Frame at which the current target was chosen, or last approached.
     target_since: i32,
     station_failures: u32,
+    /// When the attackers last broke off; no new wave for a while after.
+    last_retreat_frame: i32,
     /// Where the attackers are gathering before the assault, and since which frame.
     staging: Option<(Vec3, i32)>,
 }
@@ -186,25 +196,35 @@ impl Brain {
         }
     }
 
-    /// Metal worth of what we know defends `target`: remembered armed buildings, soldiers in sight, and the enemy
+    /// What we know stands within `radius` of `place`: remembered armed buildings, soldiers in sight, and the enemy
     /// commander if this is its base. A floor: what we have not seen is not counted.
-    fn known_defenders(&self, target: Vec3, visible: &[EnemyUnit]) -> f32 {
-        let worth = |def: bot_protocol::UnitDefId| self.world.def(def).filter(|d| d.weapon_count > 0).map_or(0.0, |d| d.metal_cost);
-        let turrets: f32 = self
-            .enemy_buildings
-            .values()
-            .filter(|(_, pos, _)| pos.dist2d(target) < DEFENDED_RADIUS)
-            .map(|(def, _, _)| worth(*def) * TURRET_WORTH)
-            .sum();
-        let soldiers: f32 = visible
-            .iter()
-            .filter(|e| e.pos.dist2d(target) < DEFENDED_RADIUS)
-            .filter_map(|e| e.def)
-            .filter(|def| self.world.def(*def).is_some_and(|d| d.speed > 0.0 && d.build_speed == 0.0))
-            .map(worth)
-            .sum();
-        let commander = if target.dist2d(self.enemy_start) < DEFENDED_RADIUS { COMMANDER_WORTH } else { 0.0 };
-        turrets + soldiers + commander
+    fn known_enemy_force(&self, place: Vec3, radius: f32, visible: &[EnemyUnit]) -> Force {
+        let mut force = Force::default();
+        for (def, pos, _) in self.enemy_buildings.values() {
+            if pos.dist2d(place) < radius
+                && let Some(d) = self.world.def(*def).filter(|d| d.weapon_count > 0)
+            {
+                force.turret_metal += d.metal_cost;
+            }
+        }
+        for enemy in visible.iter().filter(|e| e.pos.dist2d(place) < radius) {
+            let Some(def) = enemy.def else { continue };
+            if self.world.def(def).is_some_and(|d| d.speed > 0.0 && d.build_speed == 0.0 && d.weapon_count > 0) {
+                force.add(def);
+            }
+        }
+        if place.dist2d(self.enemy_start) < radius {
+            force.turret_metal += COMMANDER_WORTH / super::combat::TURRET_WORTH;
+        }
+        force
+    }
+
+    fn force_of(units: &[&OwnUnit]) -> Force {
+        let mut force = Force::default();
+        for unit in units {
+            force.add(unit.def);
+        }
+        force
     }
 
     /// A remembered building that our soldiers are standing next to and cannot see is gone.
@@ -337,14 +357,19 @@ impl Brain {
                     self.trigger("base-attack", tick.frame, format!("Our base is under attack: {count} enemies near {grid}."));
                 }
                 // An attack on the base is everyone's business; raiders at an outpost are met by the nearest few.
-                let raiders = snapshot.enemies.iter().filter(|e| e.pos.dist2d(intruder.pos) < RAID_RADIUS).count();
+                let mut nearest: Vec<&&OwnUnit> = home_group.iter().collect();
+                nearest.sort_by(|a, b| a.pos.dist2d(intruder.pos).total_cmp(&b.pos.dist2d(intruder.pos)));
                 let wanted = if rule == "H-ARMY-DEFEND" || !self.enabled("H-ARMY-RESPONDERS") {
                     home_group.len()
                 } else {
-                    (raiders * RESPONDERS_PER_RAIDER).max(MIN_RESPONDERS)
+                    // The nearest soldiers, as many as it takes for good odds against the raiders in sight there.
+                    let raiders = self.known_enemy_force(intruder.pos, RAID_RADIUS, snapshot.enemies.as_slice());
+                    let enough = (MIN_RESPONDERS..=nearest.len()).find(|&k| {
+                        let group: Vec<&OwnUnit> = nearest[..k].iter().map(|u| **u).collect();
+                        self.odds(&Self::force_of(&group), &raiders) >= RESPONSE_ODDS
+                    });
+                    enough.unwrap_or(nearest.len())
                 };
-                let mut nearest: Vec<&&OwnUnit> = home_group.iter().collect();
-                nearest.sort_by(|a, b| a.pos.dist2d(intruder.pos).total_cmp(&b.pos.dist2d(intruder.pos)));
                 commands.extend(nearest.iter().take(wanted).map(|u| Command::Fight { unit: u.id, to: intruder.pos, queue: false }));
             }
         } else {
@@ -360,15 +385,16 @@ impl Brain {
             let mut by_station: Vec<&OwnUnit> = home_group.clone();
             by_station.sort_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)));
             let wave: Vec<&OwnUnit> = by_station.into_iter().skip(guard).collect();
-            let quiet = tick.frame - self.last_loss_at_home_frame >= QUIET_BEFORE_WAVE_FRAMES;
+            let quiet = tick.frame - self.last_loss_at_home_frame >= QUIET_BEFORE_WAVE_FRAMES
+                && (self.army.last_retreat_frame == 0 || tick.frame - self.army.last_retreat_frame >= AFTER_RETREAT_FRAMES);
             // H-ARMY-WAVE-GATE: weigh the wave against what we know stands at the target.
-            let wave_value: f32 = wave.iter().filter_map(|u| self.world.def(u.def)).map(|d| d.metal_cost).sum();
-            let defenders = self.known_defenders(target, snapshot.enemies.as_slice());
-            let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || wave_value >= WAVE_ADVANTAGE * defenders;
+            let defenders = self.known_enemy_force(target, DEFENDED_RADIUS, snapshot.enemies.as_slice());
+            let odds = self.odds(&Self::force_of(&wave), &defenders);
+            let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || odds >= WAVE_ADVANTAGE;
             let ordered_attack = stance == Some(Stance::Attack);
             if may_launch && wave.len() >= wave_size && !ordered_attack && (!quiet || !outweighs) && tick.frame % (30 * FRAMES_PER_SECOND) == 0 {
                 eprintln!(
-                    "[ai {}] f={} wave held: {} soldiers worth {wave_value:.0} against {defenders:.0} known at ({:.0}, {:.0}){}",
+                    "[ai {}] f={} wave held: {} soldiers at odds {odds:.2} against what is known at ({:.0}, {:.0}){}",
                     self.ai(), tick.frame, wave.len(), target.x, target.z, if quiet { "" } else { "; losses at home in the last 30 s" }
                 );
             }
@@ -414,6 +440,35 @@ impl Brain {
                 "[ai {}] f={} attackers {} ({} idle) around ({cx:.0}, {cz:.0}), target ({:.0}, {:.0}), home group {}",
                 self.ai(), tick.frame, attackers.len(), idle, target.x, target.z, home_group.len()
             );
+        }
+
+        // H-ARMY-RETREAT: attackers facing a fight they are predicted to lose break off before they are spent. Judged
+        // from the leading group: the attackers within contact range of the nearest enemy in sight, against every
+        // enemy soldier and remembered turret within the same range of it.
+        if self.enabled("H-ARMY-RETREAT") && !attackers.is_empty() && tick.frame % RETREAT_CHECK_FRAMES == 0 && stance != Some(Stance::Attack) {
+            let contact = snapshot
+                .enemies
+                .iter()
+                .filter(|e| attackers.iter().any(|u| u.pos.dist2d(e.pos) < CONTACT_RADIUS))
+                .min_by(|a, b| a.pos.dist2d(self.home).total_cmp(&b.pos.dist2d(self.home)));
+            if let Some(contact) = contact {
+                let engaged: Vec<&OwnUnit> = attackers.iter().filter(|u| u.pos.dist2d(contact.pos) < CONTACT_RADIUS).copied().collect();
+                let theirs = self.known_enemy_force(contact.pos, CONTACT_RADIUS, snapshot.enemies.as_slice());
+                let odds = self.odds(&Self::force_of(&engaged), &theirs);
+                if odds < RETREAT_ODDS {
+                    self.fire("H-ARMY-RETREAT");
+                    eprintln!(
+                        "[ai {}] f={} retreat: {} attackers at odds {odds:.2} near ({:.0}, {:.0}); everyone home",
+                        self.ai(), tick.frame, engaged.len(), contact.pos.x, contact.pos.z
+                    );
+                    self.event(tick.frame, format!("attack broken off at {}: odds {odds:.2}", self.world.grid(contact.pos)));
+                    commands.extend(attackers.iter().map(|u| Command::Move { unit: u.id, to: rally, queue: false }));
+                    self.army.attackers.clear();
+                    self.army.staging = None;
+                    self.army.last_retreat_frame = tick.frame;
+                    return;
+                }
+            }
         }
 
         // `attackers` was drawn up before this tick's launch, so a wave launched just now is judged from the next tick.

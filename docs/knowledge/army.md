@@ -127,3 +127,18 @@ In every NW loss "they first have 1.5x our army" falls in minute 6-8, even on le
 on known enemy value, the same tags still led the tally.
 **Used by.** (next changes)
 
+
+
+### K-army-combat-prediction
+**Claim.** Once a fight is decisive (a side with a real force on the spot loses at least half of it), the side with the
+higher fighting power, metal value weighted by the duel table with turrets at 1.5x, loses the smaller share in 9 cases
+of 10. The matchup weighting adds only a point or two over plain metal in our games, because both sides field a narrow
+set of units. It says nothing about skirmishes and raids, where who loses less is a coin toss (56 %), and nothing about
+what we have not seen.
+**Status.** supported (2026-09-19)
+**Evidence.** `run/predict_check.py` over v17-truth-medium and v18-verdict-fixes (48 games): 273 decisive engagements,
+89 % right (plain metal 88 %), 93 % beyond 1.5:1, 94 % beyond 2:1, 96 % beyond 3:1; correlation of log power ratio with
+log loss-share ratio 0.85. The selection is by outcome (decisive fights only), so this is the accuracy given that a
+fight goes to the finish, not the accuracy of "should we start it".
+**Would be wrong if.** With retreat and launch decided by these odds, our share of metal lost in their half did not fall.
+**Used by.** H-ARMY-WAVE-GATE, H-ARMY-RETREAT, H-ARMY-RESPONDERS (`brain/combat.rs`).

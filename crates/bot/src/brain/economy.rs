@@ -514,6 +514,12 @@ impl Brain {
         let wanted_constructors = self.wanted_constructors(own, kit);
         let support = if count(kit.constructor) < wanted_constructors { kit.constructor } else { kit.artillery };
         // Fighters first: early raids arrive before an all-constructor opening pays off.
+        // H-PROD-MIX: at equal metal the line unit (Mace, Thug) wins most tier-1 fights and the old staples (Pawn,
+        // Rocketeer; Grunt) lose them (docs/data/duels-2026-09-19). One fast raider a batch stays, for responders.
+        if self.enabled("H-PROD-MIX") {
+            let support = if support == kit.artillery { kit.line } else { support };
+            return [kit.line, kit.raider, support, kit.line, kit.second].into_iter();
+        }
         [kit.raider, kit.raider, support, kit.skirmisher, kit.skirmisher].into_iter()
     }
 }
