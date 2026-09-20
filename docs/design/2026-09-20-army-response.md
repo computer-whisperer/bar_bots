@@ -127,3 +127,10 @@ contact response replaces the defend rules (deleted first). 3. Posture replaces 
   attack-unit on the key target with a move out queued). The interim rule in `raid.rs` and `contact.rs` (a priced-in
   turret is attacked first by everybody) is one branch of that hard-coded; the user judged it may suffice for now.
   Belongs to part 3 with the army-movement overhaul.
+- 2026-09-20, the user, on the update rate: the 2 Hz tick (`TICK_INTERVAL = 15` in the shim, the only source of it)
+  will not do for micro; "small squads of raiders have a lot of room to probe defences, run within milliseconds of
+  resistance, and take advantage of various unit differentials". Not the full arc now. Sequence when it comes:
+  research the SC2 bot scene's micro engines (report in `docs/knowledge/_inbox/sc2-micro-engines.md`), prepare the
+  engine (interval in the hello, a micro pass on every tick and the full brain every k-th, the search and the
+  simulator off the tick thread, tick-keyed constants in frames), then a Fable subagent to optimise the control
+  engine for raider squads.
