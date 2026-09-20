@@ -23,6 +23,10 @@ use mcp::McpServer;
 use shared::Shared;
 use transcript::Transcript;
 
+/// `claude --effort` unless `WITHIN_REASON_EFFORT` (the arena's `--effort`) says otherwise. The game is held still during a
+/// turn, so thinking costs wall time only; against people in real time it will want to be `low`.
+const DEFAULT_EFFORT: &str = "high";
+
 /// Sessions run on this subscription unless `WITHIN_REASON_CLAUDE_CONFIG_DIR` says otherwise: it has extra usage
 /// (paid credits) disabled, so it can be blocked but never charged (`docs/harness/claude-p.md`).
 const DEFAULT_CLAUDE_CONFIG_DIR: &str = ".claude2";
@@ -71,6 +75,8 @@ struct Launch {
     mode: Mode,
     cwd: PathBuf,
     config_dir: PathBuf,
+    /// `claude --effort`: stated, never inherited, so a transcript can be compared with another.
+    effort: String,
     mcp_config: String,
     transcript: Arc<Transcript>,
 }
@@ -96,11 +102,12 @@ impl Strategist {
             || PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(DEFAULT_CLAUDE_CONFIG_DIR),
             Into::into,
         );
-        let launch = Launch { mode, cwd, config_dir, mcp_config: mcp_config.to_string(), transcript };
+        let effort = std::env::var("WITHIN_REASON_EFFORT").ok().filter(|e| !e.is_empty()).unwrap_or_else(|| DEFAULT_EFFORT.into());
+        let launch = Launch { mode, cwd, config_dir, effort, mcp_config: mcp_config.to_string(), transcript };
         let session = launch.spawn()?;
         eprintln!(
-            "[ai {ai_id}] {mode:?} started ({}, account {}, MCP on port {})",
-            mode.model(), launch.config_dir.display(), server.port
+            "[ai {ai_id}] {mode:?} started ({}, effort {}, account {}, MCP on port {})",
+            mode.model(), launch.effort, launch.config_dir.display(), server.port
         );
         let stop = Arc::new(AtomicBool::new(false));
         let (driver_shared, driver_stop) = (shared.clone(), stop.clone());
@@ -123,6 +130,7 @@ impl Launch {
             .args(["-p", "--model", self.mode.model(), "--tools", "", "--strict-mcp-config", "--mcp-config"])
             .arg(&self.mcp_config)
             .args(["--allowedTools", "mcp__wreason__*", "--permission-mode", "dontAsk", "--setting-sources", ""])
+            .args(["--effort", &self.effort])
             .args(["--system-prompt", self.mode.system_prompt()])
             .args(["--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
             .stdin(Stdio::piped())
