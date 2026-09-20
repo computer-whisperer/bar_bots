@@ -55,6 +55,28 @@ defence and biased forward as people play it.
   (BARb: 8-12 soldiers at minute 6-7), it goes back to today's behaviour. The clock and the health floor are the knobs;
   both come from measurement (commander deaths by minute with and without the rule).
 
+## 3. The commander (the LLM) drives the search (user's ruling, 2026-09-20)
+- The search takes **priorities** as input, and the heuristic-only game is the search with default priorities. Both are
+  kept and iterated: defaults, search inputs and commander-unit behaviour are tuned in heuristic games; the LLM is given
+  the same inputs as levers.
+- **Priorities** (one tool, `build_priorities`, valid before the game and at any turn): weights of the objective (metal
+  income, army at a named time, static defence), constraints ("a turret at P by 2:30", "lab by 1:00", spots to take first
+  or leave alone: today's `expansion` lever becomes a constraint of the search), the commander unit's role (build
+  forward / hold home / fight raiders: section 2's knobs), the horizon. The answer to the tool is the plan the search
+  found under them with its predicted curve (extractors, income, army by minute), so the LLM sees what its priorities
+  buy before the game has paid for them, and may change them and ask again within the turn.
+- **A pre-game turn.** Human games open with a countdown of several seconds (its length to be checked in the game's
+  settings); the LLM gets a turn there, or at frame 0 with the game held as its turns are today, with the map, the
+  start positions, the passages and the default plan, and sets priorities before the first order. Today its first turn
+  comes when the first factory is up, after the opening has been decided without it.
+- **Mid-game** the same tool re-plans from the current state ("the next two minutes of builder time"), once the
+  mid-game search exists.
+
+## Where the commander unit's rules come from (user's ruling)
+Not from off-the-cuff rules: from games against BARb. How far forward, until when, when to leave a building site to
+defend, when to pull back are fitted to measurement: commander deaths, extractor and constructor losses, and build
+time lost to walking, by minute, across settings of the knobs in arena batches; the defaults are what that shows.
+
 ## Judged by
 - Opening: extractors and metal income at minutes 2, 3 and 5 against today's rules on the same seeds, on at least three
   maps; first soldier's time no later than today's; no energy stall. Predicted-against-played: the plan's predicted income
