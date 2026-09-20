@@ -277,6 +277,9 @@ pub enum Command {
     GiveUnit { def: UnitDefId, at: Vec3 },
     /// Starts the unit's self-destruct countdown (a second order cancels it).
     SelfDestruct { unit: UnitId },
+    /// A line in the game chat, to everyone: the bot names itself at the start (the game gives AIs random names;
+    /// `{name}` in the text becomes the one given to this AI).
+    Say { text: String },
 }
 
 /// The shim resolves this to the closest legal build position, since only it can query the map.

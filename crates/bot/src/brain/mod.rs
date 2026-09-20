@@ -76,6 +76,8 @@ pub struct Brain {
     army: army::Army,
     /// H-ARMY-CONTACT: the enemy parties on our ground and who answers each (`contact.rs`).
     contacts: contact::Contacts,
+    /// What the bot says in the game chat at its first orders: commit and settings (`main.rs`), once.
+    banner: Option<String>,
     /// When each metal spot was last in sight, and the raider out looking (`scout.rs`).
     spots: scout::Spots,
     squads: squads::Squads,
@@ -133,7 +135,7 @@ pub struct Brain {
 }
 
 impl Brain {
-    pub fn new(world: World, strategist: Option<Arc<Shared>>, board: Arc<crate::team::TeamBoard>) -> Self {
+    pub fn new(world: World, strategist: Option<Arc<Shared>>, board: Arc<crate::team::TeamBoard>, banner: String) -> Self {
         let h = &world.hello;
         eprintln!(
             "[ai {}] team {} on {} ({}x{}), {} unit defs, {} metal spots",
@@ -164,6 +166,7 @@ impl Brain {
             army: army::Army::default(),
             contacts: Default::default(),
             spots: scout::Spots::default(),
+            banner: Some(banner),
             squads: Default::default(),
             wake: Default::default(),
             production_weights: Default::default(),
@@ -211,6 +214,13 @@ impl Brain {
         self.track_wrecks(tick);
         self.track_losses(tick, &kit);
         let mut commands = Vec::new();
+        // The game names AIs at random (ai_namer.lua), so the bot says who it is, once the engine takes orders.
+        if tick.frame >= 2 * FRAMES_PER_SECOND
+            && let Some(banner) = self.banner.take()
+        {
+            let side = self.world.hello.teams.iter().find(|t| t.team == self.world.hello.team).map_or("?", |t| t.side.as_str());
+            commands.push(Command::Say { text: format!("{{name}} is {banner} | seat ai{} team {} {side}", self.world.hello.ai_id, self.world.hello.team) });
+        }
         self.protect_commander(tick, &kit, &mut commands);
         self.run_economy(tick, &kit, &mut commands);
         self.run_army(tick, &kit, &mut commands);

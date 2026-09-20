@@ -39,6 +39,14 @@ The bot process never calls into the engine; everything it knows arrives in `Hel
 If the bot is absent or dies, the shim keeps the game running and retries the connection about once a second, re-sending `Hello`.
 Socket path: `$WITHIN_REASON_SOCKET`, else `$XDG_RUNTIME_DIR/within-reason.sock`.
 
+### The banner (2026-09-20)
+The game names every AI at random (`ai_namer.lua`: donor and contributor names) and takes nothing from the AI, so at
+its first orders (frame 60) the bot says a chat line: `<its given name> is Within Reason <commit, "+" when the tree
+was dirty at build> | heuristic|strategist|commander (model, effort) | off: <disabled heuristics> | seat aiN team T
+side`. `Command::Say` carries it; the shim sends it as `/say`, the only form the engine takes text from an AI in,
+so the line appears as chat from the AI's host player (the arena's spectator, or the human hosting the AI). The
+commit comes from `crates/bot/build.rs`.
+
 ## MVP brain (deliberately weak; exists to exercise the loop end to end)
 The game places AI teams itself (`game_initial_spawn.lua` guesses a spot in the start box), so no start position is sent.
 Commander and constructors build metal extractors on nearest spots, energy, a bot lab (more when metal floats) → labs queue cheap combat units →

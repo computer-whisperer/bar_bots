@@ -73,7 +73,15 @@ fn session(mut stream: UnixStream, mode: Option<(Mode, bool)>) -> io::Result<()>
         Some((Mode::Commander, _)) => "commander",
     };
     let mut recorder = recorder::Recorder::from_env(&log_dir(), &hello, mode_name);
-    let mut brain = Brain::new(World::new(hello), strategist.as_ref().map(|s| s.shared.clone()), board);
+    let setting = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
+    let mut banner = format!("Within Reason {} | {mode_name}", env!("WITHIN_REASON_COMMIT"));
+    if strategist.is_some() {
+        banner += &format!(" ({}{})", setting("WITHIN_REASON_MODEL").unwrap_or_else(|| "default model".into()), setting("WITHIN_REASON_EFFORT").map_or(String::new(), |e| format!(", effort {e}")));
+    }
+    if let Some(disabled) = setting("WITHIN_REASON_DISABLE") {
+        banner += &format!(" | off: {disabled}");
+    }
+    let mut brain = Brain::new(World::new(hello), strategist.as_ref().map(|s| s.shared.clone()), board, banner);
     write_frame(&mut stream, &Commands::default())?;
     loop {
         let ToBot::Tick(tick) = next()? else {

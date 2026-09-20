@@ -193,6 +193,7 @@ impl Recorder {
                 Command::Repair { unit, target, .. } => json!(["repair", unit.0, target.0]),
                 Command::ReclaimFeature { unit, feature, .. } => json!(["reclaim_feature", unit.0, feature.0]),
                 Command::Resurrect { unit, feature, .. } => json!(["resurrect", unit.0, feature.0]),
+                Command::Say { ref text } => json!(["say", text]),
                 Command::GiveUnit { def, at } => json!(["give", self.def(Some(def)), at.x as i32, at.z as i32]),
                 Command::SelfDestruct { unit } => json!(["selfdestruct", unit.0]),
             })
