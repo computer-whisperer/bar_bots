@@ -226,7 +226,6 @@ impl Brain {
             enemy_soldiers_seen_metal: self.enemy_soldiers.values().map(|(def, _)| self.world.def(*def).map_or(0.0, |d| d.metal_cost)).sum::<f32>() as u32,
             enemy_soldiers_seen_lately: self.enemy_soldiers.values().filter(|(_, seen)| tick.frame - seen < 2 * 60 * FRAMES_PER_SECOND).count(),
             enemy_soldiers_seen: self.enemy_soldiers.len(),
-            enemy_army_typical: typical_enemy_army(tick.frame),
         };
         *shared.field.lock().unwrap() = Field {
             score,
@@ -245,22 +244,6 @@ impl Brain {
 /// The scoreboard's "near": free spots within this walk of home, soldiers within this of the start point.
 const SCORE_NEAR: f32 = 2500.0;
 const SCORE_AT_HOME: f32 = 800.0;
-
-/// BARb medium's mean army value by minute over the 24 north-west games of v20 and v22 (opponent ground truth,
-/// `run/batch_curves.py`). What we see of its army is a fragment; this is what to assume until scouting says otherwise.
-const TYPICAL_ENEMY_ARMY: [(i32, f32); 8] = [(2, 70.0), (4, 520.0), (6, 1250.0), (10, 2800.0), (12, 3800.0), (15, 4700.0), (20, 5400.0), (30, 8000.0)];
-
-fn typical_enemy_army(frame: i32) -> u32 {
-    let minute = frame as f32 / (60 * FRAMES_PER_SECOND) as f32;
-    let table = TYPICAL_ENEMY_ARMY;
-    let after = table.iter().position(|(m, _)| *m as f32 >= minute).unwrap_or(table.len() - 1);
-    if after == 0 {
-        return (table[0].1 * minute / table[0].0 as f32) as u32;
-    }
-    let ((m0, v0), (m1, v1)) = (table[after - 1], table[after]);
-    let share = ((minute - m0 as f32) / (m1 - m0) as f32).clamp(0.0, 1.0);
-    (v0 + (v1 - v0) * share) as u32
-}
 
 fn centre_of(units: &[&&OwnUnit]) -> Option<Vec3> {
     if units.is_empty() {

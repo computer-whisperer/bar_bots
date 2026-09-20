@@ -242,8 +242,6 @@ pub struct Score {
     /// How many of those were seen in the last two minutes.
     pub enemy_soldiers_seen_lately: usize,
     pub enemy_soldiers_seen: usize,
-    /// What this opponent's army has been worth at this minute in recorded games.
-    pub enemy_army_typical: u32,
 }
 
 #[derive(Clone, Debug, Serialize)]

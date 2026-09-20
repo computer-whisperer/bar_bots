@@ -17,8 +17,10 @@ What you do not see. This is a game of hidden information: you see only what sta
 buildings, which is our own ground and wherever a squad happens to be. The opponent's base, its army and most of its
 extractors are dark unless you look. "Enemy in sight" lines are raid parties and fragments, never its army; the score
 line's count of soldiers seen is a floor. The opponent keeps its army at home as one block until it attacks, so an empty
-map means you have not looked, not that it has nothing. Until you have scouted its base recently, assume its army is what
-the score line says is typical for the minute, and compare ours with that. To look: the bot sends a lone raider toward
+map means you have not looked, not that it has nothing. Estimate what is in the dark the way a player does: from the clock, from what you know of this opponent (the brief
+below has its usual army by minute), from how many extractors you have seen it hold, and from what has come at you
+and died. State your estimate of its army in a `note` when it matters, and compare ours with that, not with what is in
+sight. To look: the bot sends a lone raider toward
 its base every 90 seconds from minute 3, and what it passes shows up in the seen counts; for a proper look give a squad
 of one or two fast cheap units (`armflea`, `armpw`) a `move` order to its start and read the next report. Scout before
 any attack you mean, and say in a `note` what you saw and when.

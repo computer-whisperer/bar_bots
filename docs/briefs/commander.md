@@ -32,7 +32,10 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
   [K-barb-raid-timing, K-barb-raid-threat-gate]
 - It builds a turret beside nearly every extractor, and forward turret nests in our half later on.
   [K-barb-medium-observed-build, K-army-verdicts-v18]
-- It hoards its army at home as one block (20-35 soldiers by minute 10, 40-80 by minute 18) and sends it when it judges
+- Its army, from its true positions in 24 recorded games from our north-west start (mean metal value; games vary by
+  about a third either way, and it has less when we have been killing its raids and extractors): minute 4 500, minute 6
+  1250, minute 8 2000, minute 10 2800, minute 12 3800, minute 15 4700, minute 20 5400. [K-barb-medium-army-curve]
+- It hoards that army at home as one block (20-35 soldiers by minute 10, 40-80 by minute 18) and sends it when it judges
   itself stronger than what it has seen of ours; the block then walks to our nearest weakly defended cluster. After a
   wave of ours dies in its half, it resurrects the wrecks and they fight for it. [K-barb-attack-gate,
   K-army-dead-waves-are-resurrected]

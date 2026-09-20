@@ -552,3 +552,16 @@ extractors either: they fall while 20-37 soldiers stand at the station.
 left the early exchange ratio unchanged.
 **Used by.** (none yet)
 
+### K-barb-medium-army-curve
+**Claim.** BARb medium's army on Quicksilver, against us starting north-west, is worth on average (metal): minute 4
+520, minute 6 1250, minute 10 2800, minute 12 3800, minute 15 4700, minute 20 5400.
+**Status.** measured (2026-09-19) for one map, one corner and our play at the time; a prior for a player's estimate, not
+a schedule. It belongs in what the commander knows (`../briefs/commander.md`), not in the harness: a first version put
+it in every report as "typical", which is the harness asserting knowledge it does not have (the user's objection).
+**Evidence.** Opponent ground truth (`truth-N.jsonl`), north-west games of v20-opening-scout-reach and v22-early-expand,
+`run/batch_curves.py`: 523/591 at minute 4, 1234/1288 at 6, 2899/2712 at 10, 3780/3760 at 12, 4498/5001 at 15, 5400 at 20
+(v22 only).
+**Would be wrong if.** Another map, corner or opponent level; or our own play changing what it can afford (in
+commander-3 it had 6 extractors to our 13 at minute 8 and its army was still 1445 then, half the curve).
+**Used by.** The commander's brief.
+
