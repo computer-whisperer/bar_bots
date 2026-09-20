@@ -24,6 +24,11 @@ impl Brain {
         let mut directives = shared.directives.lock().unwrap();
         directives.expire(frame);
         self.directives = directives.clone();
+        drop(directives);
+        // One commander may serve several seats: a place for "the commander" means the seat that lives nearest it.
+        if self.directives.commander_station.is_some_and(|station| shared.nearest_seat(station.value).is_some_and(|seat| seat != self.world.hello.team)) {
+            self.directives.commander_station = None;
+        }
     }
 
     pub(super) fn place(&self, pos: Vec3) -> Place {
@@ -197,6 +202,7 @@ impl Brain {
         enemy_buildings_remembered.sort_by(|a, b| a.at.grid.cmp(&b.at.grid).then(a.name.cmp(&b.name)));
 
         let briefing = Briefing {
+            seats: Vec::new(),
             game_time: clock(tick.frame),
             frame: tick.frame,
             metal: snapshot.metal,
@@ -221,7 +227,7 @@ impl Brain {
             recent_events: self.recent_events.iter().cloned().collect(),
             directives_in_force: self.directives.describe(tick.frame),
         };
-        *shared.briefing.lock().unwrap() = briefing;
+        shared.publish_briefing(self.world.hello.team, self.home, briefing);
     }
 
     fn map_description(&self) -> serde_json::Value {

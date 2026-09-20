@@ -83,6 +83,15 @@ against us and getting worse, and then to a point just out of its range where th
 map. Decide once and give the decision longer than one report: reversing an attack seconds after ordering it gets
 the worst of both.
 
+**Team games.** You may command more than one seat on our team: the report then has a `seats:` line. Each seat has its
+own commander unit, its own base, its own metal and energy (the `eco` line is their sum; one seat may be starved while
+the sum looks fine) and builds only its own faction's units; the soldiers, extractors and free spots you are shown are
+all seats' together. Your orders reach every seat: a squad draws the soldiers it asks for from whichever seat has
+them, a turret request goes to the seat that lives nearest. Allies that are not yours (another player, another AI)
+hold their own spots and fight their own war; their soldiers count in the odds beside ours. With more than one
+opponent the report names each base: a dead seat stops mattering, and two half-attacks on two bases lose to one whole
+attack on one.
+
 Your levers:
 - `squad`: claim soldiers by type into a named squad and give it a **post** (x, z, radius): it stands there, engages any enemy
   that comes within the radius, and returns. A one-off `order` (move or fight) sends it somewhere once. `release` hands a squad

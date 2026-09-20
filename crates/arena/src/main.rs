@@ -18,7 +18,9 @@
 //!              [--seed-base N]   (default 1; match i plays seed N+i, for the engine and for BARb: a fresh N is a fresh set of games)
 //!              [--base-port N]   (default 9100; match i uses N+2i and N+2i+1, so a second arena needs another range)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
-//!              [--commander]    (Sonnet field commander per match; the game is held still during its turns, so any --speed)
+//!              [--commander]    (Sonnet field commander per match, one for all our seats; the game is held still during its turns, so any --speed)
+//!              [--commander-each]   (a commander of its own for every seat of ours)
+//!              [--commander-model ID]   (the session's model instead of the role's usual one, e.g. claude-opus-5)
 
 mod record;
 mod script;
@@ -57,6 +59,9 @@ struct Options {
     call_settled: bool,
     strategist: bool,
     commander: bool,
+    /// With `commander`: every seat of ours gets its own session instead of one for the team.
+    commander_each: bool,
+    commander_model: Option<String>,
     /// Play every match as this faction instead of alternating.
     side: Option<&'static str>,
     /// Fixes our start corner; otherwise it alternates.
@@ -143,7 +148,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "commander_each": options.commander_each, "commander_model": options.commander_model, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -265,7 +270,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     };
     let mut bot = Command::new(options.bot.clone().unwrap_or_else(|| repo.join("target/release/bot")))
         .args(options.strategist.then_some("--strategist"))
-        .args(options.commander.then_some("--commander"))
+        .args(options.commander.then_some(if options.commander_each { "--commander-each" } else { "--commander" }))
         .env("WITHIN_REASON_SOCKET", &socket)
         .env("WITHIN_REASON_LOG_DIR", &dir)
         .env("WITHIN_REASON_DISABLE", &disable)
@@ -273,6 +278,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .env("WITHIN_REASON_RECORD", "1")
         .envs(options.claude_config_dir.as_ref().map(|dir| ("WITHIN_REASON_CLAUDE_CONFIG_DIR", dir)))
         .envs(options.effort.as_ref().map(|effort| ("WITHIN_REASON_EFFORT", effort)))
+        .envs(options.commander_model.as_ref().map(|model| ("WITHIN_REASON_MODEL", model)))
         .envs(options.think_penalty.as_ref().map(|penalty| ("WITHIN_REASON_THINK_PENALTY", penalty)))
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
@@ -507,6 +513,8 @@ fn parse_args() -> Options {
         call_settled: true,
         strategist: false,
         commander: false,
+        commander_each: false,
+        commander_model: None,
         side: None,
         corner: None,
         ours: 1,
@@ -547,6 +555,10 @@ fn parse_args() -> Options {
                 options.commander = true;
                 continue;
             }
+            "--commander-each" => {
+                (options.commander, options.commander_each) = (true, true);
+                continue;
+            }
             "--strategist" => {
                 options.strategist = true;
                 continue;
@@ -566,6 +578,7 @@ fn parse_args() -> Options {
             "--ab-disable" => options.ab_disable = Some(value()),
             "--claude-config-dir" => options.claude_config_dir = Some(value()),
             "--effort" => options.effort = Some(value()),
+            "--commander-model" => options.commander_model = Some(value()),
             "--think-penalty" => options.think_penalty = Some(value()),
             "--opponent-opening" => {
                 options.opponent_opening = value();
@@ -611,7 +624,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
     std::process::exit(2)
 }
 

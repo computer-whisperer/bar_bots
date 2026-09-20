@@ -28,6 +28,8 @@ pub struct Briefing {
     /// Newest last.
     pub recent_events: Vec<String>,
     pub directives_in_force: Vec<String>,
+    /// Our seats in this game, one line each; filled by the merge (`seats.rs`).
+    pub seats: Vec<super::seats::SeatLine>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -197,10 +199,12 @@ pub struct SquadRequest {
     /// Draw the units nearest to this point (else to the post, else to home).
     pub near: Option<Vec3>,
     pub post: Option<Post>,
-    /// A one-off order, taken by the brain when issued.
+    /// A one-off order, carried out once by every seat (`seen_by` says which have) and then dropped.
     pub order: Option<(OrderKind, Vec3)>,
-    /// Hand every member back to the heuristics and forget the squad.
+    /// Hand every member back to the heuristics and forget the squad, likewise once every seat has.
     pub release: bool,
+    /// Seats (teams) that have carried out the order or release standing above.
+    pub seen_by: std::collections::BTreeSet<i32>,
 }
 
 /// The field commander's levers (see `DESIGN.md`, "Field commander").
@@ -264,6 +268,9 @@ pub struct Score {
     pub seconds_since_turn: Option<i32>,
     /// Where a factory of the opponent's has been seen, standing or not.
     pub enemy_base_found: Option<Place>,
+    /// Every enemy seat's base: team (when known), place, whether a factory of it has been seen (else the place is a
+    /// guess), whether it has been razed.
+    pub enemy_bases: Vec<(Option<i32>, Place, bool, bool)>,
     /// The opponent's soldiers seen in the last three minutes and not seen to die, and their metal. Older sightings
     /// are left out: most of its soldiers die where we cannot see, and a count that never forgets only grows.
     pub enemy_soldiers_seen: usize,
@@ -337,13 +344,15 @@ pub struct Shared {
     /// (Given an immediate answer to `wait`, it took the wait to be over and went on polling and ordering on the
     /// running game, in one endless response: commander game 10, first attempt.)
     pub turn_over: std::sync::atomic::AtomicBool,
-    pub briefing: Mutex<Briefing>,
+    /// What each seat of ours last published; read merged, through `briefing()` and `field()` (`seats.rs`).
+    pub seats: Mutex<BTreeMap<i32, super::seats::SeatView>>,
+    /// When the commander's last turn began (team-wide: whichever seat leads asks for the next).
+    pub last_turn_frame: std::sync::atomic::AtomicI32,
     pub directives: Mutex<Directives>,
     /// Things worth waking the strategist for, drained by the driver.
     pub triggers: Mutex<Vec<String>>,
     /// Static map description, filled once at game start.
     pub map: Mutex<serde_json::Value>,
-    pub field: Mutex<Field>,
     pub field_orders: Mutex<FieldOrders>,
     /// Losses and kills since the commander last looked ("lost armpw to corak in our half" to count).
     pub fights: Mutex<BTreeMap<String, u32>>,

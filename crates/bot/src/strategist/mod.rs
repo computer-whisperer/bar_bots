@@ -6,6 +6,7 @@
 
 mod mcp;
 mod report;
+pub mod seats;
 pub mod shared;
 mod transcript;
 
@@ -40,11 +41,15 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn model(self) -> &'static str {
-        match self {
-            Mode::Strategist => "claude-opus-5",
-            Mode::Commander => "claude-sonnet-5",
-        }
+    /// `WITHIN_REASON_MODEL` (the arena's `--commander-model`) overrides the role's usual model.
+    fn model(self) -> String {
+        std::env::var("WITHIN_REASON_MODEL").ok().filter(|m| !m.is_empty()).unwrap_or_else(|| {
+            match self {
+                Mode::Strategist => "claude-opus-5",
+                Mode::Commander => "claude-sonnet-5",
+            }
+            .into()
+        })
     }
 
     fn system_prompt(self) -> &'static str {
@@ -129,7 +134,7 @@ impl Launch {
         let mut child = Command::new("claude")
             .current_dir(&self.cwd)
             .env("CLAUDE_CONFIG_DIR", &self.config_dir)
-            .args(["-p", "--model", self.mode.model(), "--tools", "", "--strict-mcp-config", "--mcp-config"])
+            .args(["-p", "--model", &self.mode.model(), "--tools", "", "--strict-mcp-config", "--mcp-config"])
             .arg(&self.mcp_config)
             .args(["--allowedTools", "mcp__wreason__*", "--permission-mode", "dontAsk", "--setting-sources", ""])
             .args(["--effort", &self.effort])
@@ -191,7 +196,7 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
             },
             Mode::Strategist => {
                 std::thread::sleep(Duration::from_millis(200));
-                let frame = shared.briefing.lock().unwrap().frame;
+                let frame = shared.briefing().frame;
                 let triggers = std::mem::take(&mut *shared.triggers.lock().unwrap());
                 if frame == 0 || (triggers.is_empty() && frame - last_turn_frame < ROUTINE_INTERVAL_FRAMES) {
                     continue;
@@ -229,8 +234,8 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
             turns_this_session = 0;
         }
         let (frame, game_time) = {
-            let briefing = shared.briefing.lock().unwrap();
-            (briefing.frame, briefing.game_time.clone())
+            let briefing = shared.briefing();
+            (briefing.frame, briefing.game_time)
         };
         let prompt = match mode {
             Mode::Strategist => format!("Game time {game_time}. {headline}"),
@@ -272,8 +277,8 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
 /// The commander is shown the picture outright (a tool call to look would double its turn), in full at the start of
 /// a session and as changes afterwards.
 fn commander_prompt(game_time: &str, headline: &str, shared: &Shared, seen: &mut report::Seen, fresh_session: bool) -> String {
-    let briefing = shared.briefing.lock().unwrap().clone();
-    let field = shared.field.lock().unwrap().clone();
+    let briefing = shared.briefing();
+    let field = shared.field();
     let fights: Vec<String> =
         std::mem::take(&mut *shared.fights.lock().unwrap()).into_iter().map(|(what, n)| format!("{what} x{n}")).collect();
     let mut prompt = String::new();

@@ -134,6 +134,15 @@ with lower-level levers than the strategist's directives. The purpose is to lear
 unit mix look like (the heuristic home group is "F2 a-move": one blob charging every raider), and to find where the
 LLM levers belong. BARb is the reference for economy and army hoarding, not for defence.
 
+- **Team games (2026-09-20).** Each seat we play is its own session and brain; seats of one game and ally team share a
+  team board (`crates/bot/src/team.rs`: spot claims, enemy buildings, one attack target, each other's soldiers in the
+  wave odds). One commander serves all our seats (`bot --commander`; `--commander-each` gives every seat its own):
+  each seat publishes its briefing and field into the one `Shared`, the commander reads the merge
+  (`strategist/seats.rs`) with a `seats:` line (the economies are separate) and an `opponents:` line (one base per
+  enemy seat). The live seat with the lowest team number leads: it alone asks for turns, and held, it holds the engine
+  and so every seat. Orders reach all seats: a squad's `take` is one count that whichever seat has the soldiers draws
+  down, a one-off order or release is carried out once by each seat, a turret request and a `commander_station` go to
+  the seat whose home is nearest. Chosen because two sessions that cannot talk split the army and cost twice as much.
 - **Division of labour.** The heuristic brain keeps the economy, the opening and every soldier the commander has not
   claimed (home group, waves). The commander's levers are squads, the unit mix, turret requests and the directives. A
   silent commander costs nothing: squads keep their standing posts, everything else is heuristic.

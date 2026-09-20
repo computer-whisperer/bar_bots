@@ -216,10 +216,10 @@ fn orders(arguments: &Value, shared: &Shared) -> Result<String, String> {
 
 fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, String> {
     match name {
-        "overview" => serde_json::to_string(&*shared.briefing.lock().unwrap()).map_err(|e| e.to_string()),
+        "overview" => serde_json::to_string(&shared.briefing()).map_err(|e| e.to_string()),
         "map" => Ok(shared.map.lock().unwrap().to_string()),
         "note" => {
-            let time = shared.briefing.lock().unwrap().game_time.clone();
+            let time = shared.briefing().game_time;
             let text = arguments["text"].as_str().filter(|t| !t.trim().is_empty()).ok_or("a note needs its words under \"text\"")?;
             shared.notes.lock().unwrap().push(format!("[{time}] {text}"));
             Ok("noted".into())
@@ -247,11 +247,11 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, S
             shared.end_turn_at_wait();
             Ok(reply)
         }
-        "situation" => serde_json::to_string(&*shared.field.lock().unwrap()).map_err(|e| e.to_string()),
+        "situation" => serde_json::to_string(&shared.field()).map_err(|e| e.to_string()),
         "squad" => squad(arguments, shared),
         "set_production" => {
             let weights = arguments["weights"].as_object().ok_or("weights must be an object")?;
-            let known: Vec<String> = shared.field.lock().unwrap().buildable.iter().map(|(name, _)| name.clone()).collect();
+            let known: Vec<String> = shared.field().buildable.iter().map(|(name, _)| name.clone()).collect();
             if let Some(unknown) = weights.keys().find(|name| !known.contains(name)) {
                 return Err(format!("{unknown} is not something our factories build; see `buildable`"));
             }
@@ -262,7 +262,7 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, S
         "request_turret" => {
             let at = position(arguments, "request_turret")?.ok_or("needs x and z")?;
             // Anywhere we already stand: a turret asked for on ground we hold nothing near is a constructor sent to die.
-            let field = shared.field.lock().unwrap().clone();
+            let field = shared.field();
             let held = field.extractors.iter().map(|x| &x.at).chain(field.squads.iter().filter_map(|q| q.centre.as_ref())).chain(field.turrets.iter());
             let near = held.map(|p| (p.x as f32 - at.x).hypot(p.z as f32 - at.z)).fold(f32::INFINITY, f32::min);
             if near > 1000.0 {
@@ -288,7 +288,7 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, S
 
 fn squad(arguments: &Value, shared: &Shared) -> Result<String, String> {
     let name = arguments["name"].as_str().filter(|n| !n.is_empty()).ok_or("squad needs a name")?;
-    let known: Vec<String> = shared.field.lock().unwrap().buildable.iter().map(|(name, _)| name.clone()).collect();
+    let known: Vec<String> = shared.field().buildable.iter().map(|(name, _)| name.clone()).collect();
     let mut orders = shared.field_orders.lock().unwrap();
     let request = orders.squads.entry(name.to_string()).or_default();
     if let Some(take) = arguments["take"].as_object() {
@@ -310,15 +310,17 @@ fn squad(arguments: &Value, shared: &Shared) -> Result<String, String> {
         let kind = parse::<OrderKind>(&arguments["order"]["kind"])?.ok_or("order needs a kind")?;
         request.post = None;
         request.order = Some((kind, to));
+        request.seen_by.clear();
     }
     if arguments["release"].as_bool() == Some(true) {
         request.release = true;
+        request.seen_by.clear();
     }
     Ok(format!("squad {name} updated. The game is paused during your turn, so members are drawn and orders carried out when the turn ends; your next report shows the result"))
 }
 
 fn set_directives(arguments: &Value, shared: &Shared) -> Result<String, String> {
-    let frame = shared.briefing.lock().unwrap().frame;
+    let frame = shared.briefing().frame;
     let ttl = arguments["ttl_seconds"].as_i64().unwrap_or(DEFAULT_TTL_SECONDS).clamp(10, MAX_TTL_SECONDS);
     let expires_frame = frame + ttl as i32 * 30;
     let fields = arguments.as_object().ok_or("arguments must be an object")?;

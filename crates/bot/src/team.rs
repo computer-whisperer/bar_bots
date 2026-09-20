@@ -18,6 +18,8 @@ pub type Building = (UnitDefId, Vec3, i32);
 #[derive(Default)]
 pub struct TeamBoard {
     inner: Mutex<Board>,
+    /// The team's one LLM session, alive while a seat's session holds it.
+    strategist: Mutex<Weak<crate::strategist::Strategist>>,
 }
 
 #[derive(Default)]
@@ -69,6 +71,17 @@ impl TeamBoard {
         let board = Arc::new(TeamBoard::default());
         boards.push((hello.game_id, hello.ally_team, Arc::downgrade(&board)));
         board
+    }
+
+    /// The team's LLM session, started by the first seat to ask.
+    pub fn strategist(&self, start: impl FnOnce() -> std::io::Result<Arc<crate::strategist::Strategist>>) -> std::io::Result<Arc<crate::strategist::Strategist>> {
+        let mut held = self.strategist.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(running) = held.upgrade() {
+            return Ok(running);
+        }
+        let started = start()?;
+        *held = Arc::downgrade(&started);
+        Ok(started)
     }
 
     /// Posts `team`'s state and returns what the other live seats have posted.

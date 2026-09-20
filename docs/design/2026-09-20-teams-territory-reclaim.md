@@ -61,6 +61,25 @@ arc; `DESIGN.md` gets the decisions once they are built. Status lines at the end
   any seat. One commander per seat is the other (`--commander-each`). Rejected as the only mode: one each, because two
   sessions that cannot talk split the army and cost twice as much.
 
+### One commander over several seats (design, 2026-09-20)
+Each seat keeps its own brain; the commander's `Shared` state is one per team, and every seat of ours attaches to it.
+- **Reading.** Each seat publishes its own briefing and field into `Shared.seats` (keyed by team, with its home and the
+  frame). What the report, the MCP tools and the wake rules read is the merge over the live seats (a seat is live while
+  it has published within the last three seconds): resources, counts, soldiers and extractors summed; squads of one name
+  joined; enemy facts from the lead seat (the board has pooled them already); and a `seats:` line per seat (home,
+  income, extractors, soldiers) so the commander knows the economies are separate. One seat merges to itself, so the
+  single-seat game runs the same code.
+- **The lead seat** is the live seat with the lowest team number. Only it asks for turns and holds the game (in lockstep
+  one held seat holds the engine, so all); the others pass what would have woken the commander to it through
+  `Shared.triggers`. If the lead dies the next seat leads.
+- **Orders.** Directives and the unit mix are read by every seat (a mix names units; a seat builds the ones its faction
+  has). A squad's `take` is a shared count that whichever seat has the soldiers draws down, so a squad may hold soldiers
+  of several seats, each commanded by its own brain toward the same post or order. One-off orders and releases are
+  marked seen per seat and dropped when every live seat has seen them. A turret request, and a `commander_station`,
+  go to the seat whose home is nearest.
+- **Modes.** `bot --commander`: one session per team (started by the first seat to connect). `bot --commander-each`: one
+  session per seat, each with its own `Shared`, as before. The arena passes either through.
+
 ### Arena
 - `--ours N --allies M --enemies K` (defaults 1, 0, 1; allies and enemies are BARb), `--ffa` (every enemy seat its own
   ally team), `--boxes corners|north-south|west-east`; allies share a box, each enemy ally team gets its own.
@@ -155,4 +174,7 @@ Territory before reclaim because the crew needs to know where it is safe to walk
   joining a launch), H-TEAM-DEFEND, arena N v M. Differences from the text above: no `TeamDied` event (the interface has
   none; a base is called dead when it is found and then razed); enemy starts are start boxes, not positions (no call
   gives positions); H-TEAM-DEFEND was not planned and came from a lost game.
-- Not built: the commander over several seats; parts 2-4.
+- 2026-09-20, the commander over several seats: built as designed above (`strategist/seats.rs`, per-seat `seen_by` on
+  squad orders, the lead seat in `wake.rs`), with `--commander-each` and `--commander-model` (part 4's flag) on the arena.
+  First game: commander-team-1 (`docs/experiments.md`).
+- Not built: parts 2 and 3; part 4's comparison.

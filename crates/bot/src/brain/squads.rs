@@ -43,10 +43,18 @@ impl Brain {
             members.retain(|id| soldiers.iter().any(|u| u.id == *id));
         }
 
+        // Several seats of ours may serve one commander (`strategist/seats.rs`): an order or a release is carried out
+        // once by each and dropped when all have; a turret request goes to the seat whose home is nearest.
+        let team = self.world.hello.team;
+        let homes = shared.seat_homes();
+        let everyone_has = |seen: &std::collections::BTreeSet<i32>| homes.iter().all(|(seat, _)| seen.contains(seat));
         let mut one_off: Vec<(String, OrderKind, Vec3)> = Vec::new();
         {
             let mut orders = shared.field_orders.lock().unwrap();
-            self.turret_requests.append(&mut orders.turret_requests);
+            let (mine, others): (Vec<Vec3>, Vec<Vec3>) =
+                orders.turret_requests.drain(..).partition(|at| crate::strategist::seats::nearest_seat(&homes, *at).is_none_or(|seat| seat == team));
+            orders.turret_requests = others;
+            self.turret_requests.extend(mine);
             self.production_weights = orders.production.clone();
             self.spot_priority = orders.spot_priority.clone();
             self.spot_avoid = orders.spot_avoid.clone();
@@ -57,7 +65,10 @@ impl Brain {
                     self.squads.members.remove(&name);
                     self.squads.posts.remove(&name);
                     self.squads.marches.remove(&name);
-                    orders.squads.remove(&name);
+                    request.seen_by.insert(team);
+                    if everyone_has(&request.seen_by) {
+                        orders.squads.remove(&name);
+                    }
                     continue;
                 }
                 if let Some(post) = request.post {
@@ -88,7 +99,12 @@ impl Brain {
                     }
                 }
                 request.take.retain(|_, wanted| *wanted > 0);
-                if let Some((kind, to)) = request.order.take() {
+                let order = request.order.filter(|_| request.seen_by.insert(team));
+                if request.order.is_some() && everyone_has(&request.seen_by) {
+                    request.order = None;
+                    request.seen_by.clear();
+                }
+                if let Some((kind, to)) = order {
                     // A one-off order ends the standing post; the commander posts the squad again when it wants.
                     match self.walkable(to) {
                         Ok((to, remark)) => {
@@ -291,8 +307,9 @@ impl Brain {
             extractors_lost_3_min: self.wake.losses.len(),
             traded_3_min: traded(&|frame| recent(&frame)),
             traded: traded(&|_| true),
-            seconds_since_turn: (self.wake.last_turn_frame > 0).then(|| (tick.frame - self.wake.last_turn_frame) / FRAMES_PER_SECOND),
+            seconds_since_turn: Some(shared.last_turn_frame.load(std::sync::atomic::Ordering::Relaxed)).filter(|at| *at > 0).map(|at| (tick.frame - at) / FRAMES_PER_SECOND),
             enemy_base_found: self.found_enemy_base().map(|pos| self.place(pos)),
+            enemy_bases: self.enemy_bases.iter().map(|b| (b.team, self.place(b.at), b.found, b.dead)).collect(),
             enemy_spots_seen: enemy_extractors.len(),
             enemy_factories: self
                 .enemy_buildings
@@ -327,7 +344,7 @@ impl Brain {
             enemy_soldiers_seen: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).count(),
             enemy_soldiers_seen_metal: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).map(|(def, _)| self.world.def(*def).map_or(0.0, |d| d.metal_cost)).sum::<f32>() as u32,
         };
-        *shared.field.lock().unwrap() = Field {
+        shared.publish_field(self.world.hello.team, Field {
             score,
             unassigned: composition(&pool),
             unassigned_centre: centre_of(&pool).map(|c| self.place(c)),
@@ -353,7 +370,7 @@ impl Brain {
                     _ => format!("take first: {}; leave alone: {}", list(&self.spot_priority), list(&self.spot_avoid)),
                 }
             },
-        };
+        });
     }
 }
 

@@ -57,6 +57,8 @@ corners; Great Divide V1 is played north against south). Allies share a start bo
 allied BARb plays the other faction. One bot process serves all our seats of a match, one session each, joined by the
 team board (`crates/bot/src/team.rs`); each seat writes its own `record-<ai>.jsonl`. A human ally cannot be scripted
 headless; an allied BARb is the same code path for us. The referee's balance line counts our whole ally team against every enemy.
+`--commander` gives our seats one LLM session between them (transcript `strategist-<first seat's ai>.jsonl`), `--commander-each`
+one each; `--commander-model claude-opus-5` replaces the role's usual model (Sonnet for the commander).
 
 ## Post-game analysis
 

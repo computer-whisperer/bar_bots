@@ -61,6 +61,26 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         briefing.metal.current, briefing.metal.income, briefing.metal.usage, briefing.energy.current, briefing.energy.storage,
         briefing.energy.income - briefing.energy.usage, c.extractors, c.constructors, c.labs, c.turrets, c.converters
     ));
+    if briefing.seats.len() > 1 {
+        let seats: Vec<String> = briefing
+            .seats
+            .iter()
+            .map(|s| format!("team {} at {}: metal {:.0} ({:+.1}), {} extractors, {} soldiers", s.team, s.home.grid, s.metal_stored, s.metal_income, s.extractors, s.soldiers))
+            .collect();
+        lines.push(format!("seats: you command {} seats, each with its own economy | {}", seats.len(), seats.join(" | ")));
+    }
+    if s.enemy_bases.len() > 1 {
+        let bases: Vec<String> = s
+            .enemy_bases
+            .iter()
+            .map(|(team, at, found, dead)| {
+                let who = team.map_or("an opponent".to_string(), |t| format!("team {t}"));
+                let state = if *dead { "razed, no longer a target" } else if *found { "base FOUND" } else { "base unscouted, guessed" };
+                format!("{who}: {state} at {} ({}, {})", at.grid, at.x, at.z)
+            })
+            .collect();
+        lines.push(format!("opponents: {}", bases.join(" | ")));
+    }
     let places = |list: &[super::shared::Place]| list.iter().map(|p| format!("{} ({}, {})", p.grid, p.x, p.z)).collect::<Vec<_>>().join("; ");
     lines.push(format!(
         "to win: its commander {}; its factories seen: {}",
