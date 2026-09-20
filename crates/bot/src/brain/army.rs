@@ -64,10 +64,8 @@ const DEFENDED_RADIUS: f32 = 900.0;
 /// No wave leaves within this long of losing something on our side of the map.
 const QUIET_BEFORE_WAVE_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
 const QUIET_CEILING_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
-/// How long the biggest enemy force seen stays in mind.
 /// H-ARMY-SCOUT: a raider goes to look at the enemy this often, so the wave gate weighs something it has seen.
 const SCOUT_EVERY_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
-const ENEMY_ARMY_MEMORY_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
 /// H-ARMY-RESPONDERS: raiders are met by the nearest soldiers, at least this many and as many as good odds take,
 /// not by the whole home group trailing across the map.
 pub(super) const MIN_RESPONDERS: usize = 4;
@@ -109,9 +107,6 @@ pub struct Army {
     last_retreat_frame: i32,
     /// Since when a full wave has been held back only because things were dying at home.
     held_for_losses_since: Option<i32>,
-    /// The biggest enemy soldier force seen in one look lately, and when: the opponent's army is one mobile block,
-    /// so what stands at a target now says little about what a wave will meet there.
-    enemy_army_seen: Option<(Force, i32)>,
     /// The soldier last sent to look at the enemy, and when.
     scout: Option<(UnitId, i32)>,
     /// Where the attackers are gathering before the assault, and since which frame.
@@ -392,17 +387,6 @@ impl Brain {
             }
         }
 
-        let in_sight = self.known_enemy_force(Vec3::default(), f32::INFINITY, snapshot.enemies.as_slice());
-        let in_sight = Force { turret_metal: 0.0, ..in_sight };
-        let nothing = Force::default();
-        let stale = self.army.enemy_army_seen.as_ref().is_none_or(|(_, seen)| tick.frame - seen > ENEMY_ARMY_MEMORY_FRAMES);
-        let bigger = self.army.enemy_army_seen.as_ref().is_none_or(|(army, _)| self.odds(&in_sight, &nothing) >= self.odds(army, &nothing));
-        if !in_sight.units.is_empty() && (stale || bigger) {
-            self.army.enemy_army_seen = Some((in_sight, tick.frame));
-        } else if stale {
-            self.army.enemy_army_seen = None;
-        }
-
         let committed = self.army.attackers.len();
         self.army.attackers.retain(|id| soldiers.iter().any(|u| u.id == *id));
         if committed >= NOTABLE_WAVE && self.army.attackers.is_empty() {
@@ -560,8 +544,16 @@ impl Brain {
                 && (self.army.last_retreat_frame == 0 || tick.frame - self.army.last_retreat_frame >= AFTER_RETREAT_FRAMES);
             // H-ARMY-WAVE-GATE: weigh the wave against what we know stands at the target.
             let mut defenders = self.known_enemy_force(target, DEFENDED_RADIUS, snapshot.enemies.as_slice());
-            if let Some((army, _)) = &self.army.enemy_army_seen {
-                // Their army will come to the fight wherever it is: count it, unless more than it already stands there.
+            // Their army is one mobile block and will come to the fight wherever it is: count it, unless more than it
+            // already stands there. H-ARMY-GATE-ALL-SEEN: their army is every soldier of theirs we have seen and not seen
+            // die. The biggest force in sight at once within two minutes, which this used to be, read 2300 metal against
+            // a true 4900 from minute 20 (the tempo study, 430 games); everything seen alive reads 3400, still a floor.
+            let all_seen = self.enabled("H-ARMY-GATE-ALL-SEEN").then(|| {
+                let mut army = Force::default();
+                self.enemy_soldiers.values().for_each(|(def, _)| army.add(*def));
+                army
+            });
+            if let Some(army) = &all_seen {
                 if self.odds(army, &Force::default()) > self.odds(&Force { turret_metal: 0.0, ..defenders.clone() }, &Force::default()) {
                     defenders.units = army.units.clone();
                 }
