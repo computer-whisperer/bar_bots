@@ -218,3 +218,51 @@ different places.
 minute 8 with 17-28 enemies in sight, while seat 0 kept 19-26 soldiers at its station 2200 away; lost at 20 minutes.
 **Evidence.** `run/matches/1789914072-team-2v2-board/00/bot.log`, the per-minute lines of both seats.
 **Used by.** H-TEAM-DEFEND.
+
+### K-army-blob-attack-move-wastes-the-raiders
+**Claim.** Sending a wave to one point makes it fight as a blob, and a blob is the worst formation our tier-1 raiders
+can be in. Spreading the same army over a block 110 elmos between neighbours is worth about a fifth of the metal it
+trades, and essentially all of that belongs to Pawns and Grunts: over 28 tier-1 pairings in the engine, metal killed
+per metal lost went 1.11 to 1.31, with a mean margin gain of +0.41 for Pawn and +0.46 for Grunt against +0.05 or less
+for Centurion, Thud, Mace, Aggravator and Rocketeer. Two mechanisms, not one: the blob feeds two or three units to
+every area shell (Mace and Thud 36 elmos, Rocketeer and Aggravator 48), and — the larger effect — a blob of
+180-range raiders cannot get more than its front rank inside its own range of a target, so it walks into a tower line
+a few at a time. Rocketeers are the exception and lose by spreading (−0.25 against Grunts): a slow fragile
+long-ranged unit needs its neighbours.
+**Status.** supported (2026-09-20) in the engine duel harness; the arena effect is the `micro-spread` row of
+`docs/experiments.md`.
+**Evidence.** `docs/studies/micro-combat.md`; batches `micro-block-off` / `micro-block-on` (28 pairings x 6 duels an
+arm, equal metal at 1200, spawn spacing 56), compared with `run/duel_ab.py`. Biggest cells: Grunt against Sentry
+−0.193 to +0.652, Pawn against Guard −0.150 to +0.560. The behaviour was confirmed before the result: `spread_x` in
+`duels.csv` (RMS distance of an army's units from its own centre at the first shot) rose, per pairing, from 46-140 to 61-184 elmos
+while the opponent's did not move. Consistent with K-units-duel-spacing-decides-area-damage, measured from the other
+end (both sides loose) in the 2026-09-19 tables.
+**Would be wrong if.** An arena arm with H-MICRO-SPREAD off traded metal at least as well as one with it on, or if
+the gain in the duels came from the fight taking longer rather than from the formation (contact time rises with the
+spread order and was not separated).
+**Used by.** H-MICRO-SPREAD.
+
+### K-army-withdrawing-a-hurt-soldier-saves-metal-and-loses-the-fight
+**Claim.** Walking a unit out of a fight when its health falls below a third is the most metal-efficient policy
+tested and still loses ground: over 135 simulated tier-1 cells it took metal killed per metal lost from 1.41 to 2.41
+and cost 0.039 of margin. Fewer of ours die; the ones that leave stop shooting, so fewer of theirs die too, and what
+walks away walks away hurt. The two measures disagree by exactly the question of whether a hurt soldier is ever
+repaired, and ours are not. Only when outnumbered (0.7x metal) is it not negative: +0.005 of margin, 0.66 to 1.02.
+**Status.** conjectured (2026-09-20) — simulator only, never run in the engine.
+**Evidence.** `combatsim micro --reps 16`, `docs/studies/micro-combat.md`.
+**Would be wrong if.** A duel arm with `withdraw` orders traded better *and* won as often, or if soldiers were
+repaired at home, which would move the true measure from margin towards metal.
+**Used by.** (candidate: H-MICRO-WITHDRAW, after H-ECO-REPAIR is extended to soldiers)
+
+### K-army-focus-fire-cannot-be-ordered-and-would-not-pay
+**Claim.** There is no attack-unit command in the protocol: `Fight` names a point and the engine picks the target,
+roughly the nearest. Simulating the command we do not have says not to add it — a side that all shoots the enemy with
+the fewest hit points left scores 0.165 of margin *worse* than the engine's own targeting over 135 cells, because
+nothing stops a salvo already in the air and the overkill is most of a Rocketeer's 3.8-second volley.
+**Status.** conjectured (2026-09-20) — simulator only. The absence of the command is `supported`
+(`crates/bot-protocol/src/messages.rs`).
+**Evidence.** `combatsim micro --reps 16`; `finishing_the_weakest_target_wastes_shots_on_the_dead` in
+`crates/combatsim/tests/mechanics.rs`.
+**Would be wrong if.** A focus rule that avoided overkill (counting damage already in the air towards a target)
+priced out positive; the policy tested is the naive one.
+**Used by.** (nothing — it is a reason not to extend the protocol)

@@ -12,6 +12,7 @@ mod combat;
 mod economy;
 pub mod journal;
 mod march;
+mod micro;
 mod raid;
 mod squads;
 mod tier2;
@@ -195,6 +196,9 @@ impl Brain {
         self.protect_commander(tick, &kit, &mut commands);
         self.run_economy(tick, &kit, &mut commands);
         self.run_army(tick, &kit, &mut commands);
+        // H-MICRO-SPREAD rewrites the attack orders the army just gave rather than hooking each path to one
+        // (`micro.rs`); it must see the whole tick's commands, so it runs here and not inside `run_army`.
+        self.spread_attack_orders(tick, &mut commands);
         self.exchange_with_team(tick);
         self.journal_intent();
         self.report(tick, &kit);
