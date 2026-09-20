@@ -11,3 +11,12 @@
   +0.15, +0.57 when spread at 120; 20 Grunts lose to 8 Maces every time (-0.29). 10 Pawns against 4 Thugs: +0.16. The
   direction agrees: small early numbers favour the raider, bigger blobs favour the plasma unit. "Damageless" needs
   dodging the simulator's policies do not have.
+
+## 2026-09-20, more from experienced players (relayed by the user)
+- **Too many construction bots, made and kept out on the map.** Measured the same day: constructors alive at minutes
+  10 / 20 / 30: cmp-opus 7.8 / 8.2 / 9.0 (up to 13), cmp-sonnet 8.4 / 8.6 / 10.8, heuristic (now-quicksilver) 7.0 / 8.8 /
+  8.4 (up to 12); Opus has 6.4 at minute 5 against 3.5. What number is right, and what the surplus should turn into
+  (assisting a lab, being reclaimed), is not known.
+- **The tier-1 bot labs are themselves reclaimed once tier 2 is active**, as are the Maces. A timing point, not a
+  rule for the rest of the game: **later, tier-1 raiders and general unit spam become useful again.** Untested; ours
+  never reclaims a building or a unit of its own.
