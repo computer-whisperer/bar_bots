@@ -31,3 +31,15 @@ tag to the full name (`resolve_game`, from `run/data/rapid/*/byar/versions.gz`) 
 Replays recorded before that: `run/fix_replay.py <match dir>` writes a `.fixed.sdfz` copy with the header corrected
 (checked: the copy loads and plays in the headless engine; the game stream is untouched).
 
+
+## Engine calls that re-enter the AI
+
+`COMMAND_CHEATS_GIVE_ME_NEW_UNIT` creates the unit before it returns, and the engine delivers the unit's events to
+`handleEvent` from inside that call. The shim's exports hold the instance table's mutex, so issuing it from inside an
+export hung the engine at the first spawn (watchdog stack trace through `Mutex::lock_contended`). The shim now queues
+spawns and issues them after unlocking (`engine::Spawner`). Ordinary unit orders travel through the network layer and
+do not re-enter. Any future synchronous engine call (other cheats, Lua calls) needs the same treatment.
+
+## Mass self-destruct is cancelled twice per team
+
+See `duels.md`, "Clearing": BAR cancels self-destruct orders covering 95% of a team's units, two times per team per game.

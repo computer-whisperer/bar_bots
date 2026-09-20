@@ -179,6 +179,11 @@ pub enum Command {
     ReclaimArea { unit: UnitId, centre: Vec3, radius: f32, queue: bool },
     /// Restore `target`'s health (a builder's job; it also finishes a stalled construction).
     Repair { unit: UnitId, target: UnitId, queue: bool },
+    /// Cheat: a finished unit of type `def` appears at `at`, owned by this AI's team. For the duel harness
+    /// (`docs/harness/duels.md`); the engine honours it only in a game hosted locally with a single player.
+    GiveUnit { def: UnitDefId, at: Vec3 },
+    /// Starts the unit's self-destruct countdown (a second order cancels it).
+    SelfDestruct { unit: UnitId },
 }
 
 /// The shim resolves this to the closest legal build position, since only it can query the map.

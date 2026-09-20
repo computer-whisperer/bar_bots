@@ -26,6 +26,14 @@ pub struct Engine {
     metal_spots: Vec<Vec3>,
 }
 
+/// The one engine call that must be made with the instance table unlocked: the cheat that creates a unit, during
+/// which the engine delivers the unit's creation events to every AI.
+#[derive(Clone, Copy)]
+pub struct Spawner {
+    ai_id: c_int,
+    callback: *const sys::SSkirmishAICallback,
+}
+
 /// Calls a callback-table entry, which always takes the AI id first.
 macro_rules! call {
     ($engine:expr, $name:ident ( $($arg:expr),* )) => {
@@ -33,7 +41,26 @@ macro_rules! call {
     };
 }
 
+impl Spawner {
+    /// A finished unit of type `def` at `at` for this AI's team; `Err` carries the engine's result code. Cheat
+    /// access is on for this one command only, as in [`Engine::enemy_census`].
+    pub fn give(self, def: UnitDefId, at: Vec3) -> Result<(), i32> {
+        let mut pos = [at.x, at.y, at.z];
+        let mut command = sys::SGiveMeNewUnitCheatCommand { unitDefId: def.0, pos_posF3: pos.as_mut_ptr(), ret_newUnitId: -1 };
+        call!(self, Cheats_setEnabled(true));
+        let code = call!(self, Engine_handleCommand(
+            sys::COMMAND_TO_ID_ENGINE, -1, sys::COMMAND_CHEATS_GIVE_ME_NEW_UNIT as c_int, std::ptr::from_mut(&mut command).cast::<c_void>()
+        ));
+        call!(self, Cheats_setEnabled(false));
+        if code == 0 { Ok(()) } else { Err(code) }
+    }
+}
+
 impl Engine {
+    pub fn spawner(&self) -> Spawner {
+        Spawner { ai_id: self.ai_id, callback: self.callback }
+    }
+
     /// # Safety
     /// `callback` must be the table the engine passed to `init` for `ai_id`, and stay valid
     /// until `release`.
@@ -400,7 +427,7 @@ impl Engine {
                     repeat,
                 })
             }
-            Command::Guard { unit, target } => self.handle(sys::COMMAND_UNIT_GUARD, &mut sys::SGuardUnitCommand {
+           Command::Guard { unit, target } => self.handle(sys::COMMAND_UNIT_GUARD, &mut sys::SGuardUnitCommand {
                 unitId: unit.0,
                 groupId: NO_GROUP,
                 options: 0,
@@ -423,6 +450,17 @@ impl Engine {
                     timeOut: NO_TIMEOUT,
                     pos_posF3: pos.as_mut_ptr(),
                     radius,
+                })
+            }
+            // Creating a unit makes the engine call back into `handleEvent` before it returns, so it cannot be
+            // issued from inside an export that holds the instance table; see `Spawner`.
+            Command::GiveUnit { .. } => Err(-1),
+            Command::SelfDestruct { unit } => {
+                self.handle(sys::COMMAND_UNIT_SELF_DESTROY, &mut sys::SSelfDestroyUnitCommand {
+                    unitId: unit.0,
+                    groupId: NO_GROUP,
+                    options: 0,
+                    timeOut: NO_TIMEOUT,
                 })
             }
         }

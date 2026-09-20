@@ -12,7 +12,7 @@ use std::ffi::{c_int, c_void};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Mutex;
 
-use bot_protocol::{BuildSite, Command, Commands, Event, Tick, ToBot, UnitId};
+use bot_protocol::{BuildSite, Command, Commands, Event, Tick, ToBot, UnitDefId, UnitId, Vec3};
 use recoil_ai_sys as sys;
 
 use engine::Engine;
@@ -38,6 +38,8 @@ struct Instance {
     /// Where the opponent's true state is written for post-game analysis; the bot never sees it.
     truth: Option<std::io::BufWriter<std::fs::File>>,
     events: Vec<Event>,
+    /// Units to create once the export has let go of the instance table (see `engine::Spawner`).
+    spawns: Vec<(UnitDefId, Vec3)>,
 }
 
 // SAFETY: the engine only calls the exports from its own thread; the raw callback pointer
@@ -154,6 +156,10 @@ impl Instance {
                     }
                 }
             }
+            if let Command::GiveUnit { def, at } = command {
+                self.spawns.push((def, at));
+                continue;
+            }
             if let Err(code) = self.engine.issue(&command) {
                 let (Command::Build { unit, .. }
                 | Command::Move { unit, .. }
@@ -162,7 +168,11 @@ impl Instance {
                 | Command::SetRepeat { unit, .. }
                 | Command::Guard { unit, .. }
                 | Command::ReclaimArea { unit, .. }
-                | Command::Repair { unit, .. }) = command;
+                | Command::Repair { unit, .. }
+                | Command::SelfDestruct { unit }) = command
+                else {
+                    continue;
+                };
                 self.events.push(Event::CommandRejected { unit, code });
             }
         }
@@ -234,6 +244,7 @@ pub unsafe extern "C" fn init(skirmish_ai_id: c_int, callback: *const sys::SSkir
                 .and_then(|dir| std::fs::File::create(std::path::Path::new(&dir).join(format!("truth-{skirmish_ai_id}.jsonl"))).ok())
                 .map(std::io::BufWriter::new),
             events: Vec::new(),
+            spawns: Vec::new(),
         };
         instance.log("init");
         instances().insert(skirmish_ai_id, instance);
@@ -257,10 +268,19 @@ pub extern "C" fn release(skirmish_ai_id: c_int) -> c_int {
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn handleEvent(skirmish_ai_id: c_int, topic: c_int, data: *const c_void) -> c_int {
     guarded(skirmish_ai_id, || {
-        let mut instances = instances();
-        let Some(instance) = instances.get_mut(&skirmish_ai_id) else { return -1 };
-        if !data.is_null() {
-            unsafe { instance.handle_event(topic as sys::EventTopic, data) };
+        let (spawner, spawns) = {
+            let mut instances = instances();
+            let Some(instance) = instances.get_mut(&skirmish_ai_id) else { return -1 };
+            if !data.is_null() {
+                unsafe { instance.handle_event(topic as sys::EventTopic, data) };
+            }
+            (instance.engine.spawner(), std::mem::take(&mut instance.spawns))
+        };
+        // The table is unlocked here: the engine re-enters this function with the new unit's events.
+        for (def, at) in spawns {
+            if let Err(code) = spawner.give(def, at) {
+                eprintln!("[wreason ai={skirmish_ai_id}] give unit def={} at ({:.0},{:.0}) refused: {code}", def.0, at.x, at.z);
+            }
         }
         0
     })

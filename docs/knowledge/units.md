@@ -155,3 +155,81 @@ their damage to air (e.g. Pawn 2 vs 9). Anti-air is only worth building after ai
 https://www.crdhq.com/articles/bar-unit-guide.
 **Would be wrong if.** A Crossbow was seen damaging a ground unit.
 **Used by.** (candidate: build 2-3 AA bots + 2 missile towers only when an enemy aircraft or air plant has been seen)
+
+## Duel results (2026-09-19)
+
+Measured with the duel harness (`docs/harness/duels.md`): equal metal (~1200 a side), flat ground, both sides
+attack-move, no micro. **Margin** = own surviving metal share (health-weighted) minus the enemy's, x 100: +100 a flawless
+win, -100 a wipe without a scratch. Two full 23-unit tables, in `docs/data/duels-2026-09-19/`: **tight** (ranks 56 elmos
+apart, 8 duels a pairing, 2184 duels) and **wide** (100 elmos, 4 a pairing, 1092 duels). Figures below are tight / wide.
+Spread within a pairing is small (median sd 0.07), so the tables are repeatable; whether they are *representative* is
+the question (K-units-duel-caveats).
+
+### K-units-duel-line-bots-beat-raiders
+**Claim.** At equal metal in a head-on fight, Mace `armham` and Centurion `armwar` are our only tier-1 bots that win most
+matchups (row means +37 / +38 and +37 / +40); Pawn `armpw` and Rocketeer `armrock` lose most (-1 / +21 and -2 / +4).
+Against what BARb fields: Mace beats Grunt +44 / +32, Aggravator +31 / +33, Thug +16 / +13, Incisor +17 / +4, Brute
++26 / +27, Stout +38 / +31, both light turrets +60 or more. Pawn loses to Thug -43 / -20, Brute -45 / -26, Pounder
+-93 / -77 and beats only Grunt (+14 / +15). Rocketeer loses to every mobile Cortex unit it cannot outrange: Thug
+-46 / -52, Incisor -41 / -50, Blitz -36 / -54, Brute -29 / -32. Cortex mirrors it: Thug +37 / +38, Grunt -3 / +11.
+**Status.** supported (2026-09-19) for the duel setting; untested in real matches
+**Evidence.** `docs/data/duels-2026-09-19/{tight,wide}-pairs.csv`. All eight tight duels went the same way for each pairing
+quoted except Mace-Incisor wide (+4, mixed).
+**Would be wrong if.** An arena batch with production shifted from Pawn / Rocketeer to Mace did not improve the fight
+ledger's exchange ratio against BARb; or the result vanished at 3-5x the army size.
+**Used by.** (candidate: H-PROD-BATCH weights — Mace as the default line unit, Pawn only for raiding; the commander's
+`set_production`)
+
+### K-units-duel-pounder-dominates
+**Claim.** Pounder `corlevlr` (220 M riot tank, range 315, speed 40) beats every other tier-1 land unit at equal metal,
+at every formation spacing tried: row mean +77 / +70; against Pawn -93 / -77 from our side, Mace -68 / -57, Centurion
+-65 / -59, Rocketeer -75 / -67, Stout -73 / -67. Its closest matchups are Janus (+24 / +45 for Pounder) and the light
+turrets (+57 / +29). Pawn against Pounder stays lost at spacing 56, 100, 120 and 160 (-0.89, -0.75, -0.74, -0.56).
+**Status.** supported (2026-09-19) for the duel setting
+**Evidence.** Tables above; batches `sp56`..`sp160` (8 duels each).
+**Would be wrong if.** Kiting decides it: the Pounder is the slowest unit in the table and out-ranged by rockets (475) and
+artillery (710); a duel with the rockets held at range, or with retreat-while-firing, may reverse Rocketeer-Pounder.
+Untested here because both sides charge.
+**Used by.** (candidate: never send Pawn / Mace blobs into scouted Pounders; rockets or Janus with stand-off instead)
+
+### K-units-duel-spacing-decides-area-damage
+**Claim.** How tightly an army is packed changes who wins when one side does area damage, so a single table is not enough.
+Janus `armjanus` has row mean +37 tight and +8 wide, and eight of its matchups change sign (Pawn +34 -> -29, Thug
++15 -> -34, Centurion +37 -> -20). Pawn against Mace goes -0.45, -0.02, +0.09, +0.19 at spacing 56, 100, 120, 160.
+Pawn's row mean rises from -1 to +21. 19 of 252 pairings change sign between the tables with both margins beyond 0.10;
+the median shift is 0.12.
+**Status.** supported (2026-09-19)
+**Evidence.** `tight-` against `wide-pairs.csv`; batches `sp56`..`sp160`; the first probe, `spacing120`.
+**Would be wrong if.** The shift came from the wide formation's rear ranks standing outside the flat rectangle (they do,
+by up to ~500 elmos for the largest armies) rather than from spacing. Not separated.
+**Used by.** (candidate: the brain's blob attack-move is the tight case; spreading a Pawn wave is worth more than its unit
+stats suggest)
+
+### K-units-duel-range-vs-turrets
+**Claim.** Against light laser towers at equal metal: Lasher `cormist` (range 575) wins untouched, +96 / +100; Rocketeer
++43 / +37 and Aggravator +24 / +28 (range 475 against 430-435) win but pay for it; Mace +60 / +52 and Thug +63 / +53
+simply overpower them; Pawn loses -20 / -18. Artillery does **not** beat turrets here: Shellshocker `armart` -5 / -17
+against Sentry, -20 / -54 against Guard, despite range 710.
+**Status.** supported (2026-09-19) for the numbers; the explanation below is conjectured
+**Evidence.** Tables above. Conjecture for the artillery result: its sight (364) is shorter than the turret's range
+(430-435), so with no spotter or radar an attack-moving Shellshocker first sees the turret from inside its range.
+Not checked in a replay.
+**Would be wrong if.** A Shellshocker group given a scout or radar coverage still lost to equal-metal turrets.
+**Used by.** K-units-rockets-outrange-llt (supports it, with the cost: rockets take return fire unless held at range);
+K-units-artillery-outranges-everything-t1 (qualifies it: range without sight is not stand-off)
+
+### K-units-duel-caveats
+**Claim.** The duel tables rank units for one situation — two single-type blobs of ~1200 metal charging each other on
+flat ground — and are wrong to the extent a real fight differs:
+(1) no micro: nothing kites, retreats or holds at range, so slow short-range units (Pounder, Mace, Thug) are flattered and
+fast or long-range ones (Rocketeer, artillery, scouts) are not; (2) formation density matters as much as unit choice for
+area damage (K-units-duel-spacing-decides-area-damage); (3) no sight support: artillery and rockets out-range their own
+vision; (4) metal only — energy cost and build time are ignored, which favours energy-hungry units; (5) one army size —
+Lanchester effects at 3-5x are untested; (6) no mixed armies, no terrain, no turrets or repair behind the line, no
+veterancy; (7) anti-air (`armjeth`, `corcrash`) cannot hit ground and scores about -76 by construction; (8) units spawn
+facing south on a west-east axis, so every army begins with a 90-degree turn.
+**Status.** supported (2026-09-19) as a description of the method
+**Evidence.** `docs/harness/duels.md`; harness checks there (no position, team-slot, site or game-speed bias found; wrecks
+bias results unless cleared).
+**Would be wrong if.** n/a (scope statement). Retire items as the harness gains stand-off orders, mixed armies or sizes.
+**Used by.** Every K-units-duel-* claim.
