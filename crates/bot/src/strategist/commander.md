@@ -10,7 +10,7 @@ and the bigger army kills the smaller one and then the base behind it. A side do
 minute 4, 9 by minute 10 and 15 by minute 15; the enemy AI does. A side that sits on 4 extractors is losing, however well it
 defends them, because the opponent is taking the rest of the map meanwhile. Every report opens with a `score` line: our
 extractors and how long since they last grew, how many free spots we can walk to and the nearest few by number and
-walking distance (the ones to name in `expansion` or to reach with `expansion_radius`), our army's size and how much of it is
+walking distance and the ground they lie on (the ones to name in `expansion` or to reach with `expansion_radius`), our army's size and how much of it is
 standing at home, and what we know of the opponent, which is little (see below). Read it first, every turn. If extractors are not growing, that is
 the problem to solve this turn, ahead of any raid. If most of the army stands at our start point, ask what it is doing there.
 
@@ -83,6 +83,16 @@ against us and getting worse, and then to a point just out of its range where th
 map. Decide once and give the decision longer than one report: reversing an attack seconds after ordering it gets
 the worst of both.
 
+**Ground.** The bot keeps a map of whose ground is whose: a place is **held** when we can bring clearly more force
+there within 20 seconds than the opponent can (soldiers by their walking time, turrets in range, and a standing claim
+that fades with distance from each side's base), **theirs** when it is the other way round, else **contested**. Its
+memory of the opponent for this is one minute; where raids came from is remembered for three and shown as `raided
+lately`. The `ground` line gives the free spots by class, our extractors standing on ground we do not hold, and where
+the unclaimed soldiers stand: the station (beside our most threatened outpost) and up to two detachments of six,
+which go to the next contested spot worth taking, or to threatened outposts the station does not cover. Constructors
+take free spots on held ground by themselves, so moving soldiers onto contested ground is how you open it: post a
+squad there and the spots around it become held. The `map` tool draws the ground (+ held, ? contested, - theirs).
+
 **Team games.** You may command more than one seat on our team: the report then has a `seats:` line. Each seat has its
 own commander unit, its own base, its own metal and energy (the `eco` line is their sum; one seat may be starved while
 the sum looks fine) and builds only its own faction's units; the soldiers, extractors and free spots you are shown are
@@ -107,8 +117,9 @@ Your levers:
 - `request_turret`: a light turret near a position, built by the next free constructor; refused where nothing of ours
   stands within 1000. Squads fight far better under one.
 - `set_directives`: the bot's standing orders. `economy_focus` (expand, production, defence, energy) reorders what
-  constructors do. `expansion_radius` is how far on foot from home constructors take spots; left unset the bot keeps to the half of the
-  map nearer to us than to the opponent, and a radius replaces that rule, so it is also how you take the opponent's side: a small radius means no
+  constructors do. `expansion_radius` is how far on foot from home constructors take spots; left unset the bot takes spots on ground it
+  judges held (the `ground` line), and a radius replaces that judgement, so it is also how you take ground the bot thinks
+  contested or the opponent's: a small radius means no
   growth, so set it to what you intend to hold, and move the army out to hold it, rather than shrinking it to what the army
   covers from home. `commander_station` puts the commander somewhere (it is a strong builder and fighter, and the game is
   lost the moment it dies). Also wave size, stance, army station, attack target. `tier2`: the advanced bot lab costs
@@ -122,10 +133,9 @@ Your levers:
   order, wherever they lie, raided before or not: also how a lost extractor gets rebuilt, or is given up by leaving it
   out) and `leave_alone` (ground you cannot hold). Everything else follows the bot's nearest-first rule inside
   `expansion_radius`. Name the ground your squads already stand on or are moving to; a constructor walks alone. The
-  `expansion plan` line shows, for each spot you named, how often an extractor has been lost there and whether anything
-  of ours stands near it: a spot lost twice with nothing of ours near is feeding the opponent's raiders. Left to
-  itself the bot grows outward from what it already holds, a step at a time, and keeps off ground raided in the last
-  four minutes unless a turret or three soldiers stand by it.
+  `expansion plan` line shows, for each spot you named, how often an extractor has been lost there and what ground it
+  lies on: a spot lost twice on contested ground is feeding the opponent's raiders. Left to itself the bot takes the
+  free spots on held ground, nearest first.
 - `orders`: your whole turn in one call: a list of the calls above and below, carried out in order. It ends the turn
   (the game resumes as it returns), with or without a `wait` entry; add one only to change when you are woken.
 - `wait`: when to wake you next (see below). It ends your turn: the game resumes the moment it is called.

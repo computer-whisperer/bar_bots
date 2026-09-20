@@ -177,4 +177,11 @@ Territory before reclaim because the crew needs to know where it is safe to walk
 - 2026-09-20, the commander over several seats: built as designed above (`strategist/seats.rs`, per-seat `seen_by` on
   squad orders, the lead seat in `wake.rs`), with `--commander-each` and `--commander-model` (part 4's flag) on the arena.
   First game: commander-team-1 (`docs/experiments.md`).
-- Not built: parts 2 and 3; part 4's comparison.
+- 2026-09-20, part 2: `territory.rs` (the grid), expansion on held ground, station at the most threatened outpost,
+  H-ARMY-DETACH (posts and the escort), the commander's `ground:` line, ground classes on the free-spot list and the
+  plan, and the grid drawn in the `map` tool. Retired: H-ECO-HOT-SPOTS, H-ECO-REACH, H-ECO-FRONTIER, H-ECO-OWN-HALF.
+  Differences from the text above: two memories, not one (60 s for the class, 3 min for threat: terr-1 against terr-2);
+  unit travel is straight-line (the standing claims use walking distance); turret placement still goes by the old
+  unguarded-outpost rule, not by the grid; constructors' paths are not steered round ground that is theirs. Not yet
+  checked: constructor deaths with nothing of ours within 600 (the design's third measure).
+- Not built: part 3; part 4's comparison.

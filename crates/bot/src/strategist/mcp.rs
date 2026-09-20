@@ -217,7 +217,14 @@ fn orders(arguments: &Value, shared: &Shared) -> Result<String, String> {
 fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, String> {
     match name {
         "overview" => serde_json::to_string(&shared.briefing()).map_err(|e| e.to_string()),
-        "map" => Ok(shared.map.lock().unwrap().to_string()),
+        "map" => {
+            let mut map = shared.map.lock().unwrap().clone();
+            map["ground"] = serde_json::json!({
+                "legend": "whose ground is whose right now, one character per 256 elmos, north up: + held by us, ? contested, - theirs",
+                "rows": *shared.ground_sketch.lock().unwrap(),
+            });
+            Ok(map.to_string())
+        }
         "note" => {
             let time = shared.briefing().game_time;
             let text = arguments["text"].as_str().filter(|t| !t.trim().is_empty()).ok_or("a note needs its words under \"text\"")?;

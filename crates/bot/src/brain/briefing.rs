@@ -81,9 +81,6 @@ impl Brain {
             }
             let Event::UnitDestroyed { unit, attacker } = event else { continue };
             let Some((def, pos)) = self.known_units.remove(unit) else { continue };
-            if kit.is_extractor(def) || def == kit.constructor {
-                self.note_hot_spot(pos, tick.frame);
-            }
             self.trade_log.push((tick.frame, self.world.def(def).map_or(0.0, |d| d.metal_cost), 0.0));
             if kit.is_extractor(def)
                 && let Some(index) = self.world.hello.metal_spots.iter().position(|s| s.dist2d(pos) < 100.0)

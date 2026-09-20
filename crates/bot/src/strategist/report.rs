@@ -43,7 +43,7 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         s.extractor_peak,
         clock(s.seconds_since_growth),
         s.free_spots,
-        if s.next_free.is_empty() { "none".to_string() } else { s.next_free.iter().map(|(n, p, walk)| format!("#{n} {} {walk}", p.grid)).collect::<Vec<_>>().join(", ") },
+        if s.next_free.is_empty() { "none".to_string() } else { s.next_free.iter().map(|(n, p, walk, ground)| format!("#{n} {} {walk} {ground}", p.grid)).collect::<Vec<_>>().join(", ") },
         s.enemy_spots_seen,
         s.soldiers,
         s.army_metal,
@@ -60,6 +60,13 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         "eco: metal {:.0} ({:+.1}/-{:.1}), energy {:.0}/{:.0} ({:+.0}) | extractors {} constructors {} labs {} turrets {} converters {}",
         briefing.metal.current, briefing.metal.income, briefing.metal.usage, briefing.energy.current, briefing.energy.storage,
         briefing.energy.income - briefing.energy.usage, c.extractors, c.constructors, c.labs, c.turrets, c.converters
+    ));
+    let g = &field.ground;
+    let listed = |places: &[super::shared::Place]| if places.is_empty() { "none".to_string() } else { places.iter().map(|p| p.grid.clone()).collect::<Vec<_>>().join(", ") };
+    lines.push(format!(
+        "ground: free spots on held ground {}, contested {}, theirs {} | our extractors on ground we do not hold: {} | unclaimed soldiers stand at: {} | raided lately: {}",
+        g.free_spots.0, g.free_spots.1, g.free_spots.2, listed(&g.extractors_exposed), listed(&g.posts),
+        if g.raided.is_empty() { "nowhere".to_string() } else { g.raided.iter().map(|(p, metal)| format!("{} ({metal})", p.grid)).collect::<Vec<_>>().join(", ") }
     ));
     if briefing.seats.len() > 1 {
         let seats: Vec<String> = briefing

@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitDefId, Vec3};
 
 use super::roster::Kit;
+use super::territory::Ground;
 use super::tier2::{ADVANCED_CONSTRUCTORS, Advance, LAB_ASSISTANTS, UPGRADES_BEFORE_ARMY};
 use crate::strategist::shared::Focus;
 use super::{Brain, FRAMES_PER_SECOND};
@@ -39,12 +40,6 @@ const MAX_CONVERTERS: usize = 40;
 /// Extractors farther from home than this want a turret of their own. It was 1200, which left the third and fourth
 /// spots of the north-west start (963 and 1199 out, past the base turret line) with none, and they died 3-5 times a game.
 const OUTPOST_DISTANCE: f32 = 500.0;
-/// H-ECO-HOT-SPOTS: a metal spot where we lost an extractor or a constructor is left alone for this long, unless a
-/// turret or soldiers cover it by then.
-const HOT_SPOT_FRAMES: i32 = 4 * 60 * 30;
-/// Soldiers this close to a spot, at least this many, count as cover.
-const COVER_RADIUS: f32 = 500.0;
-const COVER_SOLDIERS: usize = 3;
 const OUTPOST_GUARD_RADIUS: f32 = 350.0;
 /// BARb medium runs 4-6 constructors by minute 10 and 10-20 later; we ran 2-4 and never rebuilt what raids took (observe-2).
 const MAX_CONSTRUCTORS: usize = 10;
@@ -77,11 +72,6 @@ const TURRET_LINE: f32 = 650.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
 const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
-/// H-ECO-REACH: constructors take spots within this walking distance of home, plus this much per soldier we have.
-const EXPANSION_REACH: f32 = 1500.0;
-const EXPANSION_REACH_PER_SOLDIER: f32 = 50.0;
-/// H-ECO-FRONTIER: a spot this close to an extractor or turret of ours is the next step outward, however far from home.
-const FRONTIER_STEP: f32 = 1200.0;
 /// H-ECO-EXPAND-FIRST: below this many extractors a constructor's first thought is the next metal spot.
 const EXPAND_FIRST_EXTRACTORS: usize = 9;
 /// Metal spots within this walking distance of the start are built before anything else; farther ones after the lab.
@@ -502,7 +492,7 @@ impl Brain {
     }
 
     /// Reserves the nearest free metal spot this builder may go to: inside the leash for the
-    /// commander (H-COM-LEASH), on our half of the map for constructors (H-ECO-OWN-HALF).
+    /// commander (H-COM-LEASH), on held ground for constructors (H-MAP-TERRITORY).
     fn claim_spot(&mut self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit, frame: i32) -> Option<Vec3> {
         let is_commander = builder.def == kit.commander;
         let commander_station = self.directives.commander_station.map(|d| d.value);
@@ -510,7 +500,6 @@ impl Brain {
         if commander_station.is_some() || expansion_radius.is_some() {
             self.fire(if is_commander { "D-COMMANDER-STATION" } else { "D-EXPANSION-RADIUS" });
         }
-        let soldiers = own.iter().filter(|u| self.is_army(u, kit)).count();
         let reachable = |spot: Vec3| {
             // `walk_from_home` answers with the straight line for ground we cannot walk to, and the commander's leash
             // took that for nearness: an extractor went onto an islet, and a constructor spent three quarters of its
@@ -526,23 +515,14 @@ impl Brain {
                     }
                 }
             } else {
-                // H-ECO-REACH: no farther from home than the army can answer for. The far line of spots (2000-2400
-                // out) was bought and swept in every game, constructors and all.
-                // A commander's radius is the whole rule: it may reach past the half of the map the bot keeps to on its
-                // own (in commander game 5 it could not, and sat on 7 extractors with 2.7 times the opponent's army).
+                // A commander's radius is the whole rule: it may reach past what the bot holds on its own (in commander
+                // game 5 it could not, and sat on 7 extractors with 2.7 times the opponent's army).
+                // H-MAP-TERRITORY: otherwise a constructor goes where the ground is held: where we can answer sooner and
+                // harder than the opponent can arrive. Raided ground is contested until the raiders are forgotten or
+                // soldiers or a turret stand there; ground by our army is held however far from home it is.
                 match expansion_radius {
-                    Some(radius) => self.reachable_on_foot(spot) && self.walk_from_home(spot) <= radius as f32,
-                    None => {
-                        let reach = EXPANSION_REACH + EXPANSION_REACH_PER_SOLDIER * soldiers as f32;
-                        // H-ECO-FRONTIER: what we hold carries the reach outward with it. Measured from home alone, the
-                        // reach stopped at the first gap in the map: from Quicksilver's north-west start seven spots lie
-                        // within 2100 on foot and the next eight at 2700-3400, which took 24-38 soldiers standing at
-                        // home at once; we held those eight for one minute a game and the opponent for seventy
-                        // (K-eco-raided-ground-is-raided-again). Raided ground still closes through the hot-spot rule.
-                        let frontier = self.enabled("H-ECO-FRONTIER")
-                            && own.iter().any(|u| (kit.is_extractor(u.def) || u.def == kit.turret) && !u.being_built && u.pos.dist2d(spot) < FRONTIER_STEP);
-                        self.spot_is_ours(spot) && (!self.enabled("H-ECO-REACH") || self.walk_from_home(spot) <= reach || frontier)
-                    }
+                    Some(radius) => self.walk_from_home(spot) <= radius as f32,
+                    None => self.ground(spot) == Ground::Held,
                 }
             }
         };
@@ -565,7 +545,6 @@ impl Brain {
             .iter()
             .enumerate()
             .filter(|(i, s)| !self.spot_claims.contains_key(i) && !self.team_mates.spot_claims.contains(i) && reachable(**s) && !self.is_unreachable(**s) && !self.spot_avoid.contains(i) && self.spot_open_to_us(*i, **s, frame))
-            .filter(|(_, s)| !self.is_hot(**s, frame) || self.is_covered(**s, own, kit))
             .filter(|(_, s)| !self.spot_taken(**s, own, kit))
             .min_by(|(_, a), (_, b)| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))?;
         self.spot_claims.insert(index, frame);
@@ -609,30 +588,6 @@ impl Brain {
         own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < SPOT_OCCUPIED_RADIUS) || self.allied_extractor_on(spot)
     }
 
-    /// Whether we lost an extractor or a constructor at this metal spot lately.
-    pub(super) fn is_hot(&self, spot: Vec3, frame: i32) -> bool {
-        self.hot_spots.iter().any(|(hot, until)| *until > frame && hot.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
-    }
-
-    /// A turret beside the spot, or a few soldiers standing by it; an ally's count as ours do.
-    fn is_covered(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
-        let allied_soldiers = self.allied_cover(spot, COVER_RADIUS).0;
-        own.iter().any(|u| u.def == kit.turret && !u.being_built && u.pos.dist2d(spot) < OUTPOST_GUARD_RADIUS)
-            || self.allied_cover(spot, OUTPOST_GUARD_RADIUS).1
-            || own.iter().filter(|u| self.is_army(u, kit) && u.pos.dist2d(spot) < COVER_RADIUS).count() + allied_soldiers >= COVER_SOLDIERS
-    }
-
-    /// Notes the metal spot nearest a lost extractor or constructor as hot.
-    pub(super) fn note_hot_spot(&mut self, lost_at: Vec3, frame: i32) {
-        self.hot_spots.retain(|(_, until)| *until > frame);
-        let nearest = self.world.hello.metal_spots.iter().min_by(|a, b| a.dist2d(lost_at).total_cmp(&b.dist2d(lost_at)));
-        if let Some(spot) = nearest.filter(|s| s.dist2d(lost_at) < 400.0) {
-            let spot = Vec3 { y: 0.0, ..*spot };
-            self.hot_spots.retain(|(hot, _)| hot.dist2d(spot) > 1.0);
-            self.hot_spots.push((spot, frame + HOT_SPOT_FRAMES));
-        }
-    }
-
     /// The nearest far-flung extractor with no turret beside it; raiders pick those off first.
     fn unguarded_outpost(&self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Option<Vec3> {
         let guarded = |pos: Vec3| {
@@ -646,12 +601,9 @@ impl Brain {
             });
             turret_near || on_its_way
         };
-        // Hot spots count as outposts to be: the turret goes up first, and the spot reopens once it stands.
-        let hot = self.hot_spots.iter().map(|(spot, _)| *spot).filter(|spot| self.spot_is_ours(*spot));
         own.iter()
             .filter(|u| kit.is_extractor(u.def))
             .map(|u| u.pos)
-            .chain(hot)
             .filter(|pos| pos.dist2d(self.home) > OUTPOST_DISTANCE && !guarded(*pos) && self.reachable_on_foot(*pos))
             .min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
     }

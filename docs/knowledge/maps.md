@@ -159,3 +159,23 @@ call tells where another team started: an ally's start is where its commander is
 its ally team's start box, which only the setup script (`Game_getSetupScript`) gives.
 **Status.** supported (2026-09-20), read from `SSkirmishAICallback.h` and seen in team-2v2-smoke.
 **Used by.** H-TEAM-ALLIED-SPOTS, H-TEAM-ALLY-GROUND, H-MAP-ENEMY-BASE.
+
+### K-map-ground-is-who-answers-first
+**Claim.** Whether a metal spot can be held is decided by who can bring force there sooner, not by its distance from home
+or by a clock since the last loss: spots beside our army are safe far from home, and spots near home are not while the
+opponent's army stands among them.
+**Status.** supported (2026-09-20), terr-2 against the distance-and-clock rules on the same 8 north-west seeds:
+extractors 7.0 / 7.4 / 7.8 at minutes 5 / 7 / 11 against 5.0 / 6.2 / 6.9, soldiers 24-28 against 22 at minutes 11-15; on
+Mithril Mountain 12.2 / 14.6 extractors at minutes 11 / 15 against 8.4 / 8.1 (v33, 16 games) and 4-2-2 against 5-10-1.
+Wins north-west did not move (1-7-0 against 0-6-2; that corner has won 10-25 % for days, as it does for BARb).
+**Evidence.** `run/matches/*terr-2-*`, `*terr-1-nw-base`; curves from the per-minute lines of bot.log.
+**Used by.** H-MAP-TERRITORY.
+
+### K-map-presence-is-not-memory
+**Claim.** "May a constructor go there" and "where do raids come from" need different memories. With every enemy soldier
+seen in three minutes counted against a spot, one visit by the opponent's army closed most of our half for minutes and
+nothing was rebuilt; an extractor pays for itself in about half a minute, so only who is there now should stop it.
+**Status.** observed (2026-09-20), terr-1-nw: 31-41 of 44 spots classed theirs from minute 8, extractors 4-5 from minute
+7 against 6-7 without the grid; with the class forgetting in 60 s (terr-2) the curve went above the old rules'.
+**Evidence.** `run/matches/1789915396-terr-1-nw/*/bot.log`, the `ground:` lines.
+**Used by.** H-MAP-TERRITORY.

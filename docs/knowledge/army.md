@@ -218,3 +218,11 @@ different places.
 minute 8 with 17-28 enemies in sight, while seat 0 kept 19-26 soldiers at its station 2200 away; lost at 20 minutes.
 **Evidence.** `run/matches/1789914072-team-2v2-board/00/bot.log`, the per-minute lines of both seats.
 **Used by.** H-TEAM-DEFEND.
+
+### K-army-one-post-for-a-wide-front
+**Claim.** A home group that stands on one post cannot answer raids on a wide front: from Quicksilver's north-west start
+23 of 24 soldiers stood at one extractor while raiders arrived across 2000 elmos, and 12 of 19 constructor deaths had
+nothing of ours within 600.
+**Status.** observed (2026-09-20, the early-game post-mortem of commander games 8-11); the remedy (H-ARMY-DETACH) is
+built and fires, its own effect is not isolated from the territory grid's.
+**Used by.** H-ARMY-DETACH.

@@ -3,7 +3,7 @@
 //! H-TEAM-ALLIED-SPOTS: an allied extractor holds its spot. H-TEAM-ALLY-GROUND: metal nearer to an ally's start than
 //! to ours is theirs to take first; we build there only once it has stood empty for [`ALLY_GROUND_FRAMES`] (an ally
 //! expands where it likes, and we do not race it at its own door). H-TEAM-ALLIED-COVER: allied soldiers and turrets
-//! cover a spot as ours do, and allied soldiers in a fight are counted into its odds.
+//! hold ground as ours do (`territory.rs`), and allied soldiers in a fight are counted into its odds.
 //!
 //! Seats of ours also talk through the team board (`crate::team`): H-TEAM-BOARD pools spot claims and enemy buildings,
 //! H-TEAM-WAVES makes them attack one target and weigh a wave with the others' soldiers beside it.
@@ -58,11 +58,5 @@ impl super::Brain {
     pub(super) fn allied_soldiers_near(&self, pos: Vec3, radius: f32) -> Vec<UnitDefId> {
         let soldier = |def: UnitDefId| self.world.def(def).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0 && d.build_speed == 0.0);
         self.allies.iter().filter(|a| !a.being_built && a.pos.dist2d(pos) < radius && soldier(a.def)).map(|a| a.def).collect()
-    }
-
-    /// Allied soldiers within `radius` of `pos`, and whether an allied turret stands there.
-    pub(super) fn allied_cover(&self, pos: Vec3, radius: f32) -> (usize, bool) {
-        let near = || self.allies.iter().filter(move |a| !a.being_built && a.pos.dist2d(pos) < radius).filter_map(|a| self.world.def(a.def));
-        (self.allied_soldiers_near(pos, radius).len(), near().any(|d| d.weapon_count > 0 && d.speed == 0.0))
     }
 }

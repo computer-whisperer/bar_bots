@@ -9,6 +9,7 @@ use bot_protocol::{Command, EnemyUnit, OwnUnit, Tick, UnitId, Vec3};
 
 use super::combat::Force;
 use super::roster::Kit;
+use super::territory::Ground;
 use super::{Brain, FRAMES_PER_SECOND};
 use crate::strategist::shared::Stance;
 
@@ -30,6 +31,13 @@ const RAID_RADIUS: f32 = 500.0;
 const NOTABLE_INTRUSION: usize = 3;
 /// The default station stands this far from the most exposed extractor, on its home side.
 const STATION_LEAD: f32 = 250.0;
+/// H-ARMY-DETACH: posts are at least this far from the station and from each other; nearer, one group answers for both.
+const POST_SPACING: f32 = 1200.0;
+const MAX_DETACHMENTS: usize = 2;
+const DETACHMENT: usize = 6;
+/// Soldiers the station keeps before anybody is detached.
+const KEEP_AT_STATION: usize = 8;
+const DETACHMENT_RADIUS: f32 = 350.0;
 /// Buildings this close to a target given up as unreachable are skipped too (they share its ledge).
 const BAD_TARGET_RADIUS: f32 = 350.0;
 /// A candidate station this close to one given up as unreachable is skipped too.
@@ -110,6 +118,8 @@ pub struct Army {
     staging: Option<(Vec3, i32)>,
     /// H-ARMY-MARCH: attackers stopped until the body of the wave has come up.
     held: HashSet<UnitId>,
+    /// H-ARMY-DETACH: the posts beside the station, each with the home-group soldiers standing on it.
+    detachments: Vec<(Vec3, Vec<UnitId>)>,
 }
 
 impl Army {
@@ -130,33 +140,118 @@ impl Army {
         self.target
     }
 
+    pub fn detachment_posts(&self) -> Vec<Vec3> {
+        self.detachments.iter().map(|(post, _)| *post).collect()
+    }
+
     pub fn staging_point(&self) -> Option<Vec3> {
         self.staging.map(|(point, _)| point)
     }
 }
 
 impl Brain {
-    /// Where the home group waits: the strategist's station, else just ahead of our most exposed
-    /// outpost extractor, else in front of the base.
+    /// The point on the home side of an outpost where soldiers guarding it stand: ground our constructor walked to
+    /// build it. A point ahead of it towards the enemy was often unreachable, and units that cannot reach their station
+    /// pile up at the factory exit.
+    fn post_beside(&self, outpost: Vec3) -> Vec3 {
+        let (dx, dz) = (self.home.x - outpost.x, self.home.z - outpost.z);
+        let len = dx.hypot(dz).max(1.0);
+        Vec3 { x: outpost.x + dx / len * STATION_LEAD, y: 0.0, z: outpost.z + dz / len * STATION_LEAD }
+    }
+
+    /// Our outpost extractors, the most threatened first (`territory.rs`: what the opponent can bring there, from where
+    /// its bases are and what was seen or lost there lately), no two within [`POST_SPACING`] of each other.
+    fn threatened_outposts(&self, tick: &Tick, kit: &Kit) -> Vec<Vec3> {
+        let mut outposts: Vec<Vec3> =
+            tick.snapshot.own_units.iter().filter(|u| kit.is_extractor(u.def) && u.pos.dist2d(self.home) > OUTPOST_DISTANCE).map(|u| u.pos).collect();
+        outposts.sort_by(|a, b| self.territory.threat(*b).total_cmp(&self.territory.threat(*a)));
+        let mut chosen: Vec<Vec3> = Vec::new();
+        for outpost in outposts {
+            if chosen.iter().all(|c| c.dist2d(outpost) > POST_SPACING) {
+                chosen.push(outpost);
+            }
+        }
+        chosen
+    }
+
+    /// The free metal spot to take next under escort: the nearest on foot that is contested, when no held one is free.
+    fn escort_target(&self, tick: &Tick, kit: &Kit) -> Option<Vec3> {
+        let taken = |spot: Vec3| {
+            tick.snapshot.own_units.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < 100.0)
+                || self.allied_extractor_on(spot)
+                || self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(spot) < 100.0)
+        };
+        let free: Vec<(usize, Vec3)> = self
+            .world
+            .hello
+            .metal_spots
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (i, Vec3 { y: 0.0, ..*s }))
+            .filter(|(i, s)| self.reachable_on_foot(*s) && !taken(*s) && !self.spot_avoid.contains(i) && self.spot_open_to_us(*i, *s, tick.frame))
+            .collect();
+        if free.iter().any(|(_, s)| self.ground(*s) == Ground::Held) {
+            return None;
+        }
+        free.into_iter().map(|(_, s)| s).filter(|s| self.ground(*s) == Ground::Contested).min_by(|a, b| self.walk_from_home(*a).total_cmp(&self.walk_from_home(*b)))
+    }
+
+    /// H-ARMY-DETACH: the home group is not one blob. Beside the station, up to [`MAX_DETACHMENTS`] posts are held by
+    /// [`DETACHMENT`] soldiers each: the next contested spot to take (the escort: with soldiers on it the ground is
+    /// held, the constructors come, a turret follows) and the threatened outposts the station does not cover. From the
+    /// north-west start 23 of 24 soldiers stood on one post while raids came in on a front 2000 wide. Returns the
+    /// detached soldiers, who answer raids with everyone else but do not leave with a wave.
+    fn run_detachments(&mut self, tick: &Tick, kit: &Kit, home_group: &[&OwnUnit], station: Vec3, commands: &mut Vec<Command>) -> HashSet<UnitId> {
+        if !self.enabled("H-ARMY-DETACH") {
+            self.army.detachments.clear();
+            return HashSet::new();
+        }
+        let wanted = MAX_DETACHMENTS.min(home_group.len().saturating_sub(KEEP_AT_STATION) / DETACHMENT);
+        let posts: Vec<Vec3> = self
+            .escort_target(tick, kit)
+            .into_iter()
+            .chain(self.threatened_outposts(tick, kit).into_iter().map(|outpost| self.post_beside(outpost)))
+            .filter(|post| post.dist2d(station) > POST_SPACING && self.reachable_on_foot(*post))
+            .fold(Vec::new(), |mut chosen: Vec<Vec3>, post| {
+                if chosen.len() < wanted && chosen.iter().all(|c| c.dist2d(post) > POST_SPACING) {
+                    chosen.push(post);
+                }
+                chosen
+            });
+        // A detachment whose post still stands (or has moved a little) keeps its soldiers; the others dissolve.
+        let mut previous = std::mem::take(&mut self.army.detachments);
+        for post in posts {
+            let mut members = previous.iter().position(|(at, _)| at.dist2d(post) < POST_SPACING / 2.0).map(|i| previous.swap_remove(i).1).unwrap_or_default();
+            members.retain(|id| home_group.iter().any(|u| u.id == *id));
+            self.army.detachments.push((post, members));
+        }
+        for index in 0..self.army.detachments.len() {
+            let post = self.army.detachments[index].0;
+            let taken: HashSet<UnitId> = self.army.detachments.iter().flat_map(|(_, members)| members.iter().copied()).collect();
+            let mut free: Vec<&&OwnUnit> = home_group.iter().filter(|u| !taken.contains(&u.id)).collect();
+            free.sort_by(|a, b| a.pos.dist2d(post).total_cmp(&b.pos.dist2d(post)));
+            let missing = DETACHMENT.saturating_sub(self.army.detachments[index].1.len());
+            if missing > 0 && !free.is_empty() {
+                self.fire("H-ARMY-DETACH");
+            }
+            self.army.detachments[index].1.extend(free.into_iter().take(missing).map(|u| u.id));
+        }
+        for (post, members) in &self.army.detachments {
+            let strays = home_group.iter().filter(|u| members.contains(&u.id) && u.idle && u.pos.dist2d(*post) > DETACHMENT_RADIUS);
+            commands.extend(strays.map(|u| Command::Fight { unit: u.id, to: *post, queue: false }));
+        }
+        self.army.detachments.iter().flat_map(|(_, members)| members.iter().copied()).collect()
+    }
+
+    /// Where the home group waits: the strategist's station, else beside our most threatened outpost extractor, else
+    /// in front of the base.
     pub(super) fn station(&mut self, tick: &Tick, kit: &Kit) -> Vec3 {
         if let Some(ordered) = self.directives.army_station {
             self.fire("D-ARMY-STATION");
             return ordered.value;
         }
-        let most_exposed = tick
-            .snapshot
-            .own_units
-            .iter()
-            .filter(|u| kit.is_extractor(u.def) && u.pos.dist2d(self.home) > OUTPOST_DISTANCE)
-            .min_by(|a, b| a.pos.dist2d(self.enemy_base(a.pos)).total_cmp(&b.pos.dist2d(self.enemy_base(b.pos))));
-        // Candidates in order of preference. The outpost station sits on the home side of the extractor, on ground
-        // our constructor walked to build it; a point ahead of it towards the enemy was often unreachable, and
-        // units that cannot reach their station pile up at the factory exit.
-        let outpost = most_exposed.filter(|_| self.enabled("H-ARMY-STATION")).map(|extractor| {
-            let (dx, dz) = (self.home.x - extractor.pos.x, self.home.z - extractor.pos.z);
-            let len = dx.hypot(dz).max(1.0);
-            Vec3 { x: extractor.pos.x + dx / len * STATION_LEAD, y: 0.0, z: extractor.pos.z + dz / len * STATION_LEAD }
-        });
+        // Candidates in order of preference.
+        let outpost = self.threatened_outposts(tick, kit).first().filter(|_| self.enabled("H-ARMY-STATION")).map(|outpost| self.post_beside(*outpost));
         // Never in the lab yard: thirty soldiers parked on the factory exits jam the labs, and production stalls with
         // metal in the bank (v18 match 14: 1500 banked for five minutes, soldiers' moves failing beside the base).
         let labs: Vec<Vec3> = tick.snapshot.own_units.iter().filter(|u| u.def == kit.lab).map(|u| u.pos).collect();
@@ -394,6 +489,8 @@ impl Brain {
         let scout_id = self.army.scout.map(|(id, _)| id);
         let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| Some(u.id) != scout_id).collect();
 
+        let detached = self.run_detachments(tick, kit, &home_group, rally, commands);
+
         // Defence first: the home group turns on intruders at the base, then on raiders at any
         // extractor, and no wave leaves meanwhile.
         let at_base = nearest_to(self.home).filter(|e: &&EnemyUnit| e.pos.dist2d(self.home) < BASE_RADIUS);
@@ -453,7 +550,7 @@ impl Brain {
             let may_launch = !matches!(stance, Some(Stance::Defend | Stance::Gather));
             // H-ARMY-HOME-GUARD: the soldiers nearest the station stay; the rest are the wave.
             let guard = if self.enabled("H-ARMY-HOME-GUARD") { HOME_GUARD } else { 0 };
-            let mut by_station: Vec<&OwnUnit> = home_group.clone();
+            let mut by_station: Vec<&OwnUnit> = home_group.iter().filter(|u| !detached.contains(&u.id)).copied().collect();
             by_station.sort_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)));
             let wave: Vec<&OwnUnit> = by_station.into_iter().skip(guard).collect();
             // Under continuous raiding it is never quiet; then the clause would keep the army home for good. It may
@@ -538,7 +635,7 @@ impl Brain {
                 commands.extend(committed.map(|u| Command::Fight { unit: u.id, to: first_stop, queue: false }));
             } else {
                 // H-ARMY-STATION: wait where raids arrive, not scattered around the labs.
-                let stragglers = home_group.iter().filter(|u| u.idle && u.pos.dist2d(rally) > RALLY_RADIUS);
+                let stragglers = home_group.iter().filter(|u| u.idle && u.pos.dist2d(rally) > RALLY_RADIUS && !detached.contains(&u.id));
                 commands.extend(stragglers.map(|u| Command::Move { unit: u.id, to: rally, queue: false }));
             }
         }

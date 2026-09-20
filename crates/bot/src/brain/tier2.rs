@@ -83,7 +83,7 @@ impl Brain {
         let claimed = |at: Vec3| self.upgrade_claims.iter().any(|(id, spot)| *id != builder.id && spot.dist2d(at) < 50.0);
         let spot = own
             .iter()
-            .filter(|u| u.def == kit.extractor && !u.being_built && !upgraded(u.pos) && !claimed(u.pos) && !self.is_hot(u.pos, tick.frame))
+            .filter(|u| u.def == kit.extractor && !u.being_built && !upgraded(u.pos) && !claimed(u.pos) && self.ground(u.pos) == super::territory::Ground::Held)
             .map(|u| u.pos)
             .min_by(|a, b| self.walk_from_home(*a).total_cmp(&self.walk_from_home(*b)))?;
         self.upgrade_claims.insert(builder.id, spot);

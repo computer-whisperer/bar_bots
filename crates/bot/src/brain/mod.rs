@@ -14,6 +14,7 @@ pub mod journal;
 mod march;
 mod raid;
 mod squads;
+mod territory;
 mod tier2;
 mod wake;
 mod roster;
@@ -56,8 +57,8 @@ pub struct Brain {
     routes: Option<routes::Routes>,
     /// Where our units died lately, for H-ECO-RECLAIM: place and frame (enemy wrecks lie in the same places). Deaths close together are one site.
     wreck_sites: Vec<(Vec3, i32)>,
-    /// Metal spots where an extractor or a constructor of ours died, and until which frame they stay closed.
-    hot_spots: Vec<(Vec3, i32)>,
+    /// Whose ground is whose (`territory.rs`).
+    territory: territory::Territory,
     /// Units a constructor has been sent to repair, and when, so that one goes to each.
     repair_claims: HashMap<UnitId, i32>,
     /// H-T2-MOHO: the extractor each advanced constructor is upgrading.
@@ -142,7 +143,7 @@ impl Brain {
             spot_claims: HashMap::new(),
             routes: None,
             wreck_sites: Vec::new(),
-            hot_spots: Vec::new(),
+            territory: Default::default(),
             repair_claims: HashMap::new(),
             upgrade_claims: HashMap::new(),
             last_loss_at_home_frame: i32::MIN / 2,
@@ -190,6 +191,7 @@ impl Brain {
         self.note_allies(tick);
         self.track_enemy_buildings(tick);
         self.track_enemy_bases(tick);
+        self.update_territory(tick, &kit);
         self.track_losses(tick, &kit);
         let mut commands = Vec::new();
         self.protect_commander(tick, &kit, &mut commands);

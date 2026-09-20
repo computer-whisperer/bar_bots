@@ -78,6 +78,14 @@ impl Brain {
         self.routes.as_ref().and_then(|r| r.from_home.distance(pos)).unwrap_or_else(|| pos.dist2d(self.home))
     }
 
+    /// Walking distance from the nearest live enemy base; `None` when it cannot walk here or we have no terrain.
+    pub(super) fn walk_from_enemy(&self, pos: Vec3) -> Option<f32> {
+        match &self.routes {
+            Some(routes) => routes.from_enemy.as_ref().and_then(|f| f.distance(pos)),
+            None => Some(pos.dist2d(self.enemy_base(pos))),
+        }
+    }
+
     /// A metal spot we can walk to that is nearer to us than to the enemy, on foot.
     pub(super) fn spot_is_ours(&self, spot: Vec3) -> bool {
         match &self.routes {

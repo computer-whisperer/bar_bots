@@ -7,6 +7,7 @@ use bot_protocol::{Command, OwnUnit, Tick, UnitId, Vec3};
 
 use super::army::{MIN_RESPONDERS, RESPONSE_ODDS};
 use super::roster::Kit;
+use super::territory::Ground;
 use super::{Brain, FRAMES_PER_SECOND};
 use crate::strategist::shared::{ExtractorStatus, Field, OrderKind, Post, Score, SquadStatus};
 
@@ -297,7 +298,7 @@ impl Brain {
                     .map(|(n, s)| (n, *s, self.walk_from_home(*s)))
                     .collect();
                 nearest.sort_by(|a, b| a.2.total_cmp(&b.2));
-                nearest.into_iter().take(NEXT_FREE).map(|(n, s, walk)| (n, self.place(s), walk as u32)).collect()
+                nearest.into_iter().take(NEXT_FREE).map(|(n, s, walk)| (n, self.place(s), walk as u32, self.ground(s).word())).collect()
             },
             soldiers: soldiers.len(),
             army_metal: soldiers.iter().map(metal).sum::<f32>() as u32,
@@ -344,8 +345,22 @@ impl Brain {
             enemy_soldiers_seen: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).count(),
             enemy_soldiers_seen_metal: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).map(|(def, _)| self.world.def(*def).map_or(0.0, |d| d.metal_cost)).sum::<f32>() as u32,
         };
+        let count = |ground: Ground| free.iter().filter(|s| self.ground(**s) == ground).count();
+        let mut raided: Vec<(Vec3, f32)> = self.world.hello.metal_spots.iter().map(|s| (*s, self.territory.raided(*s))).filter(|(_, metal)| *metal >= 100.0).collect();
+        raided.sort_by(|a, b| b.1.total_cmp(&a.1));
+        raided.dedup_by(|a, b| self.world.grid(a.0) == self.world.grid(b.0));
+        let ground = crate::strategist::shared::GroundReport {
+            free_spots: (count(Ground::Held), count(Ground::Contested), count(Ground::Theirs)),
+            extractors_exposed: own.iter().filter(|u| kit.is_extractor(u.def) && self.ground(u.pos) != Ground::Held).map(|u| self.place(u.pos)).collect(),
+            posts: std::iter::once(self.last_station).chain(self.army.detachment_posts()).map(|p| self.place(p)).collect(),
+            raided: raided.into_iter().take(4).map(|(at, metal)| (self.place(at), metal as u32)).collect(),
+        };
+        if shared.lead().is_none_or(|lead| lead == self.world.hello.team) {
+            *shared.ground_sketch.lock().unwrap() = self.territory.sketch();
+        }
         shared.publish_field(self.world.hello.team, Field {
             score,
+            ground,
             unassigned: composition(&pool),
             unassigned_centre: centre_of(&pool).map(|c| self.place(c)),
             squads,
@@ -360,9 +375,8 @@ impl Brain {
                 let name = |i: &usize| {
                     let Some(spot) = self.world.hello.metal_spots.get(*i) else { return format!("#{i}") };
                     let lost = self.spot_losses.get(i).map_or(String::new(), |n| format!(", lost here {n} times"));
-                    let ours_near = soldiers.iter().any(|u| u.pos.dist2d(*spot) < PLAN_COVER) || turrets.iter().any(|t| t.dist2d(*spot) < PLAN_COVER);
-                    let cover = if held(*spot, &our_extractors) { "" } else if ours_near { ", soldiers or a turret of ours near" } else { ", nothing of ours within 800" };
-                    format!("#{i} {}{lost}{cover}", self.world.grid(*spot))
+                    let ground = if held(*spot, &our_extractors) { String::new() } else { format!(", {} ground", self.ground(*spot).word()) };
+                    format!("#{i} {}{lost}{ground}", self.world.grid(*spot))
                 };
                 let list = |spots: &[usize]| spots.iter().map(name).collect::<Vec<_>>().join(", ");
                 match (self.spot_priority.is_empty(), self.spot_avoid.is_empty()) {
@@ -378,8 +392,6 @@ impl Brain {
 const NEXT_FREE: usize = 5;
 /// Soldiers within this of the start point are "at home" on the score line.
 const SCORE_AT_HOME: f32 = 800.0;
-/// A planned spot with a soldier or turret of ours this close has something of ours near.
-const PLAN_COVER: f32 = 800.0;
 
 fn centre_of(units: &[&&OwnUnit]) -> Option<Vec3> {
     if units.is_empty() {
