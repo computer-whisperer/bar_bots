@@ -416,10 +416,14 @@ impl Brain {
         self.team_post.target = Some(target);
         // H-ARMY-KILL: the pressure party stands at the opponent's base with nothing armed in sight; the home group goes
         // after it at once, at whatever it is aiming for, wave size or no wave size.
-        let kill = self.raid.kill_offered;
+        // Under a commander the kill is its call: it is woken, and commits the army with the attack stance.
+        let kill = self.raid.kill_offered.filter(|_| self.strategist.is_none());
         if let Some(offered) = kill {
             self.fire("H-ARMY-KILL");
             target = offered;
+        } else if let Some(offered) = self.raid.kill_offered {
+            let place = self.world.grid(offered);
+            self.trigger("kill-open", tick.frame, format!("The kill is open: our raiders stand at the enemy base ({place}) with nothing armed in sight. Commit the army (army_stance attack, attack_target there) or the moment passes."));
         }
         let stance = self.directives.army_stance.map(|s| s.value);
         self.note_station_failures(tick, kit);

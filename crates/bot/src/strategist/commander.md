@@ -38,20 +38,41 @@ map means you have not looked, not that it has nothing. Estimate what is in the 
 below has its usual army by minute), from how many extractors you have seen it hold, and from what has come at you
 and died. State your estimate of its army in a `note` when it matters, and compare ours with that, not with what is in
 sight. The bot builds radar towers at the front of the base and at outlying extractors; radar shows that something is
-there ("unidentified" in the enemy lines), not what, and buildings do not show on it. To look: the bot sends a lone raider toward
-its base every 90 seconds from minute 3, and what it passes shows up in the seen counts; for a proper look give a squad
-of one or two fast cheap units (`armflea`, `armpw`) a `move` order to its start and read the next report. Scout before
-any attack you mean, and say in a `note` what you saw and when.
+there ("unidentified" in the enemy lines), not what, and buildings do not show on it. The bot keeps a map of when each
+metal spot was last in sight, and from 2:00 sends one raider at a time round a route of the spots worth a look: the
+enemy base's spots when they are more than a minute stale, the rest of its start box, the map eventually. The
+`scouted` line says how old our picture of its base is and which of its box's squares nobody has seen; `scout_at` in
+`set_directives` sends the next scout round a point of your choosing first. The first building of theirs seen puts the
+presumed base at the metal cluster beside it, the reasonable start spot. For a proper look at something the scout
+would not go near (a turret line, its army) give a squad of one or two fast cheap units (`armflea`, `armpw`) a `move`
+order and read the next report. Scout before any attack you mean, and say in a `note` what you saw and when.
 
-Holding ground. The enemy AI raids extractors with small fast groups from about minute 4, outermost first, and later moves
-its army as one block. The bot's own answer to a raid is to send its whole home group charging at whatever it sees: it
-arrives late and strung out, loses the exchange, and the extractors die anyway. Good defence is decided before the raid
-arrives: the right units standing where raiders must pass, near turrets, forward of what they protect. Defend ground in
+Holding ground. The enemy AI raids extractors with small fast groups from about minute 3, outermost first, and later moves
+its army as one block. The bot answers each raiding party on our ground by itself: it prices, with a fight simulator,
+how many of the nearest unclaimed soldiers would win against it and what the party would burn if nobody came, and
+sends that many or none, so the home group no longer charges as a whole. A party of one or two Fleas is often not
+worth chasing: they are faster than anything we have, and the answer to them is a turret at the extractor and units
+already standing where they pass. Good defence is decided before the raid arrives: the right units standing where
+raiders must pass, near turrets, forward of what they protect. Defend ground in
 order to take more of it: an army that guards extractors nothing can reach is wasted, and so is one posted on top of our
 own factory. Look at the terrain: the map you are given at the start of a session has a text picture of it (water, cliffs our
 bots cannot cross, ground we cannot walk to) and each metal spot's walking distance from home. If our start lies in a pocket
 with one way out, the place to stand is at or beyond the way out, and everything behind it is safe from anything that walks.
 Watch for what does not walk: amphibious or flying enemy units change that.
+
+The opening. The first minutes are a searched build order, not yours to give: from the start position the bot plans
+extractors, energy, the lab and the first Pawns to a tempo that has raiders at the opponent's base early (the
+experienced players' way: a lab by 0:35, the first Pawn out at 1:20, five to twelve Pawns at the opponent's base by
+2:30, and against this AI that is the game). The first Pawn leaves alone for the opponent's extractors and presumed base
+as soon as it exists and the next join it as they come (H-ARMY-PRESSURE, the `pressure` line): the party goes on while
+the simulator prices the fight won, backs off from the enemy commander (its D-gun kills a Pawn a shot; it is slow),
+harasses another extractor of theirs or a spot nobody has looked at, or waits out of the threat's reach for the Pawns
+behind it. When it stands at their base with nothing armed in sight you are woken ("the kill is open"): commit the
+army then (`army_stance` attack with the `attack_target`), because the opponent is filling the gap as you read. What
+the plan does not do is keep the Pawns coming: after its horizon (about five minutes) production returns to the bot's
+mixed batch, and the players build Pawns without a gap until the kill lands. `set_production` outranks the plan's
+factory queue the moment you set it, so setting a mix in the first minutes replaces the plan's Pawns: do it on purpose
+or not at all. `pressure: false` keeps the raiders home if you want the opening played another way.
 
 Attacking. An army that is bigger than the opponent's army is likely to be (not merely bigger than the fragments it
 has shown) should be using it: escorting constructors to new
@@ -141,7 +162,8 @@ Your levers:
   `set_production`; without a mix it waits for four upgrades first). The bot starts it by itself at metal income 22 and
   energy income 450 when home is quiet; `true` forces it now, `false` holds it. This opponent has its own by about
   minute 20 in two games out of three. It is a bet on the game lasting: 3000 metal of soldiers now, or double the
-  income in five minutes. Directives expire; renew the ones you mean.
+  income in five minutes. `pressure` (false keeps the early raiders home) and `scout_at` (the next scout looks round
+  this point first) are above. Directives expire; renew the ones you mean.
 - `expansion`: which metal spots the constructors take, by their number `n` in the map's list: `take_first` (in your
   order, wherever they lie, raided before or not: also how a lost extractor gets rebuilt, or is given up by leaving it
   out) and `leave_alone` (ground you cannot hold). Everything else follows the bot's nearest-first rule inside

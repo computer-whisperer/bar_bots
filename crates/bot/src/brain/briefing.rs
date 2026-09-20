@@ -220,6 +220,8 @@ impl Brain {
             enemy_buildings_remembered,
             recent_events: self.recent_events.iter().cloned().collect(),
             directives_in_force: self.directives.describe(tick.frame),
+            pressure: self.pressure_line(&soldiers),
+            scouting: self.scouting_line(tick.frame),
         };
         shared.publish_briefing(self.world.hello.team, self.home, briefing);
     }
@@ -247,5 +249,23 @@ impl Brain {
             "passages": self.passages().iter().map(|p| json!({ "at": self.place(p.at), "width": p.width as i32, "share_of_the_way_from_our_start": (p.along * 100.0) as i32 })).collect::<Vec<_>>(),
             "passages_note": "narrow places every walking route between our start and the opponent's goes through (cliffs or water on both sides), the narrowest first: whoever holds one decides who crosses, and soldiers and turrets there cover everything behind them",
         })
+    }
+}
+
+impl Brain {
+    /// The commander's `pressure` line: H-ARMY-PRESSURE's party and what it is doing.
+    fn pressure_line(&self, soldiers: &[&OwnUnit]) -> String {
+        if self.directives.pressure.is_some_and(|p| !p.value) {
+            return format!("off by your directive; {} sorties so far", self.raid.sorties);
+        }
+        let party: Vec<&OwnUnit> = soldiers.iter().copied().filter(|u| self.raid.contains(u.id)).collect();
+        if party.is_empty() {
+            return format!("no party out; {} sorties so far", self.raid.sorties);
+        }
+        let n = party.len() as f32;
+        let centre = party.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / n, y: 0.0, z: sum.z + u.pos.z / n });
+        let target = self.raid.target.map_or("nothing".to_string(), |t| self.world.grid(t));
+        let doing = if self.raid.waiting { "outmatched, waiting out of reach for more" } else if self.raid.outmatched { "outmatched, looking for another target" } else { "going for it" };
+        format!("party of {} raiders at {} after {target}: {doing}; {} sorties so far", party.len(), self.world.grid(centre), self.raid.sorties)
     }
 }

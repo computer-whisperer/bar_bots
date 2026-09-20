@@ -13,6 +13,8 @@ pub struct Seen {
     pool: String,
     production: String,
     spot_plan: String,
+    pressure: String,
+    scouting: String,
 }
 
 fn counted(items: &[(String, usize)]) -> String {
@@ -126,6 +128,14 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     if !fights.is_empty() {
         lines.push(format!("fights since last turn: {}", fights.join(", ")));
     }
+    if full || briefing.pressure != seen.pressure {
+        lines.push(format!("pressure: {}", briefing.pressure));
+    }
+    seen.pressure = briefing.pressure.clone();
+    if full || briefing.scouting != seen.scouting {
+        lines.push(format!("scouted: {}", briefing.scouting));
+    }
+    seen.scouting = briefing.scouting.clone();
     for cluster in &briefing.enemies_visible {
         lines.push(format!(
             "enemy in sight: {} at {} ({}, {}), {} from home: {}",

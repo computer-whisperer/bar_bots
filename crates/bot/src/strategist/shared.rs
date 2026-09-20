@@ -28,6 +28,10 @@ pub struct Briefing {
     /// Newest last.
     pub recent_events: Vec<String>,
     pub directives_in_force: Vec<String>,
+    /// H-ARMY-PRESSURE's party: size, where, what it is doing (`raid.rs`), one line.
+    pub pressure: String,
+    /// What has been looked at round the enemy base and in its box, and the scout out (`scout.rs`), one line.
+    pub scouting: String,
     /// Our seats in this game, one line each; filled by the merge (`seats.rs`).
     pub seats: Vec<super::seats::SeatLine>,
 }
@@ -121,6 +125,10 @@ pub struct Directives {
     pub tier2: Option<Timed<bool>>,
     /// `false`: resurrection bots take every wreck apart and raise nothing.
     pub resurrect: Option<Timed<bool>>,
+    /// `false`: the early raider pressure party (H-ARMY-PRESSURE) stays home.
+    pub pressure: Option<Timed<bool>>,
+    /// The next scout route starts round this point (H-SCOUT-ROUTE).
+    pub scout_at: Option<Timed<Vec3>>,
 }
 
 impl Directives {
@@ -141,6 +149,8 @@ impl Directives {
         lapse(&mut self.commander_station, frame);
         lapse(&mut self.tier2, frame);
         lapse(&mut self.resurrect, frame);
+        lapse(&mut self.pressure, frame);
+        lapse(&mut self.scout_at, frame);
     }
 
     pub fn describe(&self, frame: i32) -> Vec<String> {
@@ -178,6 +188,12 @@ impl Directives {
         }
         if let Some(t) = self.commander_station {
             lines.push(format!("commander_station=({:.0}, {:.0}) ({})", t.value.x, t.value.z, left(t.expires_frame)));
+        }
+        if let Some(t) = self.pressure {
+            lines.push(format!("pressure={} ({})", if t.value { "on" } else { "off" }, left(t.expires_frame)));
+        }
+        if let Some(t) = self.scout_at {
+            lines.push(format!("scout_at=({:.0}, {:.0}) ({})", t.value.x, t.value.z, left(t.expires_frame)));
         }
         lines
     }

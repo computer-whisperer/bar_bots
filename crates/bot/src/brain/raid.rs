@@ -51,8 +51,10 @@ const BODY_BAND: f32 = 1500.0;
 
 #[derive(Default)]
 pub struct Raid {
-    members: Vec<UnitId>,
-    target: Option<Vec3>,
+    pub(super) members: Vec<UnitId>,
+    pub(super) target: Option<Vec3>,
+    /// Parties sent this game.
+    pub(super) sorties: usize,
     last_order_frame: i32,
     priced_at: i32,
     rest_until: i32,
@@ -63,10 +65,10 @@ pub struct Raid {
     /// commander one at a time in rush-smoke2).
     held: HashSet<UnitId>,
     /// Waiting out of reach for reinforcements (logged once).
-    waiting: bool,
+    pub(super) waiting: bool,
     /// The last pricing's verdict, held until the next: between pricings the party was "not outmatched" and went
     /// back at the target for four seconds, then retreated for four (rush-11 to 13: parties oscillating at the base).
-    outmatched: bool,
+    pub(super) outmatched: bool,
 }
 
 impl Raid {
@@ -151,7 +153,7 @@ impl Brain {
     /// `soldiers`: finished soldiers no squad has claimed. Returns with the party's orders pushed.
     pub(super) fn run_raid(&mut self, tick: &Tick, kit: &Kit, soldiers: &[&OwnUnit], commands: &mut Vec<Command>) {
         self.raid.kill_offered = None;
-        if !self.enabled("H-ARMY-PRESSURE") || self.strategist.is_some() {
+        if !self.enabled("H-ARMY-PRESSURE") || self.directives.pressure.is_some_and(|p| !p.value) {
             self.raid.members.clear();
             return;
         }
@@ -179,6 +181,7 @@ impl Brain {
             self.raid.members = party.iter().map(|u| u.id).collect();
             self.raid.target = Some(target);
             self.raid.outmatched = false;
+            self.raid.sorties += 1;
             self.raid.last_order_frame = 0;
             self.raid.priced_at = tick.frame;
             self.fire("H-ARMY-PRESSURE");

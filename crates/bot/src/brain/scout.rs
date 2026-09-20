@@ -41,6 +41,8 @@ pub struct Spots {
     last_survey: i32,
     /// The raider on a route, and since when.
     scout: Option<(UnitId, i32)>,
+    /// The `scout_at` directive already served, by its expiry frame.
+    served_scout_at: Option<i32>,
 }
 
 impl Brain {
@@ -132,16 +134,23 @@ impl Brain {
             .map(|(index, _)| self.spot_staleness(index, tick.frame))
             .min()
             .unwrap_or(NEVER_SEEN_FRAMES);
-        let due = !base_found || freshest_round_base >= FRESH_FRAMES || tick.frame - self.spots.last_route() >= ROUTE_FRAMES;
+        // The commander's `scout_at`: once per directive, the route starts round its point.
+        let asked = self.directives.scout_at.filter(|t| self.spots.served_scout_at != Some(t.expires_frame));
+        let due = asked.is_some() || !base_found || freshest_round_base >= FRESH_FRAMES || tick.frame - self.spots.last_route() >= ROUTE_FRAMES;
         if !due {
             return None;
         }
-        let candidates = self.spots_to_look_at(base, tick.frame, TURRET_BERTH, 0.0);
-        let first = *candidates.first()?;
+        let around = asked.map_or(base, |t| t.value);
+        let candidates = self.spots_to_look_at(around, tick.frame, TURRET_BERTH, 0.0);
+        let first = candidates.first().copied().or_else(|| asked.map(|t| t.value))?;
         let scout = home_group.iter().filter(|u| u.def == kit.raider && !u.being_built).min_by(|a, b| a.pos.dist2d(first).total_cmp(&b.pos.dist2d(first)))?;
         // The route: the best spot from the scout, then the nearest of the best few from each point on.
         let mut route: Vec<Vec3> = Vec::new();
         let mut from = scout.pos;
+        if asked.is_some() {
+            route.push(first);
+            from = first;
+        }
         while route.len() < ROUTE_SPOTS {
             let next = self.spots_to_look_at(from, tick.frame, TURRET_BERTH, 0.0).into_iter()
                 .filter(|s| !route.iter().any(|r| r.dist2d(*s) < 1.0))
@@ -156,6 +165,9 @@ impl Brain {
         }
         self.fire("H-SCOUT-ROUTE");
         self.spots.scout = Some((scout.id, tick.frame));
+        if let Some(t) = asked {
+            self.spots.served_scout_at = Some(t.expires_frame);
+        }
         let squares: Vec<String> = route.iter().map(|s| self.world.grid(*s)).collect();
         eprintln!("[ai {}] f={} scout: {}#{} looks at {} ({} spots; base {})", self.ai(), tick.frame, self.name(scout.def), scout.id.0, squares.join(" "), route.len(), if base_found { "found" } else { "presumed" });
         self.journal.note(tick.frame, "scout", serde_json::json!({ "unit": scout.id.0, "route": route.iter().map(|s| [s.x as i32, s.z as i32]).collect::<Vec<_>>() }), serde_json::json!({ "squares": squares }));
@@ -167,5 +179,30 @@ impl Brain {
 impl Spots {
     fn last_route(&self) -> i32 {
         self.scout.map_or(i32::MIN / 2, |(_, since)| since)
+    }
+}
+
+impl Brain {
+    /// The commander's `scouted` line: the spots round the enemy base by age, the box's never-seen squares, the scout out.
+    pub(super) fn scouting_line(&self, frame: i32) -> String {
+        let base = self.enemy_base(self.home);
+        let spots = &self.world.hello.metal_spots;
+        let round: Vec<usize> = (0..spots.len()).filter(|i| spots[*i].dist2d(base) < BASE_VICINITY).collect();
+        let age = |i: &usize| self.spot_staleness(*i, frame);
+        let unseen_round = round.iter().filter(|i| self.spots.seen.get(**i).copied().flatten().is_none()).count();
+        let oldest = round.iter().filter(|i| self.spots.seen.get(**i).copied().flatten().is_some()).map(age).max();
+        let mut never: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+        for (i, spot) in spots.iter().enumerate() {
+            if self.spots.seen.get(i).copied().flatten().is_none() && !round.contains(&i) && self.spot_likelihood(*spot) >= LIKELY_BOX {
+                *never.entry(self.world.grid(*spot)).or_default() += 1;
+            }
+        }
+        let scout = self.spots.scout.map_or("no scout out".to_string(), |(id, since)| format!("scout #{} out for {}s", id.0, (frame - since) / FRAMES_PER_SECOND));
+        format!(
+            "round the enemy base ({}) {} spots: {} never seen, the rest last seen up to {}s ago | its box's spots never seen: {} | {scout}",
+            self.world.grid(base), round.len(), unseen_round,
+            oldest.map_or("-".to_string(), |a| (a / FRAMES_PER_SECOND).to_string()),
+            if never.is_empty() { "none".to_string() } else { never.iter().map(|(g, n)| format!("{g} x{n}")).collect::<Vec<_>>().join(", ") }
+        )
     }
 }
