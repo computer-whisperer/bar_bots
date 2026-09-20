@@ -133,14 +133,18 @@ impl Brain {
             .unwrap_or(NEVER_SEEN_FRAMES);
         // The commander's `scout_at`: once per directive, the route starts round its point.
         let asked = self.directives.scout_at.filter(|t| self.spots.served_scout_at != Some(t.expires_frame));
-        let due = asked.is_some() || !base_found || freshest_round_base >= FRESH_FRAMES || tick.frame - self.spots.last_route() >= ROUTE_FRAMES;
+        // A new route at most every ROUTE_FRAMES (unless the commander asks), when something is stale: with posts
+        // standing out there the picture stays fresh by itself (rush-23: the same Pawn was re-sent every tick).
+        let stale = !base_found || freshest_round_base >= FRESH_FRAMES;
+        let due = asked.is_some() || (stale && tick.frame - self.spots.last_route() >= ROUTE_FRAMES);
         if !due {
             return self.spots.posted();
         }
         let around = asked.map_or(base, |t| t.value);
         let candidates = self.spots_to_look_at(around, tick.frame, TURRET_BERTH, 0.0);
         let Some(first) = candidates.first().copied().or_else(|| asked.map(|t| t.value)) else { return self.spots.posted() };
-        let Some(scout) = home_group.iter().filter(|u| u.def == kit.raider && !u.being_built).min_by(|a, b| a.pos.dist2d(first).total_cmp(&b.pos.dist2d(first))) else { return self.spots.posted() };
+        let posted_now = self.spots.posted();
+        let Some(scout) = home_group.iter().filter(|u| u.def == kit.raider && !u.being_built && !posted_now.contains(&u.id)).min_by(|a, b| a.pos.dist2d(first).total_cmp(&b.pos.dist2d(first))) else { return self.spots.posted() };
         // At the cap, the oldest post comes home to make room.
         if self.spots.posts.len() >= MAX_SCOUTS {
             let (oldest, _) = self.spots.posts.remove(0);
