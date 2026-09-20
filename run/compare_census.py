@@ -48,4 +48,5 @@ def main():
         for side in ("own", "enemy"):
             print(side, " ".join(f"{n}x{c}" for n, c in sorted(rows[minute].get(side, {}).items())))
 
-main()
+if __name__ == "__main__":
+    main()

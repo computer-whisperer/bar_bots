@@ -1,12 +1,13 @@
 # Within Reason documentation
 
-Four kinds of knowledge with different lifetimes. Put a fact where its lifetime says it belongs.
+Five kinds of knowledge with different lifetimes. Put a fact where its lifetime says it belongs.
 
 | Where | What | Changes when |
 |---|---|---|
 | `knowledge/` | Claims about the game and opponents, each with evidence and a status | every batch can support, weaken or retire one |
 | `heuristics.md` | Registry of the brain's rules: ID, code location, the claims it rests on, status | a rule is added, changed or retired |
 | `experiments.md` | Ledger of arena batches: label, commit, setup, result, what it was testing | every batch |
+| `studies/` | Offline studies (simulation, data analysis) with their data; findings enter `knowledge/` as `conjectured` until the arena tests them | a study is added or rerun |
 | `harness/` | Engine, AI interface, lobby, arena and tooling facts | rarely; on engine or game bumps |
 
 `../DESIGN.md` is the architecture (shim, protocol, bot process). It records decisions, not findings.

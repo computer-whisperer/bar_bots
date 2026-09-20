@@ -102,5 +102,69 @@ assisting builders on a T1 lab is a clear win, beyond that a second factory is m
 **Evidence.** https://www.crdhq.com/articles/bar-economy-guide (2026);
 https://roguel1kegaming.com/beyond-all-reason-patch-construction-turrets/ (post-turret-nerf patch analysis, undated; quotes
 turret cost 250 M — local `armnanotc.lua` says 230 M, 3200 E, 200 build power, range 400).
+**Simulated 2026-09-19.** K-open-sim-turrets-before-second-lab agrees (no arena test yet).
 **Would be wrong if.** At equal metal spent, 2 labs out-produced 1 lab + 2 turrets in army value by minute 10.
 **Used by.** (candidate: H-ECO-MORE-LABS — add up to 2 construction turrets beside the first lab before a second lab)
+
+## From the build-order study (simulator, no enemy)
+
+Entries below come from `../studies/build-order.md` (tool: `crates/buildorder`). The simulator reproduces our recorded
+openings to about 10 % while nothing is lost and knows no enemy, terrain or losses; its optimum is a ceiling. Nothing here
+has been played in the arena, hence `conjectured` throughout. Scope: Quicksilver Remake 1.24, tier 1, game commit 54199a0d.
+
+### K-open-sim-expansion-gap
+**Claim.** The largest gap between our opening and a good one is expansion pace in minutes 1-5: a no-enemy ceiling holds
+7 extractors at minute 3 and 16 at minute 5 (6 and 13 if every walk is 40 % longer) where we hold 2 and 3-4 and BARb
+medium 4 and 5; metal income at minute 5 is 31.6 against our 8.7. The first minute (lab at 0:40 against our 0:59-1:15)
+is a small part of it.
+**Status.** conjectured (2026-09-19); our and BARb's numbers are measured (12 records, census of 24 and 42 games)
+**Evidence.** `../studies/build-order.md` table "The curve"; `../studies/data/optima.md`, `census-medium-*.csv`, `calibration.md`.
+**Would be wrong if.** A brain that reached 6+ extractors by minute 3 and 10+ by minute 5 in the arena was no richer at
+minute 8 than today's (raids eating the difference), or did not win more.
+**Used by.** (candidates: H-COM-LEASH, H-PROD-BATCH constructor share, H-ECO-BASE-TURRETS timing)
+
+### K-open-sim-constructors-first
+**Claim.** For army value at minute 8 or later, the lab's first 5-6 units (up to 9-10 when allowed) should be
+constructors, with the first fighter shortly before minute 4; for army value at minute 5 or earlier, none. The
+break-even horizon of a constructor lies between 5 and 8 minutes.
+**Status.** conjectured (2026-09-19). Conflicts with K-army-fighters-before-constructors, which is arena evidence against
+BARb's raids; the simulator has no raids, so this entry says what the early fighters cost, not that they are wrong.
+**Evidence.** `../studies/data/optima.md`: `army` at 3 and 5 minutes build 0 constructors, `army` at 8 and 10 and every
+`mix` from 5 minutes on build 6 (the cap); side run with 12 allowed used 10, +5 % (inside search noise).
+**Would be wrong if.** In the arena, batches opening constructor-heavy (say ck x4 before the second fighter) had no more
+extractors at minute 5, or lost them all to raids before minute 8.
+**Used by.** (candidate: H-PROD-BATCH)
+
+### K-open-sim-turrets-before-second-lab
+**Claim.** One lab plus 3-4 construction turrets builds as much army by minute 10 as any plan containing a second lab,
+and about 12 % more than two bare labs; one bare lab is 20-35 % behind. The first turret belongs at about minute 4-4.5,
+when metal income passes 25-30/s; roughly one more per further 10 metal/s.
+**Status.** conjectured (2026-09-19); agrees with the reported K-open-one-factory-plus-assist and with BARb medium's
+one lab + one turret (K-barb-medium-observed-build). Turrets are uncalibrated in the simulator (no recorded game has one).
+**Evidence.** `../studies/data/optima.md`, `mix` / `army` at 10 min: 1 lab 15381 / 8085; 2 labs 16164 / 10874; 1 lab +
+turrets 17810 / 12196; both 17456 / 12178.
+**Would be wrong if.** At equal metal income, a brain with lab + 2 turrets had not built more army by minute 10 than the
+current 2-3 lab brain over 24+ matches.
+**Used by.** (candidate: H-ECO-MORE-LABS)
+
+### K-open-sim-energy-ratio
+**Claim.** A well-run tier-1 economy needs about 11-12 energy/s per metal/s of income through minute 10 (181/15, 332/32,
+528/44, 566/46 at minutes 3/5/8/10). We run at 16-22 and our four-turbine opening overflows about 2100 energy in the
+first three minutes while holding two extractors. Converters do not belong in the first 10 minutes while spots are free.
+**Status.** conjectured (2026-09-19); our ratios are measured (12 records)
+**Evidence.** `../studies/build-order.md`, finding 4; `calibration.md` median table; `optima.md` (0-2 converters in every
+`army`/`mix` optimum, 7-11 only in `income` at 8-10 minutes after all 22 spots are taken).
+**Would be wrong if.** A brain holding energy income near 12x metal income stalled on energy (stored energy near zero
+for more than ~10 % of the first 10 minutes) in the arena.
+**Used by.** (candidates: H-ECO-WIND opening count, H-ECO-ENERGY-BY-STORAGE, H-ECO-CONVERT-SURPLUS)
+
+### K-open-sim-solar-is-the-robust-generator
+**Claim.** On Quicksilver (wind 3-17) an opening tuned to mean wind, mostly turbines, loses 34 % of its minute-10 army
+if the game's wind averages 8 and 58 % at 5; an opening built on solars loses 6 % against it at mean wind and nothing
+in poor wind. Game-average wind over the first 10 minutes ranged 8.2-15.5 in 12 recorded games (mean 12.8).
+**Status.** conjectured (2026-09-19); qualifies K-open-quicksilver-is-a-wind-map, whose per-metal arithmetic stands. The
+simulator's constant wind hides in-game troughs, so the effect is more likely understated than overstated.
+**Evidence.** `../studies/data/optima.md`, last table, and `../studies/build-order.md` finding 5.
+**Would be wrong if.** Arena batches with a solar opening built measurably less by minute 10 than the wind opening in
+games whose recorded wind average was at or above the mean.
+**Used by.** (candidate: H-ECO-WIND)

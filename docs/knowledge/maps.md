@@ -109,3 +109,13 @@ staging points and "our half" taken from the field, a 12-minute game had 3 move 
 (terrain-check-2), against hundreds to thousands before.
 **Would be wrong if.** Move failures or unreachable give-ups came back in numbers on another map.
 **Used by.** `brain/routes.rs`: `spot_is_ours`, `forward_of_home`, attack-target filter, staging point.
+
+### K-maps-quicksilver-spot-value-and-wind
+**Claim.** On Quicksilver Remake 1.24 a tier-1 extractor yields 2.0 metal/s on every spot we have built on, and wind per
+turbine averages 12.8 over the first ten minutes (single games 8.2 to 15.5).
+**Status.** supported (2026-09-19)
+**Evidence.** Income steps at extractor completion in 12 records of `v15-terrain-medium` (home spots 18 of 18 exactly
+2.0; outer spots median 1.8-2.7 with converter noise); wind inferred as (energy income - constant producers) / turbines.
+The map site lists 12.7.
+**Would be wrong if.** A spot's first extractor raised income by something other than 2.0 with no converter running.
+**Used by.** `crates/buildorder` (`map::SPOT_METAL`, `map::WIND_MEAN`).

@@ -24,6 +24,8 @@ The bot process never calls into the engine; everything it knows arrives in `Hel
 - `bot-protocol` — serde message types + length-prefixed postcard framing. Shared by shim and bot. No engine types leak into it.
 - `ai-shim` — cdylib. `engine.rs` is the safe wrapper over the callback table, exposing only what the snapshot and commands need.
 - `bot` — the bot binary. Listens on the socket; MVP heuristic brain.
+- `buildorder` — offline study tool, not part of the running system: a tier-1 economy simulator and a simulated-annealing
+  build-order search over it (`docs/studies/build-order.md`). Depends on nothing else in the workspace.
 
 ## Protocol (credit-based, so the shim never blocks the sim)
 1. shim → bot `Hello { ai_id, team, ally_team, frame, map, unit_defs, metal_spots }` once per connection.
