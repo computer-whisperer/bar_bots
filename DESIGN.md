@@ -113,3 +113,32 @@ Observed problems on our side: the base-attack trigger fired for lone raiders (1
 constructor count rule (2 + extractors/4) collapses exactly when extractors are being lost, which is when more are needed.
 Candidates for the next directive set: `army_station {x, z}`, `min_constructors`, `min_converters`; trigger only on 3+
 intruders or a building lost.
+
+## Field commander (experiment, 2026-09-19)
+
+A second way to run the `claude -p` session, `bot --commander`: Sonnet taking turns with the game held still,
+with lower-level levers than the strategist's directives. The purpose is to learn what good defender management and
+unit mix look like (the heuristic home group is "F2 a-move": one blob charging every raider), and to find where the
+LLM levers belong. BARb is the reference for economy and army hoarding, not for defence.
+
+- **Division of labour.** The heuristic brain keeps the economy, the opening and every soldier the commander has not
+  claimed (home group, waves). The commander owns squads, the unit mix and turret requests. A silent commander costs
+  nothing: squads keep their standing posts, everything else is heuristic.
+- **Squads, not unit ids.** `squad {name, take: {type: count}, near?, post?, order?, release?}`. `take` draws from the
+  unassigned pool (nearest to `near`, else to the post). A **post** `{x, z, radius}` is the defender primitive: stand
+  there, engage enemies that come inside the radius, go back. An **order** `{kind: move|fight, x, z}` is a one-off.
+- **Unit mix.** `set_production {weights: {unit name: n}}`: factories pick the type furthest below its share. The
+  constructor floor stays heuristic.
+- **Turrets.** `request_turret {x, z}`: the next free constructor builds one there.
+- **Turns (revised the same day after watching a real-time run: most turns were "no change", and the repeated
+  identical reports are poor context).** Lockstep: with `WITHIN_REASON_LOCKSTEP` the shim waits for the bot's answer
+  to every tick, so the bot pauses the game by holding its reply while the commander thinks, and the game runs at
+  full arena speed between turns. The commander chooses when it is woken (`wait`: a maximum quiet time plus events:
+  enemies near an extractor, a squad engaged, an extractor lost, awaited soldiers ready); the brain watches for the
+  rising edge of each. Reports are terse text, full at the start of a session and changes only afterwards. The
+  session is restarted every 40 turns with the commander's notes carried over. Rejected: real-time turns every 5-10 s
+  (tried; slow to watch and mostly idle); engine `/pause` (the AI gets no callbacks while paused, so it could not
+  unpause itself).
+- **Accounts and limits** as for the strategist: `claude2`, overage tripwire, usage snapshot before and after.
+- **Reading a run.** Fight ledger exchange ratio in our half, extractors alive at minute 12 against the observed
+  heuristic games, and the transcript: where it posts defenders, with what, and what it changes after a loss.

@@ -32,4 +32,13 @@ impl Link {
         self.stream.set_nonblocking(false)?;
         result
     }
+
+    /// Blocks until the bot's reply has arrived. Lockstep mode: the game stands still while the bot thinks.
+    pub fn wait(&mut self) -> io::Result<Commands> {
+        loop {
+            if let Some(commands) = self.reader.read(&mut self.stream)? {
+                return Ok(commands);
+            }
+        }
+    }
 }

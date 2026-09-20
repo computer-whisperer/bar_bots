@@ -74,6 +74,11 @@ impl Army {
         self.attackers.contains(&unit)
     }
 
+    /// A soldier claimed by a squad is no longer an attacker.
+    pub fn release(&mut self, unit: UnitId) {
+        self.attackers.remove(&unit);
+    }
+
     pub fn waves_sent(&self) -> usize {
         self.waves_sent
     }
@@ -119,7 +124,7 @@ impl Brain {
             .filter(|e| {
                 let bot_protocol::Event::UnitMoveFailed { unit } = e else { return false };
                 let soldier = tick.snapshot.own_units.iter().find(|u| u.id == *unit).is_some_and(|u| self.is_army(u, kit));
-                soldier && !self.army.attackers.contains(unit)
+                soldier && !self.army.attackers.contains(unit) && !self.squads.contains(*unit)
             })
             .count() as u32;
         self.army.station_failures += failures;
@@ -169,8 +174,10 @@ impl Brain {
 
     pub(super) fn run_army(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
         let snapshot = &tick.snapshot;
-        let soldiers: Vec<&OwnUnit> =
+        let every_soldier: Vec<&OwnUnit> =
             snapshot.own_units.iter().filter(|u| !u.being_built && self.is_army(u, kit)).collect();
+        self.run_squads(tick, kit, &every_soldier, commands);
+        let soldiers: Vec<&OwnUnit> = every_soldier.into_iter().filter(|u| !self.squads.contains(u.id)).collect();
 
         for event in &tick.events {
             let bot_protocol::Event::UnitMoveFailed { unit } = event else { continue };

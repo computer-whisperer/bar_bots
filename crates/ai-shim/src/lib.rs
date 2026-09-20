@@ -32,6 +32,7 @@ struct Instance {
     link: Option<Link>,
     /// The bot has answered the previous message, so it may be sent another.
     has_credit: bool,
+    lockstep: bool,
     events: Vec<Event>,
 }
 
@@ -77,6 +78,17 @@ impl Instance {
         if self.has_credit && frame % TICK_INTERVAL == 0 {
             let tick = Tick { frame, events: std::mem::take(&mut self.events), snapshot: self.engine.snapshot() };
             self.send(ToBot::Tick(tick));
+            // Lockstep (`WITHIN_REASON_LOCKSTEP`, headless study runs only): the engine waits here for the answer,
+            // so a bot that holds its reply while a language model thinks has in effect paused the game.
+            if self.lockstep && let Some(link) = &mut self.link {
+                match link.wait() {
+                    Ok(commands) => {
+                        self.has_credit = true;
+                        self.apply(commands);
+                    }
+                    Err(e) => self.disconnect(e),
+                }
+            }
         }
     }
 
@@ -199,6 +211,7 @@ pub unsafe extern "C" fn init(skirmish_ai_id: c_int, callback: *const sys::SSkir
             engine: unsafe { Engine::new(skirmish_ai_id, callback) },
             link: None,
             has_credit: false,
+            lockstep: std::env::var_os("WITHIN_REASON_LOCKSTEP").is_some(),
             events: Vec::new(),
         };
         instance.log("init");

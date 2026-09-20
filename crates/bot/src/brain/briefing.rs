@@ -64,13 +64,21 @@ impl Brain {
         for event in &tick.events {
             if let Event::EnemyDestroyed { enemy } = event {
                 let name = self.enemy_defs.remove(enemy).map_or("unseen", |d| self.name(d));
-                *self.fight_ledger.entry(format!("killed {name}")).or_default() += 1;
+                let line = format!("killed {name}");
+                if let Some(shared) = &self.strategist {
+                    *shared.fights.lock().unwrap().entry(line.clone()).or_default() += 1;
+                }
+                *self.fight_ledger.entry(line).or_default() += 1;
             }
             let Event::UnitDestroyed { unit, attacker } = event else { continue };
             let Some((def, pos)) = self.known_units.remove(unit) else { continue };
             let killer = attacker.and_then(|id| self.enemy_defs.get(&id)).map_or("unseen", |d| self.name(*d));
             let place = if pos.dist2d(self.home) < super::army::BASE_RADIUS { "at home" } else if pos.dist2d(self.home) < pos.dist2d(self.enemy_start) { "in our half" } else { "in their half" };
-            *self.fight_ledger.entry(format!("lost {} to {killer} {place}", self.name(def))).or_default() += 1;
+            let line = format!("lost {} to {killer} {place}", self.name(def));
+            if let Some(shared) = &self.strategist {
+                *shared.fights.lock().unwrap().entry(line.clone()).or_default() += 1;
+            }
+            *self.fight_ledger.entry(line).or_default() += 1;
             if self.world.def(def).is_some_and(|d| d.speed > 0.0 && d.build_speed == 0.0) {
                 continue; // soldiers die all the time
             }

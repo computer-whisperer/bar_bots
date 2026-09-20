@@ -8,7 +8,7 @@ use bot_protocol::Vec3;
 use serde_json::{Value, json};
 use tiny_http::{Header, Method, Response, Server};
 
-use super::shared::{Focus, Shared, Stance, Timed};
+use super::shared::{Focus, OrderKind, Post, Shared, Stance, Timed};
 use super::transcript::Transcript;
 
 const DEFAULT_TTL_SECONDS: i64 = 120;
@@ -117,6 +117,38 @@ fn tool_list() -> Value {
               "economy_focus": { "enum": ["expand", "energy", "production", "defence", null],
                   "description": "What constructors prefer once the opening is done." },
               "ttl_seconds": { "type": "integer", "minimum": 10, "maximum": MAX_TTL_SECONDS } } } },
+        { "name": "situation",
+          "description": "The field picture: unassigned soldiers by type, your squads (composition, health, where, post, whether engaged), every extractor with enemies near it and whether a turret covers it, turrets, what the factories can build with metal cost, the production mix in force. You are sent this at the start of every turn; call it only to look again mid-turn.",
+          "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false } },
+        { "name": "squad",
+          "description": "Create or change a squad. Soldiers in a squad are yours; all others follow the bot's heuristics (home group, attack waves). take draws that many more of each unit type from the unassigned soldiers, nearest to `near` (else to the post); units not yet built are added as they appear. post is a standing defensive position: the squad stands there, engages any enemy that comes within radius of it, and returns. order is a one-off move or fight (attack-move) to a position and cancels the post. release hands the squad back to the heuristics.",
+          "inputSchema": { "type": "object", "additionalProperties": false, "required": ["name"], "properties": {
+              "name": { "type": "string" },
+              "take": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 50 },
+                  "description": "Unit name to how many more to draw, e.g. {\"armpw\": 3, \"armham\": 2}." },
+              "near": { "type": "object", "properties": { "x": { "type": "number" }, "z": { "type": "number" } }, "required": ["x", "z"] },
+              "post": { "type": "object", "properties": { "x": { "type": "number" }, "z": { "type": "number" }, "radius": { "type": "number", "minimum": 100, "maximum": 1500 } },
+                  "required": ["x", "z", "radius"] },
+              "order": { "type": "object", "properties": { "kind": { "enum": ["move", "fight"] }, "x": { "type": "number" }, "z": { "type": "number" } },
+                  "required": ["kind", "x", "z"] },
+              "release": { "type": "boolean" } } } },
+        { "name": "set_production",
+          "description": "The unit mix the factories build, as unit name to weight (names from `buildable` in the situation). Factories build whichever type is furthest below its share of what is alive. The bot keeps its own floor of constructors. An empty object returns production to the bot's default batch.",
+          "inputSchema": { "type": "object", "additionalProperties": false, "required": ["weights"], "properties": {
+              "weights": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 100 } } } } },
+        { "name": "request_turret",
+          "description": "Ask for a light defence turret at a position; the next free constructor builds it near there.",
+          "inputSchema": { "type": "object", "additionalProperties": false, "required": ["x", "z"],
+              "properties": { "x": { "type": "number" }, "z": { "type": "number" } } } },
+        { "name": "wait",
+          "description": "Set when you are next woken; the settings hold until you change them. The game is paused during your turn and runs fast between turns, so a long quiet wait costs nothing and a raid still wakes you at once. You are always woken for a base attack, the commander under fire, or a wiped-out wave.",
+          "inputSchema": { "type": "object", "additionalProperties": false, "properties": {
+              "max_seconds": { "type": "integer", "minimum": 5, "maximum": 180, "description": "Game seconds after which you are woken whatever happens (default 30)." },
+              "enemy_near_extractor": { "type": "boolean", "description": "Enemies appear within 600 of an extractor that had none near." },
+              "squad_engaged": { "type": "boolean", "description": "A posted squad starts fighting." },
+              "extractor_lost": { "type": "boolean" },
+              "pool_reaches": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 },
+                  "description": "Woken when this many of each named unit type stand unassigned, e.g. {\"armham\": 4}. {} clears it." } } } },
         { "name": "note",
           "description": "Record your reasoning in a sentence or two. Kept with the game time for post-game analysis; it changes nothing in the game.",
           "inputSchema": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"], "additionalProperties": false } },
@@ -127,10 +159,90 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, S
     match name {
         "overview" => serde_json::to_string(&*shared.briefing.lock().unwrap()).map_err(|e| e.to_string()),
         "map" => Ok(shared.map.lock().unwrap().to_string()),
-        "note" => Ok("noted".into()),
+        "note" => {
+            let time = shared.briefing.lock().unwrap().game_time.clone();
+            let text = arguments["text"].as_str().unwrap_or_default();
+            shared.notes.lock().unwrap().push(format!("[{time}] {text}"));
+            Ok("noted".into())
+        }
+        "wait" => {
+            let mut wake = shared.wake.lock().unwrap();
+            if let Some(seconds) = arguments["max_seconds"].as_u64() {
+                wake.max_seconds = seconds.clamp(5, 180) as u32;
+            }
+            let flag = |field: &str, slot: &mut bool| {
+                if let Some(on) = arguments[field].as_bool() {
+                    *slot = on;
+                }
+            };
+            flag("enemy_near_extractor", &mut wake.enemy_near_extractor);
+            flag("squad_engaged", &mut wake.squad_engaged);
+            flag("extractor_lost", &mut wake.extractor_lost);
+            if let Some(pool) = arguments["pool_reaches"].as_object() {
+                wake.pool_reaches = pool.iter().map(|(name, n)| (name.clone(), n.as_u64().unwrap_or(1) as usize)).collect();
+            }
+            Ok(format!("in force until you change them (no need to call again): {}", serde_json::to_string(&*wake).map_err(|e| e.to_string())?))
+        }
+        "situation" => serde_json::to_string(&*shared.field.lock().unwrap()).map_err(|e| e.to_string()),
+        "squad" => squad(arguments, shared),
+        "set_production" => {
+            let weights = arguments["weights"].as_object().ok_or("weights must be an object")?;
+            let known: Vec<String> = shared.field.lock().unwrap().buildable.iter().map(|(name, _)| name.clone()).collect();
+            if let Some(unknown) = weights.keys().find(|name| !known.contains(name)) {
+                return Err(format!("{unknown} is not something our factories build; see `buildable`"));
+            }
+            let mix = weights.iter().map(|(name, w)| (name.clone(), w.as_u64().unwrap_or(0) as u32)).collect();
+            shared.field_orders.lock().unwrap().production = mix;
+            Ok("production mix set".into())
+        }
+        "request_turret" => {
+            let at = position(arguments, "request_turret")?.ok_or("needs x and z")?;
+            let (home, enemy) = {
+                let briefing = shared.briefing.lock().unwrap();
+                (briefing.home.clone(), briefing.presumed_enemy_start.clone())
+            };
+            let distance = |p: &super::shared::Place| (p.x as f32 - at.x).hypot(p.z as f32 - at.z);
+            if distance(&enemy) < distance(&home) {
+                return Err("that is on the enemy's half of the map; a constructor would die walking there".into());
+            }
+            let mut orders = shared.field_orders.lock().unwrap();
+            orders.turret_requests.push(at);
+            Ok("turret requested".into())
+        }
         "set_directives" => set_directives(arguments, shared),
         _ => Err(format!("unknown tool {name}")),
     }
+}
+
+fn squad(arguments: &Value, shared: &Shared) -> Result<String, String> {
+    let name = arguments["name"].as_str().filter(|n| !n.is_empty()).ok_or("squad needs a name")?;
+    let known: Vec<String> = shared.field.lock().unwrap().buildable.iter().map(|(name, _)| name.clone()).collect();
+    let mut orders = shared.field_orders.lock().unwrap();
+    let request = orders.squads.entry(name.to_string()).or_default();
+    if let Some(take) = arguments["take"].as_object() {
+        if let Some(unknown) = take.keys().find(|unit| !known.contains(unit)) {
+            return Err(format!("{unknown} is not a unit our factories build; see `buildable`"));
+        }
+        for (unit, count) in take {
+            *request.take.entry(unit.clone()).or_default() += count.as_u64().unwrap_or(0) as usize;
+        }
+    }
+    if let Some(near) = position(&arguments["near"], "near")? {
+        request.near = Some(near);
+    }
+    if let Some(at) = position(&arguments["post"], "post")? {
+        let radius = arguments["post"]["radius"].as_f64().ok_or("post needs a radius")? as f32;
+        request.post = Some(Post { at, radius: radius.clamp(100.0, 1500.0) });
+    }
+    if let Some(to) = position(&arguments["order"], "order")? {
+        let kind = parse::<OrderKind>(&arguments["order"]["kind"])?.ok_or("order needs a kind")?;
+        request.post = None;
+        request.order = Some((kind, to));
+    }
+    if arguments["release"].as_bool() == Some(true) {
+        request.release = true;
+    }
+    Ok(format!("squad {name} updated. The game is paused during your turn, so members are drawn and orders carried out when the turn ends; your next report shows the result"))
 }
 
 fn set_directives(arguments: &Value, shared: &Shared) -> Result<String, String> {

@@ -113,6 +113,9 @@ impl Brain {
                 }
                 self.jobs.insert(unit.id, def_id);
                 commands.push(Command::Build { unit: unit.id, def: def_id, site: Some(site), queue: false });
+            } else if is_builder && let Some(def_id) = self.weighted_production(unit, own, kit) {
+                self.fire("D-PRODUCTION-MIX");
+                commands.push(Command::Build { unit: unit.id, def: def_id, site: None, queue: false });
             } else if is_builder {
                 self.fire("H-PROD-BATCH");
                 commands.extend(self.production_batch(own, kit).map(|def_id| Command::Build {
@@ -193,6 +196,9 @@ impl Brain {
         }
         if planned(kit.lab) < 1 {
             return (Plan::Near(kit.lab, yard), "H-ECO-OPENING");
+        }
+        if !is_commander && can_build(kit.turret) && !self.turret_requests.is_empty() {
+            return (Plan::Near(kit.turret, self.turret_requests.remove(0)), "D-TURRET-REQUEST");
         }
         let focus = self.directives.economy_focus.map(|f| f.value);
         if energy_short || (focus == Some(Focus::Energy) && energy.current < energy.storage * 0.9) {
@@ -276,13 +282,44 @@ impl Brain {
             .min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
     }
 
-    /// What an idle factory queues next.
-    fn production_batch(&self, own: &[OwnUnit], kit: &Kit) -> impl Iterator<Item = UnitDefId> + use<> {
+    /// The commander's unit mix: the type furthest below its share of what is alive, one unit at a time. The
+    /// constructor floor stays ours. `None` without a mix, or when nothing in it can be built here.
+    fn weighted_production(&self, factory: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Option<UnitDefId> {
+        if self.production_weights.is_empty() {
+            return None;
+        }
         let count = |def: UnitDefId| own.iter().filter(|u| u.def == def).count();
+        let options = &self.world.def(factory.def)?.build_options;
+        if count(kit.constructor) < self.wanted_constructors(own, kit) && options.contains(&kit.constructor) {
+            // Every other unit until the floor is met, so the army is not starved by it.
+            let army = own.iter().filter(|u| self.is_army(u, kit)).count();
+            if army % 2 == 1 {
+                return Some(kit.constructor);
+            }
+        }
+        let mix: Vec<(UnitDefId, f32)> = self
+            .production_weights
+            .iter()
+            .filter_map(|(name, weight)| Some((self.world.def_named(name)?, *weight as f32)))
+            .filter(|(def, weight)| options.contains(def) && *weight > 0.0)
+            .collect();
+        let (total_weight, total_alive) = (mix.iter().map(|(_, w)| w).sum::<f32>(), mix.iter().map(|(d, _)| count(*d)).sum::<usize>());
+        let deficit = |(def, weight): &(UnitDefId, f32)| weight / total_weight - count(*def) as f32 / (total_alive.max(1)) as f32;
+        mix.iter().max_by(|a, b| deficit(a).total_cmp(&deficit(b))).map(|(def, _)| *def)
+    }
+
+    fn wanted_constructors(&self, own: &[OwnUnit], kit: &Kit) -> usize {
+        let extractors = own.iter().filter(|u| u.def == kit.extractor).count();
         // H-PROD-CONSTRUCTOR-FLOOR
         let own_floor = if self.enabled("H-PROD-CONSTRUCTOR-FLOOR") { MIN_CONSTRUCTORS } else { 0 };
         let floor = self.directives.min_constructors.map_or(own_floor, |d| d.value);
-        let wanted_constructors = (3 + count(kit.extractor) / 2).min(MAX_CONSTRUCTORS).max(floor);
+        (3 + extractors / 2).min(MAX_CONSTRUCTORS).max(floor)
+    }
+
+    /// What an idle factory queues next.
+    fn production_batch(&self, own: &[OwnUnit], kit: &Kit) -> impl Iterator<Item = UnitDefId> + use<> {
+        let count = |def: UnitDefId| own.iter().filter(|u| u.def == def).count();
+        let wanted_constructors = self.wanted_constructors(own, kit);
         let support = if count(kit.constructor) < wanted_constructors { kit.constructor } else { kit.artillery };
         // Fighters first: early raids arrive before an all-constructor opening pays off.
         [kit.raider, kit.raider, support, kit.skirmisher, kit.skirmisher].into_iter()

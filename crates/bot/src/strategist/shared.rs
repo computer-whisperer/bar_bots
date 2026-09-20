@@ -1,6 +1,7 @@
 //! What the brain and the strategist exchange: a briefing going up, directives coming down.
 
-use std::sync::Mutex;
+use std::collections::BTreeMap;
+use std::sync::{Condvar, Mutex};
 
 use bot_protocol::{Resource, Vec3};
 use serde::{Deserialize, Serialize};
@@ -156,6 +157,106 @@ impl Directives {
     }
 }
 
+/// A standing defensive position: stand at `at`, engage what comes within `radius`, go back.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Post {
+    pub at: Vec3,
+    pub radius: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrderKind {
+    Move,
+    Fight,
+}
+
+/// What the commander wants of one squad. The brain owns the membership; this is the request side.
+#[derive(Clone, Debug, Default)]
+pub struct SquadRequest {
+    /// Unit name to how many more to draw from the unassigned pool; emptied by the brain as it fills them.
+    pub take: BTreeMap<String, usize>,
+    /// Draw the units nearest to this point (else to the post, else to home).
+    pub near: Option<Vec3>,
+    pub post: Option<Post>,
+    /// A one-off order, taken by the brain when issued.
+    pub order: Option<(OrderKind, Vec3)>,
+    /// Hand every member back to the heuristics and forget the squad.
+    pub release: bool,
+}
+
+/// The field commander's levers (see `DESIGN.md`, "Field commander").
+#[derive(Clone, Debug, Default)]
+pub struct FieldOrders {
+    pub squads: BTreeMap<String, SquadRequest>,
+    /// Unit name to weight. Empty: the heuristic batch.
+    pub production: BTreeMap<String, u32>,
+    pub turret_requests: Vec<Vec3>,
+}
+
+/// What the commander is shown each turn, beyond the briefing.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct Field {
+    /// Soldiers no squad has claimed, by unit name; the heuristics command these.
+    pub unassigned: Vec<(String, usize)>,
+    pub unassigned_centre: Option<Place>,
+    pub squads: Vec<SquadStatus>,
+    pub extractors: Vec<ExtractorStatus>,
+    pub turrets: Vec<Place>,
+    /// What our factories can build, with metal cost.
+    pub buildable: Vec<(String, u32)>,
+    pub production_weights: Vec<(String, u32)>,
+    pub turret_requests_pending: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SquadStatus {
+    pub name: String,
+    pub composition: Vec<(String, usize)>,
+    pub health_percent: u32,
+    pub centre: Option<Place>,
+    pub post: Option<(Place, u32)>,
+    pub still_wanted: Vec<(String, usize)>,
+    pub engaged: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ExtractorStatus {
+    pub at: Place,
+    pub enemies_within_600: usize,
+    pub turret_within_300: bool,
+}
+
+/// When the commander wants to be woken. It sets these itself (`wait` tool); they hold until changed.
+#[derive(Clone, Debug, Serialize)]
+pub struct Wake {
+    /// Game seconds after which it is woken whatever happens.
+    pub max_seconds: u32,
+    /// Enemies appear within 600 of an extractor that had none near it.
+    pub enemy_near_extractor: bool,
+    /// A posted squad starts fighting.
+    pub squad_engaged: bool,
+    pub extractor_lost: bool,
+    /// Unit name to count: woken when that many of the type stand unassigned.
+    pub pool_reaches: BTreeMap<String, usize>,
+}
+
+impl Default for Wake {
+    fn default() -> Self {
+        Wake { max_seconds: 30, enemy_near_extractor: true, squad_engaged: true, extractor_lost: true, pool_reaches: BTreeMap::new() }
+    }
+}
+
+/// Lockstep turns: the brain asks for a turn and holds the game (its reply to the engine) until the turn is over.
+#[derive(Default)]
+pub struct Gate {
+    /// Why the commander is being woken; taken by the driver.
+    pub requested: Option<String>,
+    pub in_progress: bool,
+    /// The session is gone: never hold the game again.
+    pub closed: bool,
+}
+
 /// State shared between the brain's thread, the MCP server and the strategist driver.
 #[derive(Default)]
 pub struct Shared {
@@ -165,10 +266,59 @@ pub struct Shared {
     pub triggers: Mutex<Vec<String>>,
     /// Static map description, filled once at game start.
     pub map: Mutex<serde_json::Value>,
+    pub field: Mutex<Field>,
+    pub field_orders: Mutex<FieldOrders>,
+    /// Losses and kills since the commander last looked ("lost armpw to corak in our half" to count).
+    pub fights: Mutex<BTreeMap<String, u32>>,
+    /// The commander's own notes, carried across session restarts.
+    pub notes: Mutex<Vec<String>>,
+    pub wake: Mutex<Wake>,
+    /// True when turns are taken in lockstep with the game (the field commander).
+    pub lockstep: std::sync::atomic::AtomicBool,
+    pub gate: Mutex<Gate>,
+    pub gate_changed: Condvar,
 }
 
 impl Shared {
     pub fn trigger(&self, text: String) {
         self.triggers.lock().unwrap().push(text);
+    }
+
+    /// Brain side: ask for a turn and hold the game until it is over. Returns at once when no session can answer.
+    pub fn hold_for_turn(&self, reason: String) {
+        let mut gate = self.gate.lock().unwrap();
+        if gate.closed {
+            return;
+        }
+        gate.requested = Some(reason);
+        self.gate_changed.notify_all();
+        let _gate = self.gate_changed.wait_while(gate, |g| !g.closed && (g.requested.is_some() || g.in_progress)).unwrap();
+    }
+
+    /// Driver side: wait for the brain to ask for a turn. `None` when `give_up` turns true.
+    pub fn next_turn_request(&self, give_up: &std::sync::atomic::AtomicBool) -> Option<String> {
+        let mut gate = self.gate.lock().unwrap();
+        loop {
+            if give_up.load(std::sync::atomic::Ordering::Relaxed) {
+                return None;
+            }
+            if let Some(reason) = gate.requested.take() {
+                gate.in_progress = true;
+                return Some(reason);
+            }
+            gate = self.gate_changed.wait_timeout(gate, std::time::Duration::from_millis(250)).unwrap().0;
+        }
+    }
+
+    pub fn end_turn(&self) {
+        self.gate.lock().unwrap().in_progress = false;
+        self.gate_changed.notify_all();
+    }
+
+    pub fn close_gate(&self) {
+        let mut gate = self.gate.lock().unwrap();
+        gate.closed = true;
+        gate.in_progress = false;
+        self.gate_changed.notify_all();
     }
 }

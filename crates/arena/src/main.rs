@@ -10,6 +10,7 @@
 //!              [--ab-disable H-ID,H-ID]   (interleaved A/B: arm B also switches these off; blocks of four matches)
 //!              [--claude-config-dir DIR]   (subscription for --strategist sessions; default ~/.claude2)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
+//!              [--commander]    (Sonnet field commander per match; the game is held still during its turns, so any --speed)
 
 mod autohost;
 mod script;
@@ -46,6 +47,7 @@ struct Options {
     mirror: bool,
     swap_corners: bool,
     strategist: bool,
+    commander: bool,
     /// Play every match as this faction instead of alternating.
     side: Option<&'static str>,
     /// Fixes our start corner; otherwise it alternates.
@@ -114,7 +116,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "swap_corners": options.swap_corners, "strategist": options.strategist, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -219,6 +221,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     };
     let mut bot = Command::new(options.bot.clone().unwrap_or_else(|| repo.join("target/release/bot")))
         .args(options.strategist.then_some("--strategist"))
+        .args(options.commander.then_some("--commander"))
         .env("WITHIN_REASON_SOCKET", &socket)
         .env("WITHIN_REASON_LOG_DIR", &dir)
         .env("WITHIN_REASON_DISABLE", &disable)
@@ -231,6 +234,8 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .arg(&dir)
         .arg(&script_path)
         .env("SPRING_DATADIR", repo.join("run/data"))
+        // The commander takes its turns with the game held still: the shim waits for each of the bot's answers.
+        .envs(options.commander.then_some(("WITHIN_REASON_LOCKSTEP", "1")))
         .env("WITHIN_REASON_TRACE_BUILDS", "1")
         .env("WITHIN_REASON_SOCKET", &socket)
         .stdout(log.try_clone()?)
@@ -266,6 +271,8 @@ fn referee(
     engine_log: &Path,
 ) -> io::Result<Outcome> {
     let mut playing = false;
+    // The game clock stands still during the commander's turns, and the log only shows it once a game minute.
+    let stall_allowance = if options.commander { 10 * STALL_ALLOWANCE } else { STALL_ALLOWANCE };
     let mut deadline = Instant::now() + LOAD_ALLOWANCE;
     let frame_limit = options.max_minutes * 60 * 30;
     let mut last_seen_frame = 0;
@@ -288,7 +295,7 @@ fn referee(
             }
             if frame > last_seen_frame {
                 last_seen_frame = frame;
-                deadline = Instant::now() + STALL_ALLOWANCE;
+                deadline = Instant::now() + stall_allowance;
             }
         }
         match autohost.receive(Duration::from_millis(500))? {
@@ -297,7 +304,7 @@ fn referee(
                 autohost.send(&format!("/setmaxspeed {}", options.speed))?;
                 autohost.send(&format!("/setminspeed {}", options.speed))?;
                 playing = true;
-                deadline = Instant::now() + STALL_ALLOWANCE;
+                deadline = Instant::now() + stall_allowance;
             }
             Some(Event::GameOver { winning_ally_teams }) => {
                 let won = winning_ally_teams.contains(&setup.our_ally_team());
@@ -424,6 +431,7 @@ fn parse_args() -> Options {
         mirror: false,
         swap_corners: false,
         strategist: false,
+        commander: false,
         side: None,
         corner: None,
         bot: None,
@@ -440,6 +448,10 @@ fn parse_args() -> Options {
             }
             "--swap-corners" => {
                 options.swap_corners = true;
+                continue;
+            }
+            "--commander" => {
+                options.commander = true;
                 continue;
             }
             "--strategist" => {
@@ -482,7 +494,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--strategist] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR]");
     std::process::exit(2)
 }
 

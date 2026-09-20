@@ -7,6 +7,8 @@
 mod army;
 mod briefing;
 mod economy;
+mod squads;
+mod wake;
 mod roster;
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -33,6 +35,12 @@ pub struct Brain {
     /// Metal spot index to the frame it was claimed at.
     spot_claims: HashMap<usize, i32>,
     army: army::Army,
+    squads: squads::Squads,
+    wake: wake::WakeState,
+    /// The commander's unit mix (unit name to weight); empty means the heuristic batch.
+    production_weights: std::collections::BTreeMap<String, u32>,
+    /// Turrets the commander asked for, oldest first.
+    turret_requests: Vec<Vec3>,
     /// How often each heuristic (docs/heuristics.md) acted since the last status line.
     fired: BTreeMap<&'static str, u32>,
     /// Present when a strategist is attached; the brain publishes to it and reads directives from it.
@@ -79,6 +87,10 @@ impl Brain {
             jobs: HashMap::new(),
             spot_claims: HashMap::new(),
             army: army::Army::default(),
+            squads: Default::default(),
+            wake: Default::default(),
+            production_weights: Default::default(),
+            turret_requests: Vec::new(),
             fired: BTreeMap::new(),
             strategist,
             directives: Directives::default(),
@@ -113,6 +125,7 @@ impl Brain {
         self.run_army(tick, &kit, &mut commands);
         self.report(tick, &kit);
         self.publish_briefing(tick, &kit);
+        self.wake_commander_if_due(tick, &kit);
         commands
     }
 
