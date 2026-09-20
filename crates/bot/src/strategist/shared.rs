@@ -420,6 +420,11 @@ impl Shared {
         }
     }
 
+    /// Driver side: whether the brain is still held for the turn in hand.
+    pub fn turn_in_progress(&self) -> bool {
+        self.gate.lock().unwrap().in_progress
+    }
+
     pub fn end_turn(&self) {
         self.gate.lock().unwrap().in_progress = false;
         self.gate_changed.notify_all();

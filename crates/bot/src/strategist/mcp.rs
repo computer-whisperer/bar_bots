@@ -70,7 +70,7 @@ fn handle(call: &Value, shared: &Shared, transcript: &Transcript) -> Option<Valu
         "tools/call" => {
             let name = call["params"]["name"].as_str().unwrap_or_default();
             let arguments = &call["params"]["arguments"];
-            let outcome = call_tool(name, arguments, shared);
+            let outcome = if name == "orders" { orders(arguments, shared) } else { call_tool(name, arguments, shared) };
             // Full results, briefings included: they are what the strategist decided on, and the
             // labelled state for evaluating faster models against its decisions.
             let recorded = outcome.as_ref().map_or_else(
@@ -151,8 +151,14 @@ fn tool_list() -> Value {
           "inputSchema": { "type": "object", "additionalProperties": false, "properties": {
               "take_first": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
               "leave_alone": { "type": "array", "items": { "type": "integer", "minimum": 0 } } } } },
+        { "name": "orders",
+          "description": "A whole turn in one call: every order you want to give, carried out in the order listed, `wait` last. Each entry names one of the other tools and its arguments, exactly as you would call it alone. Use this instead of separate calls: every separate call is another round trip with the game held.",
+          "inputSchema": { "type": "object", "additionalProperties": false, "required": ["calls"], "properties": {
+              "calls": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["tool"], "properties": {
+                  "tool": { "type": "string", "enum": ["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"] },
+                  "arguments": { "type": "object" } } } } } } },
         { "name": "wait",
-          "description": "Set when you are next woken; the settings hold until you change them. The game is paused during your turn and runs fast between turns, so a long quiet wait costs nothing and a raid still wakes you at once. You are always woken for a base attack, the commander under fire, or a wiped-out wave.",
+          "description": "Ends your turn: the game resumes the moment this is called, so call it last and write nothing after it. Sets when you are next woken; the settings hold until you change them. The game is paused during your turn and runs fast between turns, so a long quiet wait costs nothing and a raid still wakes you at once. You are always woken for a base attack, the commander under fire, or a wiped-out wave.",
           "inputSchema": { "type": "object", "additionalProperties": false, "properties": {
               "max_seconds": { "type": "integer", "minimum": 5, "maximum": 180, "description": "Game seconds after which you are woken whatever happens (default 30)." },
               "enemy_near_extractor": { "type": "boolean", "description": "Enemies appear within 600 of an extractor that had none near." },
@@ -164,6 +170,27 @@ fn tool_list() -> Value {
           "description": "Record your reasoning in a sentence or two. Kept with the game time for post-game analysis; it changes nothing in the game.",
           "inputSchema": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"], "additionalProperties": false } },
     ])
+}
+
+/// The `orders` tool: several tool calls in one request. `wait` goes last wherever it was listed, since it ends the turn.
+fn orders(arguments: &Value, shared: &Shared) -> Result<String, String> {
+    let calls = arguments["calls"].as_array().ok_or("calls must be a list")?;
+    let (waits, others): (Vec<&Value>, Vec<&Value>) = calls.iter().partition(|c| c["tool"] == "wait");
+    let empty = json!({});
+    let mut lines = Vec::new();
+    for call in others.into_iter().chain(waits) {
+        let tool = call["tool"].as_str().unwrap_or_default();
+        if !["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"].contains(&tool) {
+            lines.push(format!("{tool}: not a tool that can be batched"));
+            continue;
+        }
+        let arguments = call.get("arguments").filter(|a| a.is_object()).unwrap_or(&empty);
+        match call_tool(tool, arguments, shared) {
+            Ok(text) => lines.push(format!("{tool}: {text}")),
+            Err(problem) => lines.push(format!("{tool}: REFUSED: {problem}")),
+        }
+    }
+    Ok(lines.join("\n"))
 }
 
 fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, String> {
@@ -192,7 +219,12 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, S
             if let Some(pool) = arguments["pool_reaches"].as_object() {
                 wake.pool_reaches = pool.iter().map(|(name, n)| (name.clone(), n.as_u64().unwrap_or(1) as usize)).collect();
             }
-            Ok(format!("in force until you change them (no need to call again): {}", serde_json::to_string(&*wake).map_err(|e| e.to_string())?))
+            let reply = format!("turn ended, the game is running. In force until you change them: {}", serde_json::to_string(&*wake).map_err(|e| e.to_string())?);
+            drop(wake);
+            // The turn is over here, not when the model has finished its closing sentence: that sentence is one more
+            // request to the model, a second or two with the game held (a third of a median turn, commander game 9).
+            shared.end_turn();
+            Ok(reply)
         }
         "situation" => serde_json::to_string(&*shared.field.lock().unwrap()).map_err(|e| e.to_string()),
         "squad" => squad(arguments, shared),

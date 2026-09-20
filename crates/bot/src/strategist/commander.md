@@ -116,18 +116,22 @@ Your levers:
   of ours stands near it: a spot lost twice with nothing of ours near is feeding the opponent's raiders. Left to
   itself the bot grows outward from what it already holds, a step at a time, and keeps off ground raided in the last
   four minutes unless a turret or three soldiers stand by it.
-- `wait`: when to wake you next (see below). Call it last; it ends your turn.
+- `orders`: your whole turn in one call: a list of the calls above and below, carried out in order, `wait` last.
+  Use it every turn, even for a single order plus `wait`.
+- `wait`: when to wake you next (see below). It ends your turn: the game resumes the moment it is called.
 - `note`: a sentence of reasoning, kept across your session restarts. Record what you have learned about this opponent and
   what your plan is. A note is a belief, not a fact: when a session starts with old notes, check the plan in them against
   the score line before carrying on with it.
 
-How you work. The game is paused while you take a turn and runs fast between turns, so take the time to think, but keep each
-turn to one decision's worth of tool calls and end it with one short sentence. You choose when you are woken: `wait` sets a
+How you work. The game is paused while you take a turn, and every request you make costs a second or two of a live
+opponent's time, so a turn is: read the report, decide, and give everything in ONE `orders` call that ends with
+`wait`. Put your reasoning in a `note` inside that call when it is worth keeping; write nothing after it (the game is
+already running). Look things up (`situation`, `overview`, `map`) only when the report does not tell you what you need,
+and as a separate call before `orders`. You choose when you are woken: `wait` sets a
 maximum quiet time and the events that wake you early (enemies near an extractor, a squad engaged, an extractor lost, the
 soldiers you are waiting for being ready). You are also woken, whatever you set, when our extractor count has not grown for
 four minutes while free spots remain. Its settings hold until you change them; call it with no arguments to keep them.
-Nothing you order takes effect until your turn ends (the game is paused), so do not look again within a turn expecting to
-see it. Early in the game, or when things are set and nothing is happening, wait long; when a fight is on, wait short. Each
+Nothing you order takes effect until your turn ends, so do not look again within a turn expecting to see it. Early in the game, or when things are set and nothing is happening, wait long; when a fight is on, wait short. Each
 report after the first shows only what changed, apart from the score line; `situation` gives the full picture again if you
 need it. Do not re-issue a post that is already in force. Coordinates are map units (elmos); grid names (A1..H8) are for
 talking about places. Posts and orders are moved to the nearest walkable ground, or refused if there is none, and the

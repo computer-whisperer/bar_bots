@@ -152,7 +152,12 @@ LLM levers belong. BARb is the reference for economy and army hoarding, not for 
   in 50 of 85 turns for longer than the game time to its next wake. `--think-penalty X` makes its orders (directives,
   squads, wake settings) take effect X game seconds late per wall second of thought, the old ones standing meanwhile and
   no new turn starting until they land: X = 1 is the latency of a live game at any `--speed`. Known looseness: squad
-  `take` counts fulfilled during the delay are asked for again when the delayed orders land. Rejected:
+  `take` counts fulfilled during the delay are asked for again when the delayed orders land. Where a turn's time goes
+  (measured 2026-09-20, 76 turns): none of it to the harness or the engine (tools run in the bot process on shared
+  state, the game is paused); a turn is about three requests to the model at about 1 s to first output each plus
+  generation, 3.3 s per tool call in all. So a turn ends at its `wait` call, not when the model has written its closing
+  sentence (which is one request more), and the `orders` tool takes a whole turn's calls in one request. Anything
+  ordered after `wait` in the same response lands on the running game and escapes the think penalty. Rejected:
   keeping the narrow remit and fixing expansion in the heuristics, because the commander already had the directives
   that starved it and used them for defence.
 - **Squads, not unit ids.** `squad {name, take: {type: count}, near?, post?, order?, release?}`. `take` draws from the

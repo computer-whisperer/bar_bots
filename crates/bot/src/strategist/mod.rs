@@ -182,6 +182,7 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
     let mut last_turn_frame = i32::MIN / 2;
     let mut turns_this_session = 0;
     let mut seen = report::Seen::default();
+    let mut owed_result = false;
     while !stop.load(Ordering::Relaxed) {
         let headline = match mode {
             Mode::Commander => match shared.next_turn_request(stop) {
@@ -210,6 +211,22 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
             };
             turns_this_session = 0;
         }
+        // The last turn ended at its `wait`; the session may still be writing its closing words, and takes no new
+        // prompt until it has reported that response finished.
+        if owed_result {
+            owed_result = false;
+            let arrived = loop {
+                match session.turn_done.recv_timeout(Duration::from_millis(250)) {
+                    Ok(()) => break true,
+                    Err(RecvTimeoutError::Timeout) if !stop.load(Ordering::Relaxed) => {}
+                    Err(_) => break false,
+                }
+            };
+            if !arrived {
+                shared.end_turn();
+                break;
+            }
+        }
         let (frame, game_time) = {
             let briefing = shared.briefing.lock().unwrap();
             (briefing.frame, briefing.game_time.clone())
@@ -226,13 +243,18 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
         let sent = writeln!(session.stdin, "{line}").and_then(|()| session.stdin.flush()).is_ok();
         let finished = sent
             && loop {
-                match session.turn_done.recv_timeout(Duration::from_millis(250)) {
+                match session.turn_done.recv_timeout(Duration::from_millis(50)) {
                     Ok(()) => break true,
+                    // The commander called `wait`: the game is running again, the response's tail is owed.
+                    Err(RecvTimeoutError::Timeout) if mode == Mode::Commander && !shared.turn_in_progress() => {
+                        owed_result = true;
+                        break true;
+                    }
                     Err(RecvTimeoutError::Timeout) if !stop.load(Ordering::Relaxed) => {}
                     Err(_) => break false,
                 }
             };
-        launch.transcript.record(json!({ "kind": "turn_end", "wall_seconds": started.elapsed().as_secs_f32() }));
+        launch.transcript.record(json!({ "kind": "turn_end", "wall_seconds": started.elapsed().as_secs_f32(), "ended_by": if owed_result { "wait" } else { "response" } }));
         shared.end_turn();
         if !finished {
             if !stop.load(Ordering::Relaxed) {
