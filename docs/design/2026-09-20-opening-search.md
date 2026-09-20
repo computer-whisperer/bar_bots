@@ -105,4 +105,9 @@ time lost to walking, by minute, across settings of the knobs in arena batches; 
 - 2026-09-20, step 2: the plan executor (`crates/bot/src/brain/opening.rs`, H-OPEN-PLAN) plays today's opening
   written down as a plan and comes out as the rules do or a little ahead (open-exec-1-ab). Labs get their whole queue
   at once; mobile builders still take one step at a time when idle (the 3.5 s between builds is still there: queued
-  orders for them are the next measurement). Steps 3-4: not started.
+  orders for them are the next measurement).
+- 2026-09-20, step 3, first version: H-OPEN-SEARCH (500 ms, from the rule-made opening, objective `Tempo`, commander
+  leashed to 1500, spots named by the search). open-search-1-ab: better on every opening measure on the same seeds;
+  full-game A/Bs on three maps running (open-search-2-*). Not built: the priorities as input (section 3: the
+  `build_priorities` tool, the pre-game turn), the first-contact weighting of the army term, the mid-game search.
+  Step 4 (the commander unit forward and fighting): not started.

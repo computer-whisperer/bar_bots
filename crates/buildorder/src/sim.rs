@@ -52,6 +52,10 @@ pub struct Scenario {
     pub walk_overhead: f64,
     /// Seconds a factory loses between units (the finished unit clearing the pad).
     pub factory_overhead: f64,
+    /// The commander takes no metal spot farther from home than this on foot: the game ends with it.
+    pub commander_leash: f64,
+    /// A builder within this of home puts economy buildings beside itself (H-OPEN-PLAN places them so).
+    pub base_radius: f64,
     /// Length of one `Item::Assist`.
     pub assist_chunk: f64,
     /// Stored-energy fraction above which converters run (`mmLevel`, game_energy_conversion.lua).
@@ -77,6 +81,8 @@ impl Scenario {
             mobile_overhead: 3.5,
             walk_overhead: 0.0,
             factory_overhead: 1.0,
+            commander_leash: f64::MAX,
+            base_radius: 600.0,
             assist_chunk: 20.0,
             converter_level: 0.75,
             constructors_default_to_extractors: false,
@@ -280,8 +286,9 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                         let site = if def.extracts_metal > 0.0 {
                             pays = mean_spot;
                             let from = next.site.unwrap_or(builder.place);
+                            let leashed = queue == 0 && sc.commander_leash < f64::MAX;
                             let free = (0..sc.spots.len())
-                                .filter(|i| !claimed[*i])
+                                .filter(|i| !claimed[*i] && !(leashed && sc.ground.walk(sc.home, sc.spots[*i].at) > sc.commander_leash))
                                 .min_by(|a, b| distance(sc.spots[*a].at, from).total_cmp(&distance(sc.spots[*b].at, from)));
                             match free {
                                 Some(i) if next.site.is_none() || distance(sc.spots[i].at, from) < 100.0 => {
@@ -290,6 +297,9 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                                     sc.spots[i].at
                                 }
                                 _ => match next.site {
+                                    // The named spot is taken already, or too far for the commander.
+                                    Some(site) if sc.spots.iter().any(|s| distance(s.at, site) < 100.0) => continue,
+                                    None if leashed => continue,
                                     // A replayed extractor on a spot outside the scenario's list.
                                     Some(site) => site,
                                     None if builder.next > plan.queue(queue).len() => {
@@ -301,7 +311,13 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                                 },
                             }
                         } else {
+                            // Economy buildings go up beside a builder that is about the base anyway (no walk);
+                            // everything else, and everything a builder far afield is asked for, goes to the base.
+                            let beside = def.role == Role::Eco && distance(builder.place, sc.home) < sc.base_radius;
                             next.site.unwrap_or_else(|| {
+                                if beside {
+                                    return builder.place;
+                                }
                                 base_sites += 1;
                                 base_site(sc.home, base_sites - 1)
                             })

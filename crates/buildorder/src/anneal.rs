@@ -29,7 +29,7 @@ impl Rng {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Objective {
     /// Metal income (commander, extractors, converters), mean of the last 30 s before the horizon.
     Income,
@@ -37,7 +37,14 @@ pub enum Objective {
     Army,
     /// Army value plus `MIX_INCOME_SECONDS` of the final metal income.
     Mix,
+    /// The opening's measure (`docs/design/2026-09-20-opening-search.md`), in metal: all metal made over the horizon,
+    /// plus `TEMPO_INCOME_SECONDS` of the income it ends on (what stands at the horizon goes on paying), plus the
+    /// army built times `army` per metal, less `TEMPO_STALL_METAL` for every builder-second lost to a stall.
+    Tempo { army: f64 },
 }
+
+pub const TEMPO_INCOME_SECONDS: f64 = 90.0;
+pub const TEMPO_STALL_METAL: f64 = 3.0;
 
 /// In `Objective::Mix` one metal/s of income at the horizon counts as this much army metal.
 pub const MIX_INCOME_SECONDS: f64 = 120.0;
@@ -48,6 +55,7 @@ impl Objective {
             "income" => Some(Objective::Income),
             "army" => Some(Objective::Army),
             "mix" => Some(Objective::Mix),
+            "tempo" => Some(Objective::Tempo { army: 1.0 }),
             _ => None,
         }
     }
@@ -57,6 +65,7 @@ impl Objective {
             Objective::Income => "income",
             Objective::Army => "army",
             Objective::Mix => "mix",
+            Objective::Tempo { .. } => "tempo",
         }
     }
 
@@ -70,6 +79,11 @@ impl Objective {
             Objective::Income => income + 1e-3 * shaping,
             Objective::Army => army + shaping,
             Objective::Mix => army + MIX_INCOME_SECONDS * income + shaping,
+            Objective::Tempo { army: weight } => {
+                let made: f64 = outcome.samples.iter().map(|s| s.metal_income).sum();
+                let stalled: f64 = outcome.samples.iter().map(|s| 1.0 - s.stall).sum();
+                made + TEMPO_INCOME_SECONDS * income + weight * army - TEMPO_STALL_METAL * stalled + shaping
+            }
         }
     }
 }
@@ -144,13 +158,13 @@ impl Palette {
 
 /// `plan` must be an effective plan (`Outcome::effective`): every step in it was reached, so every position matters.
 /// `live[q]`: whether queue `q` has a builder yet; writing into a queue nobody will read is a wasted move.
-fn mutate(plan: &mut Plan, live: &[usize], palette: &Palette, rng: &mut Rng) {
+fn mutate(plan: &mut Plan, live: &[usize], palette: &Palette, spots: &[(f64, f64)], rng: &mut Rng) {
     let reach = |plan: &Plan, q: usize| plan.queue(q).len();
     for _ in 0..20 {
         let q = live[rng.below(live.len())];
         let kind = plan.kind(q);
         let len = reach(plan, q);
-        match rng.below(5) {
+        match rng.below(6) {
             0 if len >= 2 => {
                 let (a, b) = (rng.below(len), rng.below(len));
                 if plan.queue(q)[a] == plan.queue(q)[b] {
@@ -186,13 +200,26 @@ fn mutate(plan: &mut Plan, live: &[usize], palette: &Palette, rng: &mut Rng) {
                 let at = rng.below(reach(plan, to) + 1).min(plan.queue(to).len());
                 plan.queue_mut(to).insert(at, step);
             }
+            5 if len >= 1 && kind != QueueKind::Factory && !spots.is_empty() => {
+                // Name the spot an extractor goes to (or leave it to "the nearest free one" again): how the search
+                // sends a builder on a walk the greedy choice would not take.
+                let at = rng.below(len);
+                if plan.queue(q)[at].item != palette.mobile[0] {
+                    continue;
+                }
+                let site = (rng.below(4) > 0).then(|| spots[rng.below(spots.len())]);
+                if plan.queue(q)[at].site == site {
+                    continue;
+                }
+                plan.queue_mut(q)[at].site = site;
+            }
             _ => continue,
         }
         return;
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Search {
     pub objective: Objective,
     /// Seconds.
@@ -203,6 +230,8 @@ pub struct Search {
     pub constructors: usize,
     /// Starting temperature as a share of the score; it falls geometrically to a hundredth of this.
     pub hot: f64,
+    /// Where to start from; the palette's plain opening when there is none. The answer is never worse than this.
+    pub start: Option<Plan>,
 }
 
 pub struct Found {
@@ -217,7 +246,10 @@ pub fn anneal(units: &Units, scenario: &Scenario, palette: &Palette, search: &Se
         let outcome = simulate(units, scenario, plan, search.horizon);
         (search.objective.score(&outcome, search.horizon), outcome)
     };
-    let mut current = palette.seed_plan(search.factories, search.constructors);
+    let mut current = search.start.clone().unwrap_or_else(|| palette.seed_plan(search.factories, search.constructors));
+    current.factories.resize(search.factories, Vec::new());
+    current.constructors.resize(search.constructors, Vec::new());
+    let spots: Vec<(f64, f64)> = scenario.spots.iter().map(|s| s.at).collect();
     let current_queue_count = current.queue_count();
     let (mut current_score, outcome) = evaluate(&current);
     let effective = |outcome: &Outcome| Plan {
@@ -239,7 +271,7 @@ pub fn anneal(units: &Units, scenario: &Scenario, palette: &Palette, search: &Se
     for i in 0..search.iterations {
         let temperature = best.score.abs().max(1.0) * hot * (cold / hot).powf(i as f64 / search.iterations as f64);
         let mut candidate = current.clone();
-        mutate(&mut candidate, &alive, palette, &mut rng);
+        mutate(&mut candidate, &alive, palette, &spots, &mut rng);
         let (score, outcome) = evaluate(&candidate);
         if score >= current_score || rng.unit() < ((score - current_score) / temperature).exp() {
             // Continue from what the builders actually did: no skipped steps, no unreached tail, default extractors
@@ -260,14 +292,12 @@ pub fn anneal_restarts(units: &Units, scenario: &Scenario, palette: &Palette, se
     let mut found: Vec<Found> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..restarts)
             .map(|r| {
-                let one = Search { seed: search.seed + r as u64, ..*search };
+                let one = Search { seed: search.seed + r as u64, ..search.clone() };
                 scope.spawn(move || anneal(units, scenario, palette, &one))
             })
             .collect();
         handles.into_iter().map(|h| h.join().expect("annealing thread")).collect()
     });
-    let scores: Vec<String> = found.iter().map(|f| format!("{:.0}", f.score)).collect();
-    eprintln!("restart scores: {}", scores.join(" "));
     let mut best = found.remove(0);
     for other in found {
         if other.score > best.score {
@@ -275,4 +305,20 @@ pub fn anneal_restarts(units: &Units, scenario: &Scenario, palette: &Palette, se
         }
     }
     best
+}
+
+/// The best plan found in about `budget` of wall time on `threads` threads: the iteration count is set from how long
+/// this scenario's simulations take on this machine.
+pub fn anneal_within(units: &Units, scenario: &Scenario, palette: &Palette, search: &Search, budget: std::time::Duration, threads: usize) -> Found {
+    let started = std::time::Instant::now();
+    let probe = Search { iterations: 30, ..search.clone() };
+    let first = anneal(units, scenario, palette, &probe);
+    let per_simulation = started.elapsed().as_secs_f64() / 31.0;
+    let left = budget.as_secs_f64() - started.elapsed().as_secs_f64();
+    let iterations = (left / per_simulation.max(1e-6)) as usize;
+    if iterations < 100 {
+        return first;
+    }
+    let found = anneal_restarts(units, scenario, palette, &Search { iterations, ..search.clone() }, threads.max(1));
+    if found.score >= first.score { found } else { first }
 }

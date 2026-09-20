@@ -9,8 +9,8 @@ use buildorder::record;
 use buildorder::sim::{simulate, Outcome, Sample, Scenario, Wind};
 
 const USAGE: &str = "usage: (the game, that is map, start, faction and unit numbers, comes from a match record's header)
-  buildorder optimize  --game RECORD.jsonl [--factory lab|vp] [--objective income|army|mix] [--minutes 10]
-                       [--iterations 40000] [--restarts 8] [--seed 1] [--wind MEAN] [--detour X] [--factories 2] [--constructors 6]
+  buildorder optimize  --game RECORD.jsonl [--factory lab|vp] [--objective income|army|mix|tempo] [--minutes 10]
+                       [--iterations 40000] [--restarts 8] [--seed 1] [--wind MEAN] [--detour X] [--factories 2] [--constructors 6] [--leash ELMOS]
                        [--no-nano] [--csv FILE] [--plan-out FILE]      (--detour X: open ground, every walk X straight lines,
                                                                         in place of the map's own ground)
   buildorder simulate  --game RECORD.jsonl --plan FILE [--minutes ..] [--wind ..] [--detour X] [--csv FILE]
@@ -72,6 +72,7 @@ fn scenario(game: &Game, args: &Args) -> Scenario {
     let mut scenario = game.scenario(game.own_half(), ground(game, args));
     scenario.wind = Wind::Constant(args.number("--wind", game.mean_wind()));
     scenario.constructors_default_to_extractors = true;
+    scenario.commander_leash = args.number("--leash", f64::MAX);
     scenario
 }
 
@@ -132,6 +133,7 @@ fn optimize(args: &Args) {
         factories: args.number("--factories", 2),
         constructors: args.number("--constructors", 6),
         hot: args.number("--hot", 0.02),
+        start: None,
     };
     let found = anneal_restarts(units, &scenario, &palette, &search, args.number("--restarts", 8));
     println!("# {} {factory} from {:.0},{:.0}, objective {} at {minutes} min, score {:.1}", game.side(), game.home.0, game.home.1, objective.name(), found.score);

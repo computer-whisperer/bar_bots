@@ -196,3 +196,18 @@ the engine's own start-up of a build) is not split.
 **Would be wrong if.** Queued orders (the plan executor's) left the gap where it is: then it is the engine's and not ours.
 **Used by.** `Scenario::mobile_overhead` (3.5 s) in `crates/buildorder`.
 
+### K-open-search-beats-rules
+**Claim.** An opening found by half a second of search over a simulator of this game's economy beats our hand-ordered
+opening on every opening measure at once, on the same seeds: extractors 5.2 / 8.2 / 11.4 at minutes 3 / 4 / 5 against
+4.6 / 6.8 / 9.1, metal income 20.2 against 16.0 at minute 5, army metal built by minute 5 1116 against 922, six
+constructors against four, and 1.6 s against 15 s with stored energy at zero. What it does differently: four
+constructors before the first soldier, generators interleaved with the commander's extractors so the stall at 4:30
+never comes, and solars where the rules took wind.
+**Status.** measured (2026-09-20), Quicksilver, 8 games an arm, against the same opening played through the same executor.
+The simulator's prediction holds to minute 3 (extractors 5.2 predicted, 5.2 played; income 12.5 against 11.5) and is
+optimistic at minute 5 (14 extractors and 30 metal/s predicted, 11.4 and 20 played): it knows no enemy and no losses.
+**Evidence.** `open-search-1-ab`; `run/opening_ab.py <batch dir>`.
+**Would be wrong if.** Full games lost the gain (the far extractors it takes die; the late first soldier loses the base):
+open-search-2-ab is that test.
+**Used by.** H-OPEN-SEARCH.
+

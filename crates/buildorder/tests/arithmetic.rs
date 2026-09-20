@@ -151,7 +151,7 @@ fn annealing_is_deterministic_and_beats_its_seed_plan() {
     let mut scenario = game.scenario(game.own_half(), game.ground());
     scenario.constructors_default_to_extractors = true;
     let palette = Palette::new(units, game.commander, game.factory("lab").unwrap(), true);
-    let search = Search { objective: Objective::Mix, horizon: 300.0, iterations: 1500, seed: 7, factories: 2, constructors: 6, hot: 0.02 };
+    let search = Search { objective: Objective::Mix, horizon: 300.0, iterations: 1500, seed: 7, factories: 2, constructors: 6, hot: 0.02, start: None };
     let seed_outcome = simulate(units, &scenario, &palette.seed_plan(2, 6), 300.0);
     let (a, b) = (anneal(units, &scenario, &palette, &search), anneal(units, &scenario, &palette, &search));
     assert_eq!(a.plan, b.plan);

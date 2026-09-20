@@ -107,3 +107,9 @@ BARb comes back from early deficits, we do not. Replayed over v17-truth-medium's
 (67,000 metal of army against 5,900: a game the bot could not finish, which is its own finding). `results.jsonl` marks
 such games `"called": true` and the batch summary counts them; `--play-out` disables calling.
 
+**Lockstep (since 2026-09-20).** Every arena game runs the shim with `WITHIN_REASON_LOCKSTEP`: the engine waits for the
+bot's answer to each tick. At speed 50 a frame is under a millisecond, so without it any thinking the bot does (the
+opening search's half second, a commander's turn) costs game time that it does not cost in a game played at speed 1:
+half a second of search was twenty game seconds of a standing commander. Batches before this date ran the heuristic
+without it (orders landed a frame or two late, nothing more).
+

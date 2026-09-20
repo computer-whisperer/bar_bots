@@ -6,8 +6,10 @@
 use std::collections::HashMap;
 
 use bot_protocol::{OwnUnit, Tick, UnitDefId, UnitId, Vec3};
-use buildorder::game::Game;
+use buildorder::anneal::{anneal_within, Objective, Palette, Search};
+use buildorder::game::{distance, Game, Spot};
 use buildorder::plan::{Item, Plan, Step};
+use buildorder::sim::simulate;
 use buildorder::units::Units;
 
 use super::roster::Kit;
@@ -20,6 +22,11 @@ const RAID_RADIUS: f32 = 1000.0;
 /// A plan step whose builder is idle again this soon never started (the engine drops orders now and then): once more.
 const RETRY_FRAMES: i32 = 3 * FRAMES_PER_SECOND;
 const RETRIES: u32 = 2;
+/// The search's wall-time budget and threads: spent once, in the opening seconds in which the engine takes no orders.
+const SEARCH_BUDGET: std::time::Duration = std::time::Duration::from_millis(500);
+const SEARCH_THREADS: usize = 2;
+/// Constructor queues the search may write.
+const SEARCHED_CONSTRUCTORS: usize = 4;
 
 pub(super) struct Opening {
     plan: Plan,
@@ -73,13 +80,37 @@ impl Brain {
         Some(plan)
     }
 
+    /// The opening for this start: the best plan an anytime search finds from the rule-made one within its budget,
+    /// by the simulator's measure (H-OPEN-SEARCH; with it off, the rule-made one as it stands).
     pub(super) fn start_opening(&mut self, tick: &Tick, kit: &Kit) {
         if self.opening_tried || !self.enabled("H-OPEN-PLAN") {
             return;
         }
         self.opening_tried = true;
         let Some(game) = self.buildorder_game(kit) else { return };
-        let Some(plan) = self.default_opening(&game, kit) else { return };
+        let Some(mut plan) = self.default_opening(&game, kit) else { return };
+        let lab = self.world.hello.unit_defs.iter().position(|d| d.id == kit.lab);
+        if self.enabled("H-OPEN-SEARCH") && let Some(lab) = lab {
+            // Ours to count on: the spots nearer to us than to the enemy on foot.
+            let mut spots: Vec<Spot> = self.world.hello.metal_spots.iter().filter(|s| self.reachable_on_foot(**s) && self.spot_is_ours(**s))
+                .map(|s| Spot { at: (s.x as f64, s.z as f64), metal: game.spot_metal(s.y as f64) }).collect();
+            spots.sort_by(|a, b| distance(a.at, game.home).total_cmp(&distance(b.at, game.home)));
+            let mut scenario = game.scenario(spots, game.ground());
+            scenario.constructors_default_to_extractors = true;
+            scenario.commander_leash = super::economy::EARLY_COMMANDER_LEASH as f64;
+            let palette = Palette::new(&game.units, game.commander, lab, false);
+            let horizon = (HORIZON_FRAMES / FRAMES_PER_SECOND) as f64;
+            let search = Search { objective: Objective::Tempo { army: 1.0 }, horizon, iterations: 0, seed: 1, factories: 1, constructors: SEARCHED_CONSTRUCTORS, hot: 0.02, start: Some(plan.clone()) };
+            let started = std::time::Instant::now();
+            let before = search.objective.score(&simulate(&game.units, &scenario, &plan, horizon), horizon);
+            let found = anneal_within(&game.units, &scenario, &palette, &search, SEARCH_BUDGET, SEARCH_THREADS);
+            let at = |minute: f64| found.outcome.samples.iter().find(|s| s.t == minute * 60.0).map_or((0, 0.0, 0.0), |s| (s.extractors, s.metal_income, s.army_value));
+            eprintln!(
+                "[ai {}] f={} opening search: {:.0} ms, score {:.0} from {:.0}; predicted extractors / metal per s / army metal at 2, 3, 5 min: {:?} {:?} {:?}",
+                self.ai(), tick.frame, started.elapsed().as_secs_f64() * 1000.0, found.score, before, at(2.0), at(3.0), at(5.0)
+            );
+            plan = found.plan;
+        }
         eprintln!("[ai {}] f={} opening plan:\n{}", self.ai(), tick.frame, plan.to_text(&game.units));
         let queues = plan.queue_count();
         self.opening = Some(Opening { plan, next: vec![0; queues], queue_of: HashMap::new(), factories: 0, constructors: 0, last: HashMap::new() });

@@ -288,8 +288,10 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .arg(&dir)
         .arg(&script_path)
         .env("SPRING_DATADIR", repo.join("run/data"))
-        // The commander takes its turns with the game held still: the shim waits for each of the bot's answers.
-        .envs(options.commander.then_some(("WITHIN_REASON_LOCKSTEP", "1")))
+        // The shim waits for each of the bot's answers. At arena speed a frame is under a millisecond, so any thinking
+        // the bot does (a commander's turn, the opening search's few hundred milliseconds) would otherwise cost game
+        // time it does not cost in a game played at speed 1.
+        .env("WITHIN_REASON_LOCKSTEP", "1")
         .env("WITHIN_REASON_TRACE_BUILDS", "1")
         // Every match leaves the opponent's ground truth and a census for study (the shim reads them with cheat access
         // for the length of the query; the bot never sees them). It used to take the caller's environment to switch on,

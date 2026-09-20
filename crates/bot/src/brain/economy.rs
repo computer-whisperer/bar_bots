@@ -16,7 +16,7 @@ const COMMANDER_LEASH: f32 = 900.0;
 /// H-ECO-EARLY-EXPAND: until this frame the commander's leash is the longer one (no raider that can hurt it is out
 /// yet), and until we hold this many extractors constructors take a spot before anything else.
 const EARLY_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
-const EARLY_COMMANDER_LEASH: f32 = 1500.0;
+pub(super) const EARLY_COMMANDER_LEASH: f32 = 1500.0;
 const EARLY_EXTRACTORS: usize = 5;
 /// H-ECO-NANO: a construction turret per this much metal income, up to this many per factory, placed within reach of it.
 const NANO_PER_INCOME: f32 = 8.0;
@@ -70,6 +70,8 @@ const LAB_GAP: i32 = 8;
 const BACK_FIELD: f32 = 150.0;
 const LAB_YARD: f32 = 350.0;
 const TURRET_LINE: f32 = 650.0;
+/// `buildorder::sim::Scenario::base_radius`.
+const PLANNED_BESIDE_RADIUS: f32 = 600.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
 const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
@@ -301,7 +303,8 @@ impl Brain {
             d if d == kit.lab => Plan::Near(d, self.forward_of_home(LAB_YARD)),
             d if d == kit.turret => Plan::Near(d, self.forward_of_home(TURRET_LINE)),
             d if d == kit.nano && lab.is_some() => Plan::Beside(d, lab.unwrap().pos),
-            d if (d == kit.wind || d == kit.solar) && lab.is_none() => Plan::Beside(d, builder.pos),
+            // As the simulator places them: beside a builder that is about the base, no walking.
+            d if d != kit.nano && builder.pos.dist2d(self.home) < PLANNED_BESIDE_RADIUS => Plan::Beside(d, builder.pos),
             d => Plan::Near(d, self.forward_of_home(-BACK_FIELD)),
         }
     }
