@@ -9,16 +9,17 @@ use std::path::Path;
 use crate::director::DuelResult;
 
 pub const HEADER: &str = "match,site,sequence,x,y,rep,x_end,x_team,n_x,n_y,metal_x,metal_y,winner,reason,seconds,\
-contact_seconds,survivors_x,survivors_y,value_left_x,value_left_y,damage_taken_x,damage_taken_y";
+contact_seconds,survivors_x,survivors_y,value_left_x,value_left_y,damage_taken_x,damage_taken_y,spread_x,spread_y";
 
 pub fn row(r: &DuelResult) -> String {
     format!(
-        "{},{},{},{},{},{},{},{},{},{},{:.0},{:.0},{},{},{:.1},{},{},{},{:.3},{:.3},{:.0},{:.0}",
+        "{},{},{},{},{},{},{},{},{},{},{:.0},{:.0},{},{},{:.1},{},{},{},{:.3},{:.3},{:.0},{:.0},{:.0},{:.0}",
         r.match_index, r.site, r.sequence, r.job.x, r.job.y, r.job.rep,
         if r.job.x_is_west() { "west" } else { "east" }, r.job.x_team(),
         r.count[0], r.count[1], r.metal[0], r.metal[1], r.winner, r.reason, r.seconds,
         r.contact_seconds.map_or(String::new(), |s| format!("{s:.1}")),
         r.survivors[0], r.survivors[1], r.value_left[0], r.value_left[1], r.damage_taken[0], r.damage_taken[1],
+        r.spread_at_contact[0], r.spread_at_contact[1],
     )
 }
 

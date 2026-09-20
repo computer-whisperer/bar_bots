@@ -2,9 +2,11 @@
 
 use std::collections::HashMap;
 
+mod policies;
+
 use combatsim::duels::{self, DECISIVE};
 use combatsim::field::Field;
-use combatsim::scenario::{Energy, Group, Odds, Scenario, Vec2};
+use combatsim::scenario::{Energy, Focus, Group, Micro, Odds, Scenario, Vec2};
 use combatsim::sim::{Rules, Tuning, odds, simulate};
 use combatsim::units::Units;
 
@@ -13,14 +15,19 @@ combatsim --a <type:count[@delay][,...]> --b <type:count[@delay][,...]>
           [--spacing 56] [--apart 1100] [--reps 1] [--seed 0] [--delay-a S] [--delay-b S]
           [--hold-a] [--hold-b] [--terrain FILE:W:H] [--at X,Z] [--from X,Z] [--no-collide] [--verbose]
           [--stored 500] [--income 30] (both sides; --stored-a/--income-b for one side only)
+          [--micro-a POLICY] [--micro-b POLICY]
 combatsim validate [--spacing 56|100|both] [--reps 4] [--worst 15] [--no-collide] [--stored E] [--income E]
+combatsim micro [--reps 8] [--budget 1200] [--ratios 0.7,1,1.4] [--policies LIST] [--detail] [--spacing 56]
 combatsim speed [--reps 200]
 
 Unit names are the game's internal ones (armham, corllt). Side A stands in the west, B in the east.
 A side's types are laid out front to back in the order listed, so `--b corllt:12,corthud:20` is a tower line
 with the army behind it, and `--a armham:10,armrock:6` is Rocketeers screened by Maces.
 --terrain reads the bot's terrain-<ai>.bin (width and height in 16-elmo cells, from the record header);
---from and --at then place A and B on it instead of the default west-east line.";
+--from and --at then place A and B on it instead of the default west-east line.
+
+A micro policy is a comma-separated list of `none`, `spread=N`, `withdraw=F`, `kite`, `kite-slow`,
+`focus=weakest|threat` and `no-chase`; `combatsim micro` prices each of them across the tier-1 matchups.";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -34,10 +41,29 @@ fn main() {
     let rules = Rules::new(Units::default(), tuning);
     match args.first().map(String::as_str) {
         Some("validate") => validate(&rules, &flags),
+        Some("micro") => policies::sweep(&rules, &flags),
         Some("speed") => speed(&rules, &flags),
         Some("--help" | "-h") | None => println!("{USAGE}"),
         _ => query(&rules, &flags),
     }
+}
+
+/// `spread=120,withdraw=0.35` and so on; `none` (or nothing) is plain attack-move.
+pub fn micro(spec: &str) -> Micro {
+    let mut micro = Micro::default();
+    for part in spec.split(',').map(str::trim).filter(|p| !p.is_empty() && *p != "none") {
+        let (name, value) = part.split_once('=').unwrap_or((part, ""));
+        match name {
+            "spread" => micro.spread = value.parse().expect("spread=<elmos>"),
+            "withdraw" => micro.withdraw_below = value.parse().expect("withdraw=<share of health>"),
+            "kite" => micro.kite = true,
+            "kite-slow" => (micro.kite, micro.kite_when_slower) = (true, true),
+            "focus" => micro.focus = Focus::parse(value).expect("focus=nearest|weakest|threat"),
+            "no-chase" => micro.no_chase = true,
+            _ => panic!("unknown micro policy {name}"),
+        }
+    }
+    micro
 }
 
 /// `--name value` and bare `--name` switches.
@@ -113,6 +139,7 @@ fn query(rules: &Rules, flags: &Flags) {
     let at = at.unwrap_or(Vec2::new(from.x + apart, from.z));
     let mut scenario = Scenario::new();
     scenario.energy = [energy(flags, "a"), energy(flags, "b")];
+    scenario.micro = [micro(flags.get("micro-a").unwrap_or("")), micro(flags.get("micro-b").unwrap_or(""))];
     scenario.sides[0] = force(rules, a, from, from.towards(at), flags, "a");
     scenario.sides[1] = force(rules, b, at, at.towards(from), flags, "b");
     if let Some(spec) = flags.get("terrain") {

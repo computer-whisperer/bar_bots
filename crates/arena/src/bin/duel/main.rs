@@ -3,7 +3,7 @@
 //! This process is the bot for both teams: the shims connect to it instead of `bot`. See `docs/harness/duels.md`.
 //!
 //! usage: duel (--units a,b,c | --ours a,b --theirs c,d | --pairs a:b,c:d) [--reps N] [--budget METAL | --count N]
-//!             [--parallel N] [--sites N] [--duels-per-match N] [--time-limit SECONDS] [--sweep-waves N] [--spacing ELMOS] [--speed N] [--map NAME]
+//!             [--parallel N] [--sites N] [--duels-per-match N] [--time-limit SECONDS] [--sweep-waves N] [--spacing ELMOS] [--spread ELMOS] [--speed N] [--map NAME]
 //!             [--label TEXT] [--base-port N]
 //!        duel --report DIR [duels.csv ...]   (rebuild the tables in DIR, from its own duels.csv or the files named)
 
@@ -48,6 +48,8 @@ struct Options {
     time_limit: i32,
     sweep_waves: u32,
     spacing: f32,
+    /// H-MICRO-SPREAD for the first unit of each pairing: elmos between the points its units are sent to.
+    spread: f32,
     speed: u32,
     map: String,
     label: String,
@@ -77,7 +79,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": git_commit(&repo), "map": options.map, "pairings": options.pairs.len(),
             "reps": options.reps, "sizing": format!("{:?}", options.sizing), "time_limit": options.time_limit,
-            "speed": options.speed, "sweep_waves": options.sweep_waves, "spacing": options.spacing, "sites": options.sites, "duels_per_match": options.duels_per_match,
+            "speed": options.speed, "sweep_waves": options.sweep_waves, "spacing": options.spacing, "spread": options.spread, "sites": options.sites, "duels_per_match": options.duels_per_match,
         }))?,
     )?;
 
@@ -93,6 +95,7 @@ fn main() -> io::Result<()> {
         time_limit: options.time_limit,
         sweep_waves: options.sweep_waves,
         spacing: options.spacing,
+        spread: options.spread,
         on_result: Box::new(move |result| {
             // Written as they finish, so an interrupted batch keeps what it has.
             let _ = writeln!(csv.lock().unwrap(), "{}", report::row(result));
@@ -278,6 +281,7 @@ fn parse_args() -> io::Result<Options> {
         time_limit: 240,
         sweep_waves: 3,
         spacing: 56.0,
+        spread: 0.0,
         speed: 50,
         map: "Quicksilver Remake 1.24".into(),
         label: "batch".into(),
@@ -315,6 +319,7 @@ fn parse_args() -> io::Result<Options> {
             "--time-limit" => options.time_limit = number(value()) as i32,
             "--sweep-waves" => options.sweep_waves = number(value()),
             "--spacing" => options.spacing = number(value()) as f32,
+            "--spread" => options.spread = number(value()) as f32,
             "--speed" => options.speed = number(value()),
             "--base-port" => options.base_port = number(value()) as u16,
             "--map" => options.map = value(),
@@ -330,6 +335,6 @@ fn parse_args() -> io::Result<Options> {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: duel (--units a,b,c | --ours a,b --theirs c,d | --pairs a:b,c:d) [--reps N] [--budget METAL | --count N] [--parallel N] [--sites N] [--duels-per-match N] [--time-limit SECONDS] [--sweep-waves N] [--spacing ELMOS] [--speed N] [--map NAME] [--label TEXT] [--base-port N]\n       duel --report DIR [duels.csv ...]");
+    eprintln!("{problem}\nusage: duel (--units a,b,c | --ours a,b --theirs c,d | --pairs a:b,c:d) [--reps N] [--budget METAL | --count N] [--parallel N] [--sites N] [--duels-per-match N] [--time-limit SECONDS] [--sweep-waves N] [--spacing ELMOS] [--spread ELMOS] [--speed N] [--map NAME] [--label TEXT] [--base-port N]\n       duel --report DIR [duels.csv ...]");
     std::process::exit(2)
 }
