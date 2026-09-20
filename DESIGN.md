@@ -28,10 +28,12 @@ The bot process never calls into the engine; everything it knows arrives in `Hel
   build-order search over it (`docs/studies/build-order.md`). Depends on nothing else in the workspace.
 
 ## Protocol (credit-based, so the shim never blocks the sim)
-1. shim → bot `Hello { ai_id, team, ally_team, frame, map, unit_defs, metal_spots }` once per connection.
+1. shim → bot `Hello { ai_id, team, ally_team, game_id, teams, start_boxes, frame, map, unit_defs, metal_spots, terrain }` once per
+   connection. `teams` is every seat with its ally team and faction; `start_boxes` come from the setup script (the interface
+   has no call for them); `game_id` is a hash of that script, by which the bot process finds the sessions that play together.
 2. bot → shim `Commands(vec)` — also serves as "ready for next tick" credit.
 3. shim → bot `Tick { frame, events, snapshot }` — only when it holds credit and `frame % tick_interval == 0`. Events that occur
-   while waiting are buffered, not dropped. Snapshot = economy, own units, visible enemies.
+   while waiting are buffered, not dropped. Snapshot = economy, own units, allied units (seen, never commanded), visible enemies with their team.
 4. Shim reads the socket non-blocking at each UPDATE and applies any `Commands` on the engine thread.
 
 If the bot is absent or dies, the shim keeps the game running and retries the connection about once a second, re-sending `Hello`.

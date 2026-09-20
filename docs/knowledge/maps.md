@@ -147,3 +147,15 @@ start positions are not exposed to a skirmish AI (`Map_getStartPos` gives only o
 a factory is seen (H-MAP-ENEMY-BASE).
 **Used by.** H-MAP-ENEMY-START.
 
+### K-team-a-mean-of-two-bases-is-nobodys
+**Claim.** With several opponents, any single "enemy start" (a mirror point, a mean of factories) is a place where
+nobody lives; ground, direction and targets have to be asked of the nearest live base.
+**Status.** reasoned, not measured (2026-09-20): the single-base code was replaced before a team game was played.
+**Used by.** H-MAP-ENEMY-BASE.
+
+### K-team-allies-are-invisible-by-default
+**Claim.** The AI interface's unit list is our own team's; allied units must be asked for (`getFriendlyUnits`), and no
+call tells where another team started: an ally's start is where its commander is first seen, an enemy's is somewhere in
+its ally team's start box, which only the setup script (`Game_getSetupScript`) gives.
+**Status.** supported (2026-09-20), read from `SSkirmishAICallback.h` and seen in team-2v2-smoke.
+**Used by.** H-TEAM-ALLIED-SPOTS, H-TEAM-ALLY-GROUND, H-MAP-ENEMY-BASE.

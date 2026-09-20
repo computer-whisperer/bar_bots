@@ -3,6 +3,7 @@
 mod brain;
 mod recorder;
 mod strategist;
+mod team;
 mod terrain;
 mod world;
 
@@ -66,7 +67,8 @@ fn session(mut stream: UnixStream, mode: Option<Mode>) -> io::Result<()> {
         Some(Mode::Commander) => "commander",
     };
     let mut recorder = recorder::Recorder::from_env(&log_dir(), &hello, mode_name);
-    let mut brain = Brain::new(World::new(hello), strategist.as_ref().map(|s| s.shared.clone()));
+    let board = team::TeamBoard::of(&hello);
+    let mut brain = Brain::new(World::new(hello), strategist.as_ref().map(|s| s.shared.clone()), board);
     write_frame(&mut stream, &Commands::default())?;
     loop {
         let ToBot::Tick(tick) = next()? else {

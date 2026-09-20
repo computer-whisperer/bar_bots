@@ -98,7 +98,14 @@ impl Engine {
                 side: self.string(call!(self, Game_getTeamSide(team))),
             })
             .collect();
-        let start_boxes = crate::script::start_rects(&self.string(call!(self, Game_getSetupScript())))
+        let script = self.string(call!(self, Game_getSetupScript()));
+        let game_id = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            script.hash(&mut hasher);
+            hasher.finish()
+        };
+        let start_boxes = crate::script::start_rects(&script)
             .into_iter()
             .map(|(ally_team, [left, top, right, bottom])| StartBox {
                 ally_team,
@@ -113,6 +120,7 @@ impl Engine {
             ai_id: self.ai_id,
             team: call!(self, SkirmishAI_getTeamId()),
             ally_team: call!(self, Game_getMyAllyTeam()),
+            game_id,
             teams,
             start_boxes,
             frame,

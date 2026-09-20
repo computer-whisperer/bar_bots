@@ -120,10 +120,13 @@ impl Brain {
     }
 
     pub(super) fn track_enemy_buildings(&mut self, tick: &Tick) {
+        let mut gone = std::mem::take(&mut self.razed);
+        let mut seen = Vec::new();
         for event in &tick.events {
             if let Event::EnemyDestroyed { enemy } = event {
                 self.enemy_buildings.remove(enemy);
                 self.enemy_soldiers.remove(enemy);
+                gone.push(*enemy);
             }
         }
         for enemy in &tick.snapshot.enemies {
@@ -134,9 +137,14 @@ impl Brain {
             }
             if info.speed == 0.0 {
                 self.enemy_buildings.insert(enemy.id, (def, enemy.pos, tick.frame));
+                seen.push((enemy.id, (def, enemy.pos, tick.frame)));
             } else if info.weapon_count > 0 && info.build_speed == 0.0 {
                 self.enemy_soldiers.insert(enemy.id, (def, tick.frame));
             }
+        }
+        // H-TEAM-BOARD: what one seat of ours has seen, all know.
+        if self.enabled("H-TEAM-BOARD") {
+            self.enemy_buildings = self.board.pool_buildings(&seen, &gone);
         }
     }
 

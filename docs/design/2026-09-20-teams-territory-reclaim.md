@@ -53,16 +53,18 @@ arc; `DESIGN.md` gets the decisions once they are built. Status lines at the end
 ### Brain: several seats of ours (same process)
 - A `TeamBoard` shared by the sessions of one game (keyed by the game's socket, `Arc<Mutex<..>>`): spot claims, each
   seat's start and station, known enemy buildings and sightings (pooled: what one seat sees all know), wave intents.
-- Spots are split by walking distance to each seat's start (nearest seat claims first; a free spot unclaimed for a
-  minute is anyone's). Waves: a seat launching a wave posts its target and time; another seat with a ready wave joins
+- Spots: seats of ours see each other as allies, so the ally-ground rule above already splits the ground between them
+  (built that way: one mechanism, not two); the board adds the builders' claims in flight. Waves: a seat launching a wave posts its target and time; another seat with a ready wave joins
   the same target instead of choosing its own (two half-armies at two targets is how team games are thrown).
-- One commander for all our seats, not one each: the LLM session attaches to the board, sees every seat's units, and its
-  squads may take soldiers from any seat. Until that is built (it touches squads and reports throughout), the first
-  seat gets the commander and the others play heuristics with the board; `DESIGN.md` records this as a stage.
+- The commander (user's ruling, 2026-09-20): both configurations are supported. One commander for all our seats is
+  the common one: the LLM session attaches to the team, sees every seat's units, and its squads may take soldiers from
+  any seat. One commander per seat is the other (`--commander-each`). Rejected as the only mode: one each, because two
+  sessions that cannot talk split the army and cost twice as much.
 
 ### Arena
-- `--ours N --allies "barb:M" --enemies "barb:K"` (defaults 1, 0, 1), `--enemy-teams 1|K` (one allied enemy team or
-  free-for-all enemies); start boxes: allies share a box, each enemy ally team gets its own (corners, then edges).
+- `--ours N --allies M --enemies K` (defaults 1, 0, 1; allies and enemies are BARb), `--ffa` (every enemy seat its own
+  ally team), `--boxes corners|north-south|west-east`; allies share a box, each enemy ally team gets its own.
+  The team-game test ground is Great Divide V1, north against south (user's choice, 2026-09-20).
   Results carry per-seat outcome; the referee declares a win when no enemy team lives and a loss when no seat on our
   ally team does.
 - A human seat cannot be scripted headless; that case is tested by an allied BARb, which is the same code path for us.
@@ -147,4 +149,10 @@ where the raids come in.
 Territory before reclaim because the crew needs to know where it is safe to walk.
 
 ## Status
-Nothing built yet (2026-09-20).
+- 2026-09-20, part 1 without the commander: built and watched in 2v2 and 1+BARb v 2 on Great Divide (`docs/experiments.md`,
+  team-* rows). Protocol and shim (teams, start boxes from the setup script, allied units, enemy team ids, game id), enemy
+  bases per seat, allied spots / ground / cover, the team board (claims, pooled buildings, one target, combined odds,
+  joining a launch), H-TEAM-DEFEND, arena N v M. Differences from the text above: no `TeamDied` event (the interface has
+  none; a base is called dead when it is found and then razed); enemy starts are start boxes, not positions (no call
+  gives positions); H-TEAM-DEFEND was not planned and came from a lost game.
+- Not built: the commander over several seats; parts 2-4.

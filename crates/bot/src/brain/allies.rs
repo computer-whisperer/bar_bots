@@ -3,7 +3,10 @@
 //! H-TEAM-ALLIED-SPOTS: an allied extractor holds its spot. H-TEAM-ALLY-GROUND: metal nearer to an ally's start than
 //! to ours is theirs to take first; we build there only once it has stood empty for [`ALLY_GROUND_FRAMES`] (an ally
 //! expands where it likes, and we do not race it at its own door). H-TEAM-ALLIED-COVER: allied soldiers and turrets
-//! cover a spot as ours do.
+//! cover a spot as ours do, and allied soldiers in a fight are counted into its odds.
+//!
+//! Seats of ours also talk through the team board (`crate::team`): H-TEAM-BOARD pools spot claims and enemy buildings,
+//! H-TEAM-WAVES makes them attack one target and weigh a wave with the others' soldiers beside it.
 
 use bot_protocol::{Tick, UnitDefId, Vec3};
 
@@ -42,10 +45,24 @@ impl super::Brain {
         !theirs || frame - self.ally_spot_held.get(&index).copied().unwrap_or(0) > ALLY_GROUND_FRAMES
     }
 
+    /// Posts this seat's tick to the team board and reads the other seats'.
+    pub(super) fn exchange_with_team(&mut self, tick: &Tick) {
+        let mut post = std::mem::take(&mut self.team_post);
+        self.team_post.launched = post.launched;
+        post.frame = tick.frame;
+        post.spot_claims = self.spot_claims.keys().copied().collect();
+        self.team_mates = if self.enabled("H-TEAM-BOARD") { self.board.exchange(self.world.hello.team, post) } else { Default::default() };
+    }
+
+    /// The types of the allied soldiers within `radius` of `pos`.
+    pub(super) fn allied_soldiers_near(&self, pos: Vec3, radius: f32) -> Vec<UnitDefId> {
+        let soldier = |def: UnitDefId| self.world.def(def).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0 && d.build_speed == 0.0);
+        self.allies.iter().filter(|a| !a.being_built && a.pos.dist2d(pos) < radius && soldier(a.def)).map(|a| a.def).collect()
+    }
+
     /// Allied soldiers within `radius` of `pos`, and whether an allied turret stands there.
     pub(super) fn allied_cover(&self, pos: Vec3, radius: f32) -> (usize, bool) {
         let near = || self.allies.iter().filter(move |a| !a.being_built && a.pos.dist2d(pos) < radius).filter_map(|a| self.world.def(a.def));
-        let soldiers = near().filter(|d| d.weapon_count > 0 && d.speed > 0.0 && d.build_speed == 0.0).count();
-        (soldiers, near().any(|d| d.weapon_count > 0 && d.speed == 0.0))
+        (self.allied_soldiers_near(pos, radius).len(), near().any(|d| d.weapon_count > 0 && d.speed == 0.0))
     }
 }

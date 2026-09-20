@@ -49,7 +49,14 @@ compare batches run at different requested speeds.
 `WITHIN_REASON_OBSERVE=1` makes the shim write a census of both sides to `engine.log` once a game minute (unit types,
 counts, mean positions). It switches the engine's cheat callbacks on for the length of that one query only; the bot's own
 view stays fair. `run/compare_census.py run/matches/<batch>/<NN> [--detail MINUTE]` prints the two sides beside each other.
-`--corner nw|se` fixes our start; `--swap-corners` puts team 0 in the south-east.
+`--corner nw|se` fixes our start (`nw` is the first start box of the layout); `--swap-corners` puts ally team 0 in the second box.
+
+Team games: `--ours N --allies N --enemies N` (seats of ours, BARb seats on our side, BARb seats against us; default 1 0 1),
+`--ffa` (every enemy seat its own ally team; corners only, at most 3), `--boxes corners|north-south|west-east` (default
+corners; Great Divide V1 is played north against south). Allies share a start box and the game places them in it. An
+allied BARb plays the other faction. One bot process serves all our seats of a match, one session each, joined by the
+team board (`crates/bot/src/team.rs`); each seat writes its own `record-<ai>.jsonl`. A human ally cannot be scripted
+headless; an allied BARb is the same code path for us. The referee's balance line counts our whole ally team against every enemy.
 
 ## Post-game analysis
 

@@ -33,6 +33,9 @@ pub struct Hello {
     pub ai_id: i32,
     pub team: i32,
     pub ally_team: i32,
+    /// The same for every AI of one game and different from game to game (a hash of the start script): how the
+    /// bot process tells which of its sessions play together.
+    pub game_id: u64,
     /// Every team in the game, ours included.
     pub teams: Vec<TeamInfo>,
     /// Where each ally team may start, for the ally teams whose box the start script gives.

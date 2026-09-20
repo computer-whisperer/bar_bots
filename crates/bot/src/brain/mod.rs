@@ -41,6 +41,11 @@ pub struct Brain {
     allies: Vec<bot_protocol::AllyUnit>,
     ally_starts: HashMap<i32, Vec3>,
     ally_spot_held: HashMap<usize, i32>,
+    /// Shared with the other seats of ours in this game (`team.rs`), and what they posted last tick.
+    board: Arc<crate::team::TeamBoard>,
+    team_mates: crate::team::Others,
+    /// What this seat posts this tick; the army fills in its part.
+    team_post: crate::team::Post,
     /// One per enemy seat: guessed, found or dead (`bases.rs`).
     enemy_bases: Vec<bases::EnemyBase>,
     /// What each busy builder was last told to build, so others can plan around it.
@@ -79,6 +84,8 @@ pub struct Brain {
     directives: Directives,
     /// Enemy buildings seen and not known to be destroyed: definition, position, frame last seen.
     enemy_buildings: HashMap<UnitId, (UnitDefId, Vec3, i32)>,
+    /// Buildings `forget_razed_buildings` dropped this tick, for the team board.
+    razed: Vec<UnitId>,
     /// Every enemy soldier seen and not known dead, with when it was last seen: what we know of their army, a floor.
     enemy_soldiers: HashMap<UnitId, (UnitDefId, i32)>,
     /// Where and when the enemy commander was last seen: killing it wins the game.
@@ -114,7 +121,7 @@ pub struct Brain {
 }
 
 impl Brain {
-    pub fn new(world: World, strategist: Option<Arc<Shared>>) -> Self {
+    pub fn new(world: World, strategist: Option<Arc<Shared>>, board: Arc<crate::team::TeamBoard>) -> Self {
         let h = &world.hello;
         eprintln!(
             "[ai {}] team {} on {} ({}x{}), {} unit defs, {} metal spots",
@@ -124,6 +131,9 @@ impl Brain {
             world,
             kit: None,
             home: Vec3::default(),
+            board,
+            team_mates: Default::default(),
+            team_post: Default::default(),
             allies: Vec::new(),
             ally_starts: HashMap::new(),
             ally_spot_held: HashMap::new(),
@@ -149,6 +159,7 @@ impl Brain {
             strategist,
             directives: Directives::default(),
             enemy_buildings: HashMap::new(),
+            razed: Vec::new(),
             enemy_soldiers: HashMap::new(),
             enemy_commander_seen: None,
             recent_events: VecDeque::new(),
@@ -184,6 +195,7 @@ impl Brain {
         self.protect_commander(tick, &kit, &mut commands);
         self.run_economy(tick, &kit, &mut commands);
         self.run_army(tick, &kit, &mut commands);
+        self.exchange_with_team(tick);
         self.journal_intent();
         self.report(tick, &kit);
         self.publish_briefing(tick, &kit);

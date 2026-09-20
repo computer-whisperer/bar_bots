@@ -201,3 +201,20 @@ into a squad).
 around (3059, 2995)-(3133, 3108) from f=32400 to f=37800, target 1300 away. The commander's note at 20:44: "stalled
 exactly at D4 for many minutes despite attack_target".
 **Used by.** H-ARMY-REINFORCE.
+
+### K-team-seats-alone-split-the-army
+**Claim.** Two seats of ours that do not talk each hold their own wave against their own target and their own estimate
+of the defenders, and neither goes when together they would.
+**Status.** observed (2026-09-20), team-2v2-smoke match 0 on Great Divide: both seats held 20-29 soldiers at odds
+0.71-1.12 for three minutes against (584, 3592) and (2568, 3592); when they went, they went 2900 frames apart to
+different places.
+**Evidence.** `run/matches/1789913869-team-2v2-smoke/00/bot.log`, the `wave held` lines from f=20700. With the board
+(team-2v2-defend) 12 of 14 waves left within 15-300 frames of the partner's, at the same target.
+**Used by.** H-TEAM-BOARD, H-TEAM-WAVES.
+
+### K-team-a-partner-dies-beside-an-idle-army
+**Claim.** A seat that only defends its own base and extractors lets its partner be overrun next door.
+**Status.** observed once (2026-09-20), team-2v2-board match 0: seat 1 was down to 2 extractors and 2-5 soldiers from
+minute 8 with 17-28 enemies in sight, while seat 0 kept 19-26 soldiers at its station 2200 away; lost at 20 minutes.
+**Evidence.** `run/matches/1789914072-team-2v2-board/00/bot.log`, the per-minute lines of both seats.
+**Used by.** H-TEAM-DEFEND.

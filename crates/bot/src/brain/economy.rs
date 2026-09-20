@@ -548,7 +548,7 @@ impl Brain {
         };
         // D-EXPANSION-PLAN: the commander's named spots come first, in its order, wherever they lie and however often
         // they have been raided: which ground to take, retake or give up is its call.
-        let free = |i: usize, s: Vec3| !self.spot_claims.contains_key(&i) && self.reachable_on_foot(s) && !self.is_unreachable(s) && !self.spot_taken(s, own, kit);
+        let free = |i: usize, s: Vec3| !self.spot_claims.contains_key(&i) && !self.team_mates.spot_claims.contains(&i) && self.reachable_on_foot(s) && !self.is_unreachable(s) && !self.spot_taken(s, own, kit);
         if !is_commander {
             let planned = self.spot_priority.iter().copied().find(|i| self.world.hello.metal_spots.get(*i).is_some_and(|s| free(*i, *s)));
             if let Some(index) = planned {
@@ -564,7 +564,7 @@ impl Brain {
             .metal_spots
             .iter()
             .enumerate()
-            .filter(|(i, s)| !self.spot_claims.contains_key(i) && reachable(**s) && !self.is_unreachable(**s) && !self.spot_avoid.contains(i) && self.spot_open_to_us(*i, **s, frame))
+            .filter(|(i, s)| !self.spot_claims.contains_key(i) && !self.team_mates.spot_claims.contains(i) && reachable(**s) && !self.is_unreachable(**s) && !self.spot_avoid.contains(i) && self.spot_open_to_us(*i, **s, frame))
             .filter(|(_, s)| !self.is_hot(**s, frame) || self.is_covered(**s, own, kit))
             .filter(|(_, s)| !self.spot_taken(**s, own, kit))
             .min_by(|(_, a), (_, b)| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))?;

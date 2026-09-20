@@ -14,6 +14,8 @@ use crate::strategist::shared::Stance;
 
 /// BARb medium holds its army until about minute 10 (30 units) while ours left in eights and died (observe-1).
 const FIRST_WAVE: usize = 20;
+/// Half a wave or more follows another seat's launch made this lately (H-TEAM-WAVES).
+const JOIN_WITHIN_FRAMES: i32 = 20 * FRAMES_PER_SECOND;
 const WAVE_GROWTH: usize = 5;
 const MAX_WAVE: usize = 40;
 /// Smallest home group an `attack` stance will commit.
@@ -256,10 +258,16 @@ impl Brain {
     /// A remembered building that our soldiers are standing next to and cannot see is gone.
     fn forget_razed_buildings(&mut self, soldiers: &[&OwnUnit], visible: &[EnemyUnit]) {
         const IN_PLAIN_SIGHT: f32 = 250.0;
-        self.enemy_buildings.retain(|id, (_, pos, _)| {
-            let we_are_there = soldiers.iter().any(|u| u.pos.dist2d(*pos) < IN_PLAIN_SIGHT);
-            !we_are_there || visible.iter().any(|e| e.id == *id)
-        });
+        let razed: Vec<UnitId> = self
+            .enemy_buildings
+            .iter()
+            .filter(|(id, (_, pos, _))| soldiers.iter().any(|u| u.pos.dist2d(*pos) < IN_PLAIN_SIGHT) && !visible.iter().any(|e| e.id == **id))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in &razed {
+            self.enemy_buildings.remove(id);
+        }
+        self.razed.extend(razed);
     }
 
     pub(super) fn run_army(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
@@ -327,6 +335,7 @@ impl Brain {
             .map(|(_, pos, _)| *pos)
             .filter(reachable)
             .min_by(|a, b| a.dist2d(self.home).total_cmp(&b.dist2d(self.home)));
+        let lead_target = self.team_mates.lead_target.filter(|lead| self.enabled("H-TEAM-WAVES") && reachable(lead));
         self.army.target = nearest_building.or(self.army.target);
         if self.army.target.zip(previous_target).is_none_or(|(now, before)| now.dist2d(before) > 50.0) {
             self.army.target_since = tick.frame;
@@ -337,7 +346,12 @@ impl Brain {
         if let Some(ordered) = self.directives.attack_target {
             self.fire("D-ATTACK-TARGET");
             target = ordered.value;
+        } else if let Some(lead) = lead_target {
+            // H-TEAM-WAVES: the seats of ours attack one place, the lowest-numbered seat's choice.
+            self.fire("H-TEAM-WAVES");
+            target = lead;
         }
+        self.team_post.target = Some(target);
         let stance = self.directives.army_stance.map(|s| s.value);
         self.note_station_failures(tick, kit);
         let rally = self.station(tick, kit);
@@ -362,6 +376,7 @@ impl Brain {
         }
         let (attackers, home_group): (Vec<&OwnUnit>, Vec<&OwnUnit>) =
             soldiers.iter().partition(|u| self.army.attackers.contains(&u.id));
+        self.team_post.committed = attackers.iter().map(|u| u.def).collect();
 
         // H-ARMY-SCOUT: unscouted, the wave gate knows only the enemy commander, and lets a wave walk into their whole
         // army (v18 match 20: "1500 known" against 3205). One raider at a time goes to look, by way of the target.
@@ -392,6 +407,16 @@ impl Brain {
             Some(enemy) => (Some(enemy), "H-ARMY-DEFEND"),
             None if self.enabled("H-ARMY-DEFEND-OUTPOST") => (raider(), "H-ARMY-DEFEND-OUTPOST"),
             None => (None, "H-ARMY-DEFEND-OUTPOST"),
+        };
+        // H-TEAM-DEFEND: with nothing at our own door, enemies at an ally's base are ours to answer too. A seat was
+        // overrun in nine minutes while its partner's 24 soldiers stood at their station (team-2v2-board, match 0).
+        let at_ally = || {
+            let bases = self.ally_starts.values();
+            bases.filter_map(|base| nearest_to(*base).filter(|e| e.pos.dist2d(*base) < BASE_RADIUS)).min_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)))
+        };
+        let (intruder, rule) = match intruder {
+            None if self.enabled("H-TEAM-DEFEND") => (at_ally(), "H-TEAM-DEFEND"),
+            found => (found, rule),
         };
         if let Some(intruder) = intruder {
             if tick.frame - self.army.last_defend_order >= DEFEND_REORDER_FRAMES {
@@ -444,7 +469,12 @@ impl Brain {
                     defenders.units = army.units.clone();
                 }
             }
-            let odds = self.odds(&Self::force_of(&wave), &defenders);
+            // H-TEAM-WAVES: the other seats' ready waves and attackers go to the same place and count beside ours.
+            let mut ours = Self::force_of(&wave);
+            if self.enabled("H-TEAM-WAVES") {
+                self.team_mates.with_us.iter().for_each(|def| ours.add(*def));
+            }
+            let odds = self.odds(&ours, &defenders);
             let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || odds >= WAVE_ADVANTAGE;
             let ordered_attack = stance == Some(Stance::Attack);
             if may_launch && wave.len() >= wave_size && !ordered_attack && (!quiet || !outweighs) && tick.frame % (30 * FRAMES_PER_SECOND) == 0 {
@@ -454,12 +484,19 @@ impl Brain {
                 );
             }
             let ready = may_launch && wave.len() >= wave_size;
+            if ready && quiet {
+                self.team_post.offer = wave.iter().map(|u| u.def).collect();
+            }
             self.army.held_for_losses_since = match (ready && outweighs && !quiet, self.army.held_for_losses_since) {
                 (true, since) => since.or(Some(tick.frame)),
                 (false, _) => None,
             };
             let home_group = wave;
-            if may_launch && home_group.len() >= wave_size && (ordered_attack || (quiet && outweighs)) {
+            // H-TEAM-WAVES: a seat of ours has just gone, counting on the wave we offered; its estimate and ours of what
+            // stands there may differ, and the worst outcome is one of us going alone.
+            let joining = self.enabled("H-TEAM-WAVES") && quiet && self.team_mates.launched.is_some_and(|at| tick.frame - at < JOIN_WITHIN_FRAMES);
+            if may_launch && ((home_group.len() >= wave_size && (ordered_attack || (quiet && outweighs))) || (joining && 2 * home_group.len() >= wave_size)) {
+                self.team_post.launched = Some(tick.frame);
                 self.army.waves_sent += 1;
                 self.fire(if wave_size == own_wave_size { "H-ARMY-WAVES" } else { "D-WAVE-LAUNCH" });
                 let grid = self.world.grid(target);
@@ -528,12 +565,22 @@ impl Brain {
             if let Some(contact) = contact {
                 let engaged: Vec<&OwnUnit> = attackers.iter().filter(|u| u.pos.dist2d(contact.pos) < CONTACT_RADIUS).copied().collect();
                 let theirs = self.known_enemy_force(contact.pos, CONTACT_RADIUS, snapshot.enemies.as_slice());
-                let odds = self.odds(&Self::force_of(&engaged), &theirs);
+                // H-TEAM-ALLIED-COVER: allies in the same fight are on our side of the scales.
+                let allied = self.allied_soldiers_near(contact.pos, CONTACT_RADIUS);
+                let with_allies = |units: &[&OwnUnit]| {
+                    let mut force = Self::force_of(units);
+                    allied.iter().for_each(|def| force.add(*def));
+                    force
+                };
+                let odds = self.odds(&with_allies(&engaged), &theirs);
                 // The few in contact are judged as what they are, a few; the wave is judged as a whole. A wave of 271
                 // used to be sent home a second after it left because six of its fastest had met something (v26,
                 // south-east timeouts at four times the opponent's army): if the whole wave wins the fight, the ones
                 // in contact fall back on it and the wave keeps coming.
-                let whole = self.odds(&Self::force_of(&attackers), &theirs);
+                // The whole attack is every seat's attackers: two seats' waves walk to the same place (H-TEAM-WAVES).
+                let mut everyone = with_allies(&attackers);
+                self.team_mates.attacking.iter().for_each(|def| everyone.add(*def));
+                let whole = self.odds(&everyone, &theirs);
                 if odds < RETREAT_ODDS && whole >= 1.0 && self.enabled("H-ARMY-REGROUP") {
                     if engaged.len() < attackers.len() {
                         self.fire("H-ARMY-REGROUP");
