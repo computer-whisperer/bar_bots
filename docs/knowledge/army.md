@@ -269,7 +269,7 @@ worktree it lived in and cannot be re-examined.**
 **Would be wrong if.** An arena arm with H-MICRO-SPREAD off traded metal at least as well as one with it on, or if
 the gain in the duels came from the fight taking longer rather than from the formation (contact time rises with
 the spread order and was not separated).
-**Used by.** H-MICRO-SPREAD.
+**Used by.** (none; H-MICRO-SPREAD, retired 2026-09-20).
 
 ### K-army-withdrawing-a-hurt-soldier-saves-metal-and-loses-the-fight
 **Claim.** Walking a unit out of a fight when its health falls below a third is the most metal-efficient policy
@@ -318,5 +318,5 @@ seventeen times as often.
 **Would be wrong if.** The arena measure were inflated by the way engagements are cut out (fighters within 1100 of
 the centre are counted, so the statistic is bounded well above what was seen — but 327 is far from that bound), or
 if waves that arrive together after H-ARMY-MARCH and H-ARMY-STAGE improve showed a lower number.
-**Used by.** H-MICRO-SPREAD (explains why its engine gain does not reach the arena); a caution for any future
+**Used by.** (none; it explained why retired H-MICRO-SPREAD's engine gain did not reach the arena); a caution for any future
 formation or spacing rule priced on the duel tables.
