@@ -6,5 +6,6 @@ license = "GPL-2.0-or-later"
 description = "Batch evaluation: runs headless matches of our bot against BARb and reports win rates"
 
 [dependencies]
+flate2 = "1.1.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

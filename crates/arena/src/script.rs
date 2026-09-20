@@ -1,6 +1,8 @@
 //! Start script generation (`doc/StartScriptFormat.txt` in the engine repo).
 
 pub struct MatchSetup<'a> {
+    /// The game's full name, not a rapid tag: the lobby reads it from a replay's header and cannot resolve a tag.
+    pub game: &'a str,
     pub map: &'a str,
     pub opponent_profile: &'a str,
     pub host_port: u16,
@@ -39,7 +41,7 @@ impl MatchSetup<'_> {
         format!(
             "[GAME]
 {{
-	GameType=byar:test;
+	GameType={game};
 	MapName={map};
 	IsHost=1;
 	HostIP=127.0.0.1;
@@ -64,6 +66,7 @@ impl MatchSetup<'_> {
 ",
             rect0 = if self.swap_corners { SOUTH_EAST } else { NORTH_WEST },
             rect1 = if self.swap_corners { NORTH_WEST } else { SOUTH_EAST },
+            game = self.game,
             map = self.map,
             host_port = self.host_port,
             autohost_port = self.autohost_port,

@@ -22,3 +22,12 @@
   13-6-5 and 10-9-5; a behaviourally identical build 6-10-8). The per-minute `rules:` line is the detector: a rule firing
   hundreds of times per match means its orders are not executing. `DROPPED order` lines in `bot.log` and
   `WITHIN_REASON_TRACE_BUILDS` placements in `engine.log` say which and where.
+
+## A replay that names the game by rapid tag will not open in the lobby
+
+The engine accepts `GameType=byar:test` and resolves the tag itself, but the name goes into the replay's header as
+written. The BAR lobby reads the header, cannot resolve a tag, and sits at "byar:test: 0%". The arena now resolves the
+tag to the full name (`resolve_game`, from `run/data/rapid/*/byar/versions.gz`) before writing the start script.
+Replays recorded before that: `run/fix_replay.py <match dir>` writes a `.fixed.sdfz` copy with the header corrected
+(checked: the copy loads and plays in the headless engine; the game stream is untouched).
+

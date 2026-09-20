@@ -32,6 +32,8 @@ use script::MatchSetup;
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 const BASE_PORT: u16 = 9100;
 /// Wall-clock allowance for engine start-up and map loading.
+/// The game version matches are played on, as a rapid tag; resolved to its full name for the start script.
+const GAME_TAG: &str = "byar:test";
 const LOAD_ALLOWANCE: Duration = Duration::from_secs(90);
 /// Backstop for a match whose game clock stops advancing.
 const STALL_ALLOWANCE: Duration = Duration::from_secs(120);
@@ -188,7 +190,9 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     let dir = batch_dir.join(format!("{index:02}"));
     fs::create_dir_all(&dir)?;
     let host_port = options.base_port + 2 * index as u16;
+    let game = resolve_game(repo, GAME_TAG)?;
     let setup = MatchSetup {
+        game: &game,
         map: &options.map,
         opponent_profile: &options.profile,
         host_port,
@@ -323,6 +327,28 @@ fn referee(
             Some(Event::Other) | None => {}
         }
     }
+}
+
+/// The full name a rapid tag stands for ("byar:test" -> "Beyond All Reason test-NNNNN-hash"), from the rapid
+/// index in our data directory. A start script may name either, but the name ends up in the replay's header, and
+/// the BAR lobby offers to download a game called "byar:test" for ever instead of opening the replay.
+fn resolve_game(repo: &Path, tag: &str) -> io::Result<String> {
+    let rapid = repo.join("run/data/rapid");
+    let repository = tag.split(':').next().unwrap_or_default();
+    for host in fs::read_dir(&rapid)?.flatten() {
+        let Ok(file) = File::open(host.path().join(repository).join("versions.gz")) else { continue };
+        let mut index = String::new();
+        flate2::read::GzDecoder::new(file).read_to_string(&mut index)?;
+        // tag,package hash,dependencies,full name
+        let name = index.lines().find_map(|line| {
+            let mut fields = line.split(',');
+            (fields.next() == Some(tag)).then(|| fields.nth(2)).flatten()
+        });
+        if let Some(name) = name {
+            return Ok(name.to_string());
+        }
+    }
+    Err(io::Error::other(format!("rapid tag {tag} not found under {}", rapid.display())))
 }
 
 /// Latest game frame in the engine log: the engine prefixes its lines with `[f=NNNNNNN]` and our
