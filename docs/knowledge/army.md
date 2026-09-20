@@ -133,7 +133,8 @@ on known enemy value, the same tags still led the tally.
 
 ### K-army-combat-prediction
 **Claim.** Once a fight is decisive (a side with a real force on the spot loses at least half of it), the side with the
-higher fighting power, metal value weighted by the duel table with turrets at 1.5x, loses the smaller share in 9 cases
+higher fighting power, metal value weighted by the duel table with turrets at 3x (1.5x at first: 92 % right; 95 % at
+4x, `run/predict_check.py`), loses the smaller share in 9 cases
 of 10. The matchup weighting adds only a point or two over plain metal in our games, because both sides field a narrow
 set of units. It says nothing about skirmishes and raids, where who loses less is a coin toss (56 %), and nothing about
 what we have not seen.

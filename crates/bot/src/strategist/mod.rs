@@ -46,7 +46,8 @@ impl Mode {
     fn system_prompt(self) -> &'static str {
         match self {
             Mode::Strategist => include_str!("prompt.md"),
-            Mode::Commander => include_str!("commander.md"),
+            // The role, then what the project knows (`docs/README.md`: the brief is rewritten from the knowledge base).
+            Mode::Commander => concat!(include_str!("commander.md"), include_str!("../../../../docs/briefs/commander.md")),
         }
     }
 

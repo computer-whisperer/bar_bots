@@ -1,6 +1,6 @@
 # Within Reason documentation
 
-Five kinds of knowledge with different lifetimes. Put a fact where its lifetime says it belongs.
+Six kinds of knowledge with different lifetimes. Put a fact where its lifetime says it belongs.
 
 | Where | What | Changes when |
 |---|---|---|
@@ -8,6 +8,7 @@ Five kinds of knowledge with different lifetimes. Put a fact where its lifetime 
 | `heuristics.md` | Registry of the brain's rules: ID, code location, the claims it rests on, status | a rule is added, changed or retired |
 | `experiments.md` | Ledger of arena batches: label, commit, setup, result, what it was testing | every batch |
 | `studies/` | Offline studies (simulation, data analysis) with their data; findings enter `knowledge/` as `conjectured` until the arena tests them | a study is added or rerun |
+| `briefs/` | What an LLM player is told at the start of a session, distilled from `knowledge/` with each line naming its entries; compiled into the bot (`briefs/commander.md` follows the commander's role prompt) | a claim it cites changes status, or a game shows the model missing or misusing something |
 | `harness/` | Engine, AI interface, lobby, arena and tooling facts | rarely; on engine or game bumps |
 
 `../DESIGN.md` is the architecture (shim, protocol, bot process). It records decisions, not findings.
