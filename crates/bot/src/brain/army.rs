@@ -322,14 +322,21 @@ impl Brain {
             self.army.target_since = tick.frame;
             self.army.target_failures = 0;
         }
-        // Seen buildings say where the enemy really is; the mirrored start is only a first guess.
-        if self.enemy_buildings.len() >= 3 {
-            let n = self.enemy_buildings.len() as f32;
-            self.enemy_start = self.enemy_buildings.values().fold(Vec3::default(), |sum, (_, pos, _)| Vec3 {
-                x: sum.x + pos.x / n,
-                y: 0.0,
-                z: sum.z + pos.z / n,
-            });
+        // Where the enemy's base is: its factories once we have seen one; the game's start guess until then.
+        // H-MAP-ENEMY-BASE: this used to be the mean of every enemy building we remember, and what we see most of
+        // is its forward turrets and extractors in our half, so the "base" crept toward us, and with it the line
+        // between its spots and ours: by minute 20 of commander game 5 our side held 9 spots of 38.
+        let base_marks: Vec<Vec3> = if self.enabled("H-MAP-ENEMY-BASE") {
+            let is_factory = |def: &bot_protocol::UnitDefId| self.world.def(*def).is_some_and(|d| !d.build_options.is_empty());
+            self.enemy_buildings.values().filter(|(def, _, _)| is_factory(def)).map(|(_, pos, _)| *pos).collect()
+        } else if self.enemy_buildings.len() >= 3 {
+            self.enemy_buildings.values().map(|(_, pos, _)| *pos).collect()
+        } else {
+            Vec::new()
+        };
+        if !base_marks.is_empty() {
+            let n = base_marks.len() as f32;
+            self.enemy_start = base_marks.iter().fold(Vec3::default(), |sum, pos| Vec3 { x: sum.x + pos.x / n, y: 0.0, z: sum.z + pos.z / n });
             self.resurvey_enemy();
         }
         let mut target = nearest_building.or(self.army.target).unwrap_or(self.enemy_start);

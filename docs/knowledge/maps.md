@@ -119,3 +119,16 @@ turbine averages 12.8 over the first ten minutes (single games 8.2 to 15.5).
 The map site lists 12.7.
 **Would be wrong if.** A spot's first extractor raised income by something other than 2.0 with no converter running.
 **Used by.** `crates/buildorder` (`map::SPOT_METAL`, `map::WIND_MEAN`).
+
+### K-maps-our-half-shrinks
+**Claim.** Placing the enemy's base at the mean of every enemy building we remember drags it toward us, because what we
+see is mostly its forward turrets and extractors; the walking-distance line between "its" spots and "ours" follows, and
+the constructors (H-ECO-OWN-HALF) are left with almost nothing to take.
+**Status.** observed once (2026-09-20), mechanism read in the code; A/B running (v24).
+**Evidence.** commander-5-tempo-brief, minute 23: "free spots on our side 2" with 7 extractors held, of 38 reachable
+spots (15 are ours at game start); army 11,200 v 4,100 and extractors flat for 19 minutes; the commander's
+`expansion_radius` 3000 changed nothing because the own-half rule applied beneath it; constructors fell through to
+converters (30). North-west heuristic batches stall at 4-5 extractors from minute 6 (v22, v23).
+**Would be wrong if.** The A/B shows the same extractor curve with the base located by factories only.
+**Used by.** H-MAP-ENEMY-BASE; the commander's `expansion_radius` now replaces the own-half rule.
+
