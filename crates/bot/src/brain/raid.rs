@@ -53,6 +53,8 @@ pub struct Raid {
     /// H-ARMY-MARCH: members stopped until the body of the party has come up (Pawns 2000 elmos apart met BARb's
     /// commander one at a time in rush-smoke2).
     held: HashSet<UnitId>,
+    /// Metal spots in the enemy's start box the party has stood at and found nothing (`unscouted_box_spots`).
+    visited: Vec<Vec3>,
 }
 
 impl Raid {
@@ -75,20 +77,47 @@ impl Brain {
         targets
     }
 
-    /// Where the party goes: the nearest extractor of theirs we know of, else their base as we presume it. H-ARMY-KILL:
-    /// at their base with nothing armed in sight, the commander if we have seen it, else the lab, else any building.
+    /// Finding the base: until a base of theirs is found, the metal spots inside the enemy start boxes the party has
+    /// not stood at, nearest `from` first. The presumed base is the box's centre and the opponent may be anywhere in
+    /// it: in Comet Catcher's strips BARb spawns at an end, 2000 elmos from the centre, and the party of rush-7 stood
+    /// at an empty spot for five minutes while the home group was committed to it.
+    fn unscouted_box_spots(&self, from: Vec3) -> Vec<Vec3> {
+        let hello = &self.world.hello;
+        let mut spots: Vec<Vec3> = hello
+            .metal_spots
+            .iter()
+            .filter(|s| hello.start_boxes.iter().any(|b| b.ally_team != hello.ally_team && b.contains(**s)))
+            .map(|s| Vec3 { y: 0.0, ..*s })
+            .filter(|s| !self.raid.visited.iter().any(|v| v.dist2d(*s) < TARGET_RADIUS) && self.reachable_on_foot(*s))
+            .collect();
+        spots.sort_by(|a, b| a.dist2d(from).total_cmp(&b.dist2d(from)));
+        spots
+    }
+
+    /// Where the party goes: the nearest extractor of theirs we know of, else a spot in their box nobody has looked
+    /// at, else their base as we presume it. H-ARMY-KILL: at their base, known by a building of theirs standing
+    /// there, with nothing armed in sight, the commander if we have seen it, else the lab, else any building.
     fn pressure_target(&self, party_at: Vec3, tick: &Tick) -> Option<Vec3> {
         let base = self.enemy_base(party_at);
         let armed_in_sight = tick.snapshot.enemies.iter().any(|e| {
             e.pos.dist2d(party_at) < KILL_RADIUS && e.def.is_none_or(|d| self.world.def(d).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0))
         });
-        if party_at.dist2d(base) < BASE_RADIUS && !armed_in_sight {
+        let base_known = self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(party_at) < BASE_RADIUS);
+        if party_at.dist2d(base) < BASE_RADIUS && base_known && !armed_in_sight {
             let commander = self.enemy_commander_seen.filter(|(pos, _)| pos.dist2d(base) < BASE_RADIUS).map(|(pos, _)| pos);
             let lab = self.enemy_buildings.values().filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| !d.build_options.is_empty() && d.speed == 0.0)).map(|(_, pos, _)| *pos);
             let any = self.enemy_buildings.values().map(|(_, pos, _)| *pos).min_by(|a, b| a.dist2d(party_at).total_cmp(&b.dist2d(party_at)));
             return commander.or_else(|| lab.min_by(|a, b| a.dist2d(party_at).total_cmp(&b.dist2d(party_at)))).or(any).or(Some(base));
         }
-        self.raid_targets().first().copied().or_else(|| self.reachable_on_foot(base).then_some(base))
+        if let Some(extractor) = self.raid_targets().first() {
+            return Some(*extractor);
+        }
+        if self.found_enemy_base().is_none()
+            && let Some(spot) = self.unscouted_box_spots(party_at).first()
+        {
+            return Some(*spot);
+        }
+        self.reachable_on_foot(base).then_some(base)
     }
 
     /// `soldiers`: finished soldiers no squad has claimed. Returns with the party's orders pushed.
@@ -143,9 +172,13 @@ impl Brain {
         let party: Vec<&OwnUnit> = soldiers.iter().filter(|u| self.raid.contains(u.id)).copied().collect();
         let Some(centre) = centre(&party) else { return };
         // The target is gone when we no longer remember an extractor there (seen destroyed, or found missing), or when
-        // the party stands on it and sees nothing.
+        // the party stands on it and sees nothing. A box spot the party reaches is scouted, whatever it found.
         let arrived = self.raid.target.is_some_and(|t| centre.dist2d(t) < TARGET_RADIUS);
-        let still_there = self.raid.target.is_some_and(|t| self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(t) < 100.0) || (!arrived && t.dist2d(self.enemy_base(t)) < BASE_RADIUS));
+        if arrived && let Some(t) = self.raid.target && self.unscouted_box_spots(t).first().is_some_and(|s| s.dist2d(t) < 1.0) {
+            self.raid.visited.push(t);
+        }
+        let unscouted = self.raid.target.is_some_and(|t| self.unscouted_box_spots(t).first().is_some_and(|s| s.dist2d(t) < 1.0));
+        let still_there = self.raid.target.is_some_and(|t| self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(t) < 100.0) || (!arrived && (unscouted || t.dist2d(self.enemy_base(t)) < BASE_RADIUS)));
         let target = if still_there { self.raid.target } else { self.pressure_target(centre, tick) };
         // Priced every few seconds against what is in sight of the party and what is known at the target, and every
         // tick while something armed is in sight: four seconds is a fight's length.
@@ -189,7 +222,8 @@ impl Brain {
                 // H-ARMY-KILL: at their base with no soldier of theirs in sight, and the commander either out of sight
                 // or outnumbered, the home group comes to finish it.
                 let kill_open = !armed_in_sight && (!commander_in_sight || party_metal >= COMMANDER_PARTY_METAL);
-                if centre.dist2d(self.enemy_base(centre)) < BASE_RADIUS && kill_open && self.enabled("H-ARMY-KILL") {
+                let at_their_base = centre.dist2d(self.enemy_base(centre)) < BASE_RADIUS && self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(centre) < BASE_RADIUS);
+                if at_their_base && kill_open && self.enabled("H-ARMY-KILL") {
                     self.raid.kill_offered = Some(target);
                 }
                 let mut held = std::mem::take(&mut self.raid.held);

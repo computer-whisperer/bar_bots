@@ -73,3 +73,9 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   (7 of a Comet strip's 14 spots lie outside the corner) and the searched start had no pair of spots within reach.
   The arena's default is now the lobby's boxes (`Boxes::Standard`, `crates/arena/startboxes.dat`); in Comet's strips the
   game spawns AIs diagonally, SW against NE. rush-7-comet-std-{place,noplace} running on them.
+- 2026-09-20, rush-7 on the lobby's boxes: 0-12 placed, 1-9-2 unplaced. Not the placement: the party walked to the
+  presumed enemy base (the box's centre snapped to a spot, `bases.rs`) and stood at an empty spot for five minutes;
+  in Comet's strips BARb spawns at an end, 2000 elmos from the centre, and the home group was committed to the same
+  empty spot by H-ARMY-KILL. Now the party scouts the enemy box's metal spots nearest first until a base is found
+  (`raid.rs` `unscouted_box_spots`), and the kill needs a building of theirs standing there. rush-8-scout-{place,
+  noplace} running (`target-scout`).
