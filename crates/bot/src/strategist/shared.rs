@@ -331,6 +331,11 @@ pub struct Shared {
     pub lockstep: std::sync::atomic::AtomicBool,
     pub gate: Mutex<Gate>,
     pub gate_changed: Condvar,
+    /// WITHIN_REASON_THINK_PENALTY: the commander's orders take effect this many game seconds late per wall second
+    /// it thought (1 = as if the game had kept running while it thought; 0 = at once). Set once at start.
+    pub think_penalty: Mutex<f32>,
+    /// A turn's orders waiting out their delay: the frame they take effect, and what then becomes live.
+    pub delayed: Mutex<Option<(i32, Directives, FieldOrders, Wake)>>,
 }
 
 impl Shared {
@@ -339,14 +344,48 @@ impl Shared {
     }
 
     /// Brain side: ask for a turn and hold the game until it is over. Returns at once when no session can answer.
-    pub fn hold_for_turn(&self, reason: String) {
-        let mut gate = self.gate.lock().unwrap();
-        if gate.closed {
-            return;
+    pub fn hold_for_turn(&self, reason: String, frame: i32) {
+        let before = (self.directives.lock().unwrap().clone(), self.field_orders.lock().unwrap().clone(), self.wake.lock().unwrap().clone());
+        let started = std::time::Instant::now();
+        {
+            let mut gate = self.gate.lock().unwrap();
+            if gate.closed {
+                return;
+            }
+            gate.requested = Some(reason);
+            self.gate_changed.notify_all();
+            let _gate = self.gate_changed.wait_while(gate, |g| !g.closed && (g.requested.is_some() || g.in_progress)).unwrap();
         }
-        gate.requested = Some(reason);
-        self.gate_changed.notify_all();
-        let _gate = self.gate_changed.wait_while(gate, |g| !g.closed && (g.requested.is_some() || g.in_progress)).unwrap();
+        // The game stood still while the commander thought. With a penalty, what it ordered waits as long (in game
+        // time) as it took to decide, and the old orders stand meanwhile: the latency it would have in a live game.
+        let penalty = *self.think_penalty.lock().unwrap();
+        if penalty > 0.0 {
+            let delay = (started.elapsed().as_secs_f32() * penalty * 30.0) as i32;
+            let ordered = (
+                std::mem::replace(&mut *self.directives.lock().unwrap(), before.0),
+                std::mem::replace(&mut *self.field_orders.lock().unwrap(), before.1),
+                std::mem::replace(&mut *self.wake.lock().unwrap(), before.2),
+            );
+            *self.delayed.lock().unwrap() = Some((frame + delay, ordered.0, ordered.1, ordered.2));
+        }
+    }
+
+    /// Brain side, every tick: puts a delayed turn's orders into force when their time has come. True while one waits.
+    pub fn apply_delayed(&self, frame: i32) -> bool {
+        let mut delayed = self.delayed.lock().unwrap();
+        match delayed.take() {
+            Some((at, directives, orders, wake)) if frame >= at => {
+                *self.directives.lock().unwrap() = directives;
+                *self.field_orders.lock().unwrap() = orders;
+                *self.wake.lock().unwrap() = wake;
+                false
+            }
+            waiting => {
+                let pending = waiting.is_some();
+                *delayed = waiting;
+                pending
+            }
+        }
     }
 
     /// Driver side: wait for the brain to ask for a turn. `None` when `give_up` turns true.

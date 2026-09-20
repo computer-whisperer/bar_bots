@@ -11,6 +11,7 @@
 //!              [--claude-config-dir DIR]   (subscription for --strategist sessions; default ~/.claude2)
 //!              [--effort low|medium|high|xhigh|max]   (the LLM session's `claude --effort`; default high)
 //!              [--opponent-opening any|bots|vehicles]   (pins BARb's first factory by disabling the other; default any)
+//!              [--think-penalty X]   (commander: its orders land X game seconds late per wall second it thought; 1 = as in a live game, default 0)
 //!              [--seed-base N]   (default 1; match i plays seed N+i, for the engine and for BARb: a fresh N is a fresh set of games)
 //!              [--base-port N]   (default 9100; match i uses N+2i and N+2i+1, so a second arena needs another range)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
@@ -70,6 +71,7 @@ struct Options {
     /// `bots`, `vehicles` or `any` (BARb's own choice, about 70 % bots on Quicksilver).
     opponent_opening: String,
     effort: Option<String>,
+    think_penalty: Option<String>,
     /// First of the UDP ports the matches use (two each); a second arena on the same machine needs its own range.
     base_port: u16,
 }
@@ -133,7 +135,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "effort": options.effort, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -258,6 +260,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .env("WITHIN_REASON_RECORD", "1")
         .envs(options.claude_config_dir.as_ref().map(|dir| ("WITHIN_REASON_CLAUDE_CONFIG_DIR", dir)))
         .envs(options.effort.as_ref().map(|effort| ("WITHIN_REASON_EFFORT", effort)))
+        .envs(options.think_penalty.as_ref().map(|penalty| ("WITHIN_REASON_THINK_PENALTY", penalty)))
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
     let log = File::create(dir.join("engine.log"))?;
@@ -500,6 +503,7 @@ fn parse_args() -> Options {
         seed_base: 1,
         opponent_opening: "any".into(),
         effort: None,
+        think_penalty: None,
         base_port: BASE_PORT,
     };
     let mut args = std::env::args().skip(1);
@@ -540,6 +544,7 @@ fn parse_args() -> Options {
             "--ab-disable" => options.ab_disable = Some(value()),
             "--claude-config-dir" => options.claude_config_dir = Some(value()),
             "--effort" => options.effort = Some(value()),
+            "--think-penalty" => options.think_penalty = Some(value()),
             "--opponent-opening" => {
                 options.opponent_opening = value();
                 if !["any", "bots", "vehicles"].contains(&options.opponent_opening.as_str()) {
@@ -570,7 +575,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
     std::process::exit(2)
 }
 

@@ -62,6 +62,9 @@ impl Brain {
         if !shared.lockstep.load(Ordering::Relaxed) {
             return;
         }
+        // A commander still "thinking" (its last orders not yet in force) cannot be asked again; what happens meanwhile
+        // is kept for its next turn.
+        let busy = shared.apply_delayed(tick.frame);
         let wake = shared.wake.lock().unwrap().clone();
         let field = shared.field.lock().unwrap().clone();
         let mut reasons: Vec<String> = std::mem::take(&mut self.wake.pending);
@@ -110,7 +113,7 @@ impl Brain {
             reasons.push("our first factory is up".into());
         }
         let too_soon = if self.wake.last_turn_frame == 0 { !first_turn } else { since < MIN_GAP_FRAMES };
-        if reasons.is_empty() || too_soon {
+        if reasons.is_empty() || too_soon || busy {
             // Keep the newest word on each subject: "enemies within ... at C3" then "... at C3, C4" is one piece of news.
             let subject = |r: &String| r.split(|c: char| c == ':' || c.is_ascii_digit()).next().unwrap_or_default().to_string();
             let mut kept: Vec<String> = Vec::new();
@@ -125,6 +128,6 @@ impl Brain {
             return;
         }
         self.wake.last_turn_frame = tick.frame;
-        shared.hold_for_turn(reasons.join("; "));
+        shared.hold_for_turn(reasons.join("; "), tick.frame);
     }
 }

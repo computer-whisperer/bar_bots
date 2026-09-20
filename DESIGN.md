@@ -146,7 +146,13 @@ LLM levers belong. BARb is the reference for economy and army hoarding, not for 
   states observations only (opponent soldiers seen and not seen dead, labelled a floor) and a `curves` line (levels
   now, 3 and 6 minutes ago); what the opponent usually has is knowledge and lives in `docs/briefs/commander.md`, which
   follows the role prompt. Tempo and hidden information are taught in the prompt as ways of reading the position, not
-  as rules (the user's direction, 2026-09-20). Rejected:
+  as rules (the user's direction, 2026-09-20).
+- **Thinking time.** The game stands still during a turn, which hides what thinking costs: in the first won game the
+  commander thought for 0.84 s per game second (86 turns, median 10 s, woken every 6 game seconds in the median), and
+  in 50 of 85 turns for longer than the game time to its next wake. `--think-penalty X` makes its orders (directives,
+  squads, wake settings) take effect X game seconds late per wall second of thought, the old ones standing meanwhile and
+  no new turn starting until they land: X = 1 is the latency of a live game at any `--speed`. Known looseness: squad
+  `take` counts fulfilled during the delay are asked for again when the delayed orders land. Rejected:
   keeping the narrow remit and fixing expansion in the heuristics, because the commander already had the directives
   that starved it and used them for defence.
 - **Squads, not unit ids.** `squad {name, take: {type: count}, near?, post?, order?, release?}`. `take` draws from the

@@ -92,6 +92,8 @@ impl Strategist {
     pub fn start(dir: &Path, ai_id: i32, mode: Mode) -> std::io::Result<Self> {
         let shared = Arc::new(Shared::default());
         shared.lockstep.store(mode == Mode::Commander, Ordering::Relaxed);
+        // How late the commander's orders land, in game seconds per wall second of thought (arena `--think-penalty`).
+        *shared.think_penalty.lock().unwrap() = std::env::var("WITHIN_REASON_THINK_PENALTY").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0);
         let transcript = Arc::new(Transcript::create(&dir.join(format!("strategist-{ai_id}.jsonl")))?);
         let server = McpServer::start(shared.clone(), transcript.clone())?;
         // An empty working directory: nothing for the session to discover.

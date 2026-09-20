@@ -751,7 +751,19 @@
     stat("builders", series.builders);
     stat("buildings", series.buildings);
     stat("enemies in view", series.enemiesVisible);
-    stat("slowest decide, ms", s.ms.toFixed(1));
+    // With a commander the game stands still during its turns, and a turn's wall time lands in this number too:
+    // it measures the bot's own speed only in heuristic games.
+    const turns = view.match.decisions.filter((d) => d.kind === "turn" && d.latency_ms != null && d.f <= view.frame);
+    if (turns.length) {
+      const seconds = turns.reduce((sum, d) => sum + d.latency_ms / 1000, 0);
+      const sorted = turns.map((d) => d.latency_ms / 1000).sort((a, b) => a - b);
+      stat("commander turns so far", turns.length);
+      stat("thinking, median s a turn", sorted[Math.floor(sorted.length / 2)].toFixed(1));
+      // 1.0 would mean it thinks for as long as the game runs: in a live game it would never catch up.
+      stat("thinking per game second, s", (seconds / Math.max(1, view.frame / WR.FPS)).toFixed(2));
+    } else {
+      stat("slowest tick, ms", s.ms.toFixed(1));
+    }
   }
 
   function renderRules() {
