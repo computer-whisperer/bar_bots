@@ -37,6 +37,7 @@ pub struct Hello {
     pub map: MapInfo,
     pub unit_defs: Vec<UnitDefInfo>,
     pub metal_spots: Vec<Vec3>,
+    pub terrain: Terrain,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -50,6 +51,38 @@ pub struct MapInfo {
     pub wind_max: f32,
 }
 
+/// The ground, at the engine's slope-map resolution. Rows run north to south (z), cells west to east (x).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Terrain {
+    /// Edge of one cell in elmos.
+    pub cell: f32,
+    pub width: u32,
+    pub height: u32,
+    /// Ground height in elmos; water level is 0, so negative is under water.
+    pub heights: Vec<i16>,
+    /// The engine's slope value (1 - the ground normal's y; 0 is flat), scaled by 255. Comparable with
+    /// [`MoveClass::max_slope`] after the same scaling.
+    pub slopes: Vec<u8>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MoveKind {
+    Tank,
+    Bot,
+    Hover,
+    Ship,
+}
+
+/// How a mobile ground or sea unit moves; aircraft and buildings have none.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct MoveClass {
+    pub kind: MoveKind,
+    /// Steepest ground it crosses, as the engine's slope value.
+    pub max_slope: f32,
+    /// Deepest water a land unit wades; for a ship, the shallowest it floats in.
+    pub depth: f32,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UnitDefInfo {
     pub id: UnitDefId,
@@ -61,6 +94,7 @@ pub struct UnitDefInfo {
     pub extracts_metal: f32,
     pub weapon_count: i32,
     pub build_options: Vec<UnitDefId>,
+    pub move_class: Option<MoveClass>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

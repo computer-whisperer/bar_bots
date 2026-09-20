@@ -5,8 +5,8 @@
 use std::ffi::{CStr, c_int, c_void};
 
 use bot_protocol::{
-    BuildSite, Command, EnemyUnit, Hello, MapInfo, OwnUnit, Resource, Snapshot, UnitDefId,
-    UnitDefInfo, UnitId, Vec3,
+    BuildSite, Command, EnemyUnit, Hello, MapInfo, MoveClass, MoveKind, OwnUnit, Resource, Snapshot, Terrain,
+    UnitDefId, UnitDefInfo, UnitId, Vec3,
 };
 use recoil_ai_sys as sys;
 
@@ -72,6 +72,49 @@ impl Engine {
             map,
             unit_defs,
             metal_spots,
+            terrain: self.terrain(),
+        }
+    }
+
+    fn move_class(&self, id: c_int) -> Option<MoveClass> {
+        if !call!(self, UnitDef_isMoveDataAvailable(id)) {
+            return None;
+        }
+        // The engine's speed-mod classes, in its own order.
+        let kind = match call!(self, UnitDef_MoveData_getSpeedModClass(id)) {
+            0 => MoveKind::Tank,
+            1 => MoveKind::Bot,
+            2 => MoveKind::Hover,
+            _ => MoveKind::Ship,
+        };
+        Some(MoveClass {
+            kind,
+            max_slope: call!(self, UnitDef_MoveData_getMaxSlope(id)),
+            depth: call!(self, UnitDef_MoveData_getDepth(id)),
+        })
+    }
+
+    /// Heights and slopes at the slope map's resolution (two height squares to a cell).
+    fn terrain(&self) -> Terrain {
+        let (squares_x, squares_z) = (call!(self, Map_getWidth()) as usize, call!(self, Map_getHeight()) as usize);
+        let (width, height) = (squares_x / 2, squares_z / 2);
+        let mut heights = vec![0f32; squares_x * squares_z];
+        let mut slopes = vec![0f32; width * height];
+        let got_heights = call!(self, Map_getHeightMap(heights.as_mut_ptr(), heights.len() as c_int)) as usize;
+        let got_slopes = call!(self, Map_getSlopeMap(slopes.as_mut_ptr(), slopes.len() as c_int)) as usize;
+        if got_heights != heights.len() || got_slopes != slopes.len() {
+            return Terrain::default();
+        }
+        let cell_height = |x: usize, z: usize| {
+            let at = |dx: usize, dz: usize| heights[(2 * z + dz) * squares_x + 2 * x + dx];
+            ((at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1)) / 4.0).round().clamp(i16::MIN as f32, i16::MAX as f32) as i16
+        };
+        Terrain {
+            cell: 2.0 * SQUARE_SIZE,
+            width: width as u32,
+            height: height as u32,
+            heights: (0..height).flat_map(|z| (0..width).map(move |x| (x, z))).map(|(x, z)| cell_height(x, z)).collect(),
+            slopes: slopes.iter().map(|s| (s * 255.0).round().clamp(0.0, 255.0) as u8).collect(),
         }
     }
 
@@ -89,6 +132,7 @@ impl Engine {
             extracts_metal: call!(self, UnitDef_getExtractsResource(id, self.metal)),
             weapon_count: call!(self, UnitDef_getWeaponMounts(id)),
             build_options: options.into_iter().map(UnitDefId).collect(),
+            move_class: self.move_class(id),
         }
     }
 

@@ -151,3 +151,15 @@ LLM levers belong. BARb is the reference for economy and army hoarding, not for 
 - **Accounts and limits** as for the strategist: `claude2`, overage tripwire, usage snapshot before and after.
 - **Reading a run.** Fight ledger exchange ratio in our half, extractors alive at minute 12 against the observed
   heuristic games, and the transcript: where it posts defenders, with what, and what it changes after a loss.
+
+## Terrain (2026-09-19)
+
+The shim sends the ground once, in `Hello`: heights and slopes at the engine's slope-map resolution (16 elmos), and
+each unit type's movement class (kind, steepest slope, water depth). The bot builds walking-distance fields over it
+(`crates/bot/src/terrain.rs`, Dijkstra on the passable cells of our soldiers' class) from home and from where the enemy
+is believed to live, and the brain's geometry goes through them (`brain/routes.rs`): which metal spots are ours, what
+"forward of home" means (along the route, not the straight line), which attack targets can be walked to, where a wave
+stages. Without terrain data everything falls back to straight lines. Known simplifications: one movement class stands
+for the whole army; buildings and wrecks are not obstacles; the commander uses the soldiers' field. The recorder writes
+the grid beside the match record and the viewer draws it (`docs/harness/record-format.md`, "Terrain").
+

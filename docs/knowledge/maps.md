@@ -86,16 +86,26 @@ trickling across the map.
 **Used by.** (candidate: H-ECO-MORE-LABS places lab 2 forward, behind the outpost turrets; relates to K-army-piecemeal-midmap)
 
 ### K-maps-quicksilver-corner-asymmetry
-**Claim.** On Quicksilver Remake 1.24 our bot does far better from the south-east start than from the north-west one,
-and the difference lies in what BARb does, not in what we do: BARb starting north-west hardly ever reaches our half.
-**Status.** conjectured (2026-09-19). The base-maze explanation (K-army-base-maze) was real but is refuted as the cause:
-fixing it left the gap unchanged.
-**Evidence.** v9-reachability SE 8-0-4, NW 2-5-5; v10-sites SE 7-0-1, NW 1-5-2; v11-layout (after the maze fix) SE 10-0-2,
-NW 3-7-2. v11 fight ledgers: in 9 of 12 SE games we lost nothing at all in our own half; in NW games we lost 6-256 units
-there, and the NW losses end with an enemy group killing a healthy commander in 10-20 s (match 14: 3535 health to dead in
-13 s to a pack of armwar, with 8 extractors, 4 labs and 28 soldiers on the books).
-Against medium (v13-medium) SE 10-2, NW 1-11. NW and SE games build identically through minute 6 (5.7 against 6.0
-extractors); in the first ten minutes we then lose 8 extractors a game from NW against 3.4 from SE. With the start boxes
-swapped (v13-medium-swapped) the gap stayed with the corner: NW as team 1 0-8, SE as team 0 6-2, so it is not the team slot.
-**Would be wrong if.** BARb vs BARb on this map showed no corner difference, or a second map showed the same gap for us.
-**Used by.** (none). Until settled, read the NW record as the honest one; the SE record flatters us.
+**Claim.** Quicksilver Remake 1.24 is an asymmetric island with cliffs and inlets, and the two corner starts the arena
+uses are different games: the north-west start sits on a narrow peninsula and has 15 metal spots nearer to it on foot,
+the south-east start 19.
+**Status.** supported (2026-09-19). An earlier version of this entry called the metal spots mirror-symmetric; that was
+wrong (only the two start positions mirror, because the arena's start boxes do): 42 of 44 spots have no mirror partner.
+The user saw the asymmetry at once in the replay.
+**Evidence.** Terrain survey at game start (`brain/routes.rs` log lines, terrain-check): 38 of 44 spots reachable on
+foot; the six cut off are (3224,520) (6184,520) (6632,984) (504,6184) (936,6664) (4632,6664), the first of which is the
+spot constructors kept failing to reach. Results by corner: v11 SE 10-0-2 / NW 3-7-2; v13-medium SE 10-2 / NW 1-11;
+with the start boxes swapped the gap stayed with the corner. The viewer's terrain layer shows the shape.
+**Would be wrong if.** A symmetric map showed the same gap between its two starts.
+**Used by.** Evaluation: results are read per corner; a symmetric 1v1 map is wanted in the pool.
+
+### K-maps-terrain-not-straight-lines
+**Claim.** Geometry by straight line ("nearer to us than to the enemy", "500 towards the enemy", "is this target
+reachable") is wrong on maps with cliffs and water. A walking-distance field over the engine's slope and height maps,
+for the soldiers' movement class, agrees with what the engine lets units do.
+**Status.** supported (2026-09-19) on one map
+**Evidence.** The field's unreachable spots include the one the engine refused all day; with stations, lab yard,
+staging points and "our half" taken from the field, a 12-minute game had 3 move failures and no "unreachable" give-ups
+(terrain-check-2), against hundreds to thousands before.
+**Would be wrong if.** Move failures or unreachable give-ups came back in numbers on another map.
+**Used by.** `brain/routes.rs`: `spot_is_ours`, `forward_of_home`, attack-target filter, staging point.

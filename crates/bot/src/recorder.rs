@@ -48,6 +48,9 @@ impl Recorder {
             return None;
         }
         let path = dir.join(format!("record-{}.jsonl", hello.ai_id));
+        if let Err(e) = write_terrain(&dir.join(terrain_file(hello)), hello) {
+            eprintln!("[ai {}] no terrain file: {e}", hello.ai_id);
+        }
         // Appending: a bot restarted mid-match continues the same record with a second header line.
         match OpenOptions::new().create(true).append(true).open(&path) {
             Ok(out) => Some(Recorder {
@@ -221,6 +224,35 @@ impl Recorder {
     }
 }
 
+fn terrain_file(hello: &Hello) -> String {
+    format!("terrain-{}.bin", hello.ai_id)
+}
+
+/// The terrain grid as raw bytes beside the record: every height as a little-endian i16, then every slope as a u8.
+/// The record's header says how to read it.
+fn write_terrain(path: &Path, hello: &Hello) -> io::Result<()> {
+    let terrain = &hello.terrain;
+    let mut bytes: Vec<u8> = terrain.heights.iter().flat_map(|h| h.to_le_bytes()).collect();
+    bytes.extend_from_slice(&terrain.slopes);
+    std::fs::write(path, bytes)
+}
+
+/// The distinct ways our side's land units move, for the viewer's "cannot go here" layers.
+fn move_classes(hello: &Hello) -> Vec<Value> {
+    let mut classes: Vec<((String, i32, i32), Value, usize)> = Vec::new();
+    for def in &hello.unit_defs {
+        let Some(class) = def.move_class else { continue };
+        let kind = format!("{:?}", class.kind).to_lowercase();
+        let key = (kind.clone(), (class.max_slope * 1000.0) as i32, class.depth as i32);
+        match classes.iter_mut().find(|(k, _, _)| *k == key) {
+            Some((_, _, units)) => *units += 1,
+            None => classes.push((key, json!({ "kind": kind, "max_slope": class.max_slope, "depth": class.depth, "example": def.name }), 1)),
+        }
+    }
+    // `units` tells the ordinary class of a kind (most unit types) from the specialists (amphibians, climbers).
+    classes.into_iter().map(|(_, mut class, units)| { class["units"] = json!(units); class }).collect()
+}
+
 fn header(hello: &Hello, mode: &str) -> Value {
     let defs: Vec<Value> = hello
         .unit_defs
@@ -244,6 +276,11 @@ fn header(hello: &Hello, mode: &str) -> Value {
         "map": { "name": map.name, "width": map.width, "height": map.height, "wind_min": map.wind_min, "wind_max": map.wind_max },
         "grid": { "columns": 8, "rows": 8 },
         "metal_spots": spots,
+        "terrain": {
+            "file": terrain_file(hello), "cell": hello.terrain.cell, "width": hello.terrain.width, "height": hello.terrain.height,
+            "layout": "heights as little-endian i16 (elmos, water level 0), row-major north to south; then slopes as u8 (engine slope x 255)",
+            "move_classes": move_classes(hello),
+        },
         "unit_defs": defs,
         "siblings": {
             "bot_log": "bot.log", "engine_log": "engine.log", "replay": "demos/*.sdfz",

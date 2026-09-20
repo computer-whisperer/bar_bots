@@ -251,9 +251,8 @@ impl Brain {
     /// commander (H-COM-LEASH), on our half of the map for constructors (H-ECO-OWN-HALF).
     fn claim_spot(&mut self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit, frame: i32) -> Option<Vec3> {
         let is_commander = builder.def == kit.commander;
-        let (home, enemy_start) = (self.home, self.enemy_start);
         let reachable = |spot: Vec3| {
-            if is_commander { spot.dist2d(home) < COMMANDER_LEASH } else { spot.dist2d(home) < spot.dist2d(enemy_start) }
+            if is_commander { self.walk_from_home(spot) < COMMANDER_LEASH } else { self.spot_is_ours(spot) }
         };
         let (index, spot) = self
             .world

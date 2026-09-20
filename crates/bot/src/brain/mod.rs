@@ -11,6 +11,7 @@ pub mod journal;
 mod squads;
 mod wake;
 mod roster;
+mod routes;
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
@@ -35,6 +36,8 @@ pub struct Brain {
     jobs: HashMap<UnitId, UnitDefId>,
     /// Metal spot index to the frame it was claimed at.
     spot_claims: HashMap<usize, i32>,
+    /// Walking distances over the terrain, once our faction (and so our movement class) is known.
+    routes: Option<routes::Routes>,
     army: army::Army,
     squads: squads::Squads,
     wake: wake::WakeState,
@@ -89,6 +92,7 @@ impl Brain {
             enemy_start: Vec3::default(),
             jobs: HashMap::new(),
             spot_claims: HashMap::new(),
+            routes: None,
             army: army::Army::default(),
             squads: Default::default(),
             wake: Default::default(),
@@ -149,6 +153,9 @@ impl Brain {
             self.home = unit.pos;
             self.enemy_start = self.world.mirrored(unit.pos);
             eprintln!("[ai {}] playing {} from ({:.0}, {:.0})", self.ai(), roster.commander, unit.pos.x, unit.pos.z);
+            if let Some(kit) = self.kit {
+                self.survey(&kit);
+            }
             return;
         }
     }
@@ -163,11 +170,17 @@ impl Brain {
         self.journal.rule(rule);
     }
 
-    /// A point `distance` elmos from home towards the enemy.
+    /// A point `distance` elmos from home towards the enemy: along the walking route when we know the terrain, and
+    /// always on ground our soldiers can reach. A negative distance is behind home, away from the enemy.
     fn forward_of_home(&self, distance: f32) -> Vec3 {
+        if distance > 0.0
+            && let Some(point) = self.on_the_way_to(self.enemy_start, distance)
+        {
+            return point;
+        }
         let (dx, dz) = (self.enemy_start.x - self.home.x, self.enemy_start.z - self.home.z);
         let len = dx.hypot(dz).max(1.0);
-        Vec3 { x: self.home.x + dx / len * distance, y: 0.0, z: self.home.z + dz / len * distance }
+        self.snap_to_reachable(Vec3 { x: self.home.x + dx / len * distance, y: 0.0, z: self.home.z + dz / len * distance })
     }
 
     /// A hurt commander away from home walks back; losing it loses the game.

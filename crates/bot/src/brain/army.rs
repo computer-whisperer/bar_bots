@@ -223,7 +223,9 @@ impl Brain {
             soldiers.iter().filter(|u| self.army.attackers.contains(&u.id)).map(|u| u.pos.dist2d(t)).min_by(f32::total_cmp)
         });
         self.note_unreachable_targets(tick, attackers_nearest);
-        let reachable = |point: &Vec3| !self.army.bad_targets.iter().any(|(bad, _)| bad.dist2d(*point) < BAD_TARGET_RADIUS);
+        let reachable = |point: &Vec3| {
+            self.reachable_on_foot(*point) && !self.army.bad_targets.iter().any(|(bad, _)| bad.dist2d(*point) < BAD_TARGET_RADIUS)
+        };
         let nearest_building = self
             .enemy_buildings
             .values()
@@ -243,6 +245,7 @@ impl Brain {
                 y: 0.0,
                 z: sum.z + pos.z / n,
             });
+            self.resurvey_enemy();
         }
         let mut target = nearest_building.or(self.army.target).unwrap_or(self.enemy_start);
         if let Some(ordered) = self.directives.attack_target {
@@ -319,11 +322,12 @@ impl Brain {
                 self.army.attackers.extend(home_group.iter().map(|u| u.id));
                 // H-ARMY-STAGE: sent straight at the target, a wave arrives fastest-first and dies one by one.
                 // Everyone committed, survivors of earlier waves included, gathers short of the target first.
-                let approach = target.dist2d(self.home);
+                let approach = self.walk_from_home(target);
                 let first_stop = if self.enabled("H-ARMY-STAGE") && approach > 2.0 * STAGE_DISTANCE {
                     self.fire("H-ARMY-STAGE");
-                    let t = STAGE_DISTANCE / approach;
-                    let point = Vec3 { x: target.x + (self.home.x - target.x) * t, y: 0.0, z: target.z + (self.home.z - target.z) * t };
+                    let t = STAGE_DISTANCE / target.dist2d(self.home).max(1.0);
+                    let straight = Vec3 { x: target.x + (self.home.x - target.x) * t, y: 0.0, z: target.z + (self.home.z - target.z) * t };
+                    let point = self.on_the_way_to(target, approach - STAGE_DISTANCE).unwrap_or(straight);
                     self.army.staging = Some((point, tick.frame));
                     point
                 } else {

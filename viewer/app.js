@@ -17,7 +17,8 @@
 
   const view = {
     match: null, lanes: null, posts: [], frame: 0, playing: false, speed: 10, lastTime: 0,
-    layers: { grid: true, spots: true, census: true, orders: true, intent: true, deaths: true },
+    layers: { terrain: true, nobots: true, notanks: false, grid: true, spots: true, census: true, orders: true, intent: true, deaths: true },
+    terrain: null,
     background: null, mapBox: null, hoverFrame: null, decisionItems: [], currentDecision: -2,
     show: { heuristic: true, llm: true, event: false },
   };
@@ -57,6 +58,69 @@
     open(texts, Number(params.get("t") || 0) * WR.FPS);
     const bg = params.get("bg") || `maps/${encodeURIComponent(view.match.header.map.name)}.png`;
     loadBackground(bg);
+    loadTerrain(base, view.match.header.terrain);
+  }
+
+  // The record's terrain grid (docs/harness/record-format.md): heights then slopes, rendered once into three
+  // canvases the map draws under everything else: relief with water, and where bots and vehicles cannot go.
+  async function loadTerrain(base, terrain) {
+    if (!terrain || !terrain.file) return;
+    let bytes;
+    try {
+      const response = await fetch(base + terrain.file);
+      if (!response.ok) return;
+      bytes = await response.arrayBuffer();
+    } catch (_) {
+      return;
+    }
+    const { width, height } = terrain;
+    const cells = width * height;
+    if (bytes.byteLength < cells * 3) return;
+    const heights = new Int16Array(bytes, 0, cells);
+    const slopes = new Uint8Array(bytes, cells * 2, cells);
+    const canvasOf = (paint) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      const image = ctx.createImageData(width, height);
+      for (let i = 0; i < cells; i++) paint(i, image.data, i * 4);
+      ctx.putImageData(image, 0, 0);
+      return canvas;
+    };
+    let top = 1;
+    for (let i = 0; i < cells; i++) if (heights[i] > top) top = heights[i];
+    const relief = canvasOf((i, out, o) => {
+      const h = heights[i];
+      // Light from the north-west: a cell brighter than its south-east neighbour faces the light.
+      const x = i % width, z = (i / width) | 0;
+      const other = heights[Math.min(z + 1, height - 1) * width + Math.min(x + 1, width - 1)];
+      const shade = Math.max(-40, Math.min(40, (h - other) * 6));
+      if (h < 0) {
+        const depth = Math.min(1, -h / 120);
+        out[o] = 18; out[o + 1] = 52 - 20 * depth; out[o + 2] = 96 - 36 * depth;
+      } else {
+        const t = h / top;
+        out[o] = 46 + 96 * t + shade; out[o + 1] = 62 + 78 * t + shade; out[o + 2] = 40 + 60 * t + shade;
+      }
+      out[o + 3] = 255;
+    });
+    const blocked = (kind, rgb) => {
+      const classes = (terrain.move_classes || []).filter((c) => c.kind === kind);
+      if (!classes.length) return null;
+      // The ordinary class of the kind: not the amphibians (any depth) or climbers (any slope), then the one most
+      // unit types use.
+      const ordinary = classes.filter((c) => c.depth < 1000 && c.max_slope < 0.99);
+      const usual = (ordinary.length ? ordinary : classes).reduce((a, b) => ((b.units || 0) > (a.units || 0) ? b : a));
+      const maxSlope = usual.max_slope * 255;
+      const depth = usual.depth;
+      return canvasOf((i, out, o) => {
+        const no = slopes[i] > maxSlope || heights[i] < -depth;
+        out[o] = rgb[0]; out[o + 1] = rgb[1]; out[o + 2] = rgb[2]; out[o + 3] = no ? 150 : 0;
+      });
+    };
+    view.terrain = { relief, nobots: blocked("bot", [200, 40, 40]), notanks: blocked("tank", [230, 140, 30]), heights, width, height, cell: terrain.cell };
+    drawMap();
   }
 
   // Terrain hook: any image of the whole map, north up. Missing is normal.
@@ -221,6 +285,17 @@
       ctx.drawImage(view.background, box.x, box.y, box.w, box.h);
       ctx.globalAlpha = 1;
     }
+    if (view.terrain) {
+      ctx.imageSmoothingEnabled = true;
+      if (view.layers.terrain) {
+        ctx.globalAlpha = 0.75;
+        ctx.drawImage(view.terrain.relief, box.x, box.y, box.w, box.h);
+      }
+      ctx.globalAlpha = 0.55;
+      if (view.layers.notanks && view.terrain.notanks) ctx.drawImage(view.terrain.notanks, box.x, box.y, box.w, box.h);
+      if (view.layers.nobots && view.terrain.nobots) ctx.drawImage(view.terrain.nobots, box.x, box.y, box.w, box.h);
+      ctx.globalAlpha = 1;
+    }
 
     if (view.layers.grid) {
       const { columns, rows } = match.header.grid;
@@ -368,6 +443,12 @@
     view.state.own.forEach((u) => consider(u, true));
     view.state.enemies.forEach((u) => consider(u, false));
     const lines = [`${WR.gridName(view.match, x, z)}  (${Math.round(x)}, ${Math.round(z)})`];
+    if (view.terrain) {
+      const t = view.terrain;
+      const cx = Math.min(t.width - 1, Math.max(0, Math.floor(x / t.cell))), cz = Math.min(t.height - 1, Math.max(0, Math.floor(z / t.cell)));
+      const h = t.heights[cz * t.width + cx];
+      lines.push(h < 0 ? `water, ${-h} deep` : `height ${h}`);
+    }
     if (best) {
       const { u, ours } = best;
       const flags = [];

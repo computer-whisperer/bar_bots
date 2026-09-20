@@ -3,6 +3,7 @@
 mod brain;
 mod recorder;
 mod strategist;
+mod terrain;
 mod world;
 
 use std::io;

@@ -76,3 +76,14 @@ runs under node), `viewer/app.js` the page. URL parameters: `t=<seconds>` start 
 Terrain: an image at `viewer/maps/<map name>.png` (whole map, north up) is drawn under the map when present; none ship.
 Tests: `node viewer/test/smoke.js <match dir>` (model, truncated file) and `node viewer/test/browser.js <url>` (the real
 page in headless Chromium: load, scrub, play, hover, toggles; fails on any page error).
+
+## Terrain
+
+The header's `terrain` object names a sibling binary file (`terrain-<ai_id>.bin`) and how to read it: `width` x `height`
+cells of `cell` elmos (the engine's slope-map resolution, 16), row-major from the north-west; first every height as a
+little-endian i16 (elmos; water level is 0, negative is under water), then every slope as a u8 (the engine's slope
+value, 1 - the ground normal's y, times 255). `move_classes` lists the distinct movement classes among the unit types
+(`kind` tank/bot/hover/ship, `max_slope` in the same slope units, `depth`: deepest water waded, or for ships the
+shallowest floated in; `units`: how many unit types use it), so a reader can work out where each kind cannot go. The
+viewer renders relief with water and the "bots cannot go" / "vehicles cannot go" layers from it.
+
