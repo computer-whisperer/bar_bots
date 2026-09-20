@@ -85,3 +85,13 @@ they have by minute 20 — because it comes to us.
 game rose materially. That is the test of any scouting change, and it now has a baseline to beat.
 **Used by.** (none yet) — it is the reason an estimate of their economy has to be inferred rather than observed
 (K-barb-tempo-is-half-clock-half-sighting), and the strongest argument yet for H-ARMY-SCOUT / radar coverage.
+
+### K-scout-enemy-base-is-a-spot-cluster
+**Claim.** An opponent's extractors in the opening are all in the vicinity of its start, which is a metal-spot cluster
+(the reasonable start spot; D7 on Quicksilver from the south); the first contact with anything of theirs is enough to
+say which cluster. The other spots in its box (C7/B7) and the middle (F6) are low priority to look at, but get looked
+at eventually. Scouting is one Pawn or Tick at a time, occasionally, tracking when each spot was last seen.
+**Status.** stated by the user 2026-09-20 from watching rush-13-harass3-noplace 00. Not measured.
+**Evidence.** In that game the first contact was at 1:52; BARb's start (3371, 5556) is D7 and its extractors by minute
+3 lie within 700 of it (its records in `run/matches/*-rush-1[0-4]-*`).
+**Used by.** H-SCOUT-SPOTS, H-SCOUT-ROUTE, H-MAP-ENEMY-CLUSTER; H-ARMY-PRESSURE's unknown targets.

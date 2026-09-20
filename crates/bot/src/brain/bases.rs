@@ -12,6 +12,10 @@ use bot_protocol::{Event, Tick, UnitId, Vec3};
 const BASE_RADIUS: f32 = 1500.0;
 /// A found base with no factory left and nothing remembered standing this near is dead.
 const RAZED_RADIUS: f32 = 1200.0;
+/// H-MAP-ENEMY-CLUSTER: a building of theirs seen this near an unfound base's guess refines the guess to the
+/// metal-spot cluster nearest the building, spots chained within `CLUSTER_LINK` of one another.
+const REFINE_RADIUS: f32 = 2500.0;
+const CLUSTER_LINK: f32 = 700.0;
 
 pub struct EnemyBase {
     /// The seat, when the script named the teams; `None` for a lone mirror guess.
@@ -21,6 +25,8 @@ pub struct EnemyBase {
     pub found: bool,
     /// Found, and then razed to the ground: no longer a target nor a claim on ground.
     pub dead: bool,
+    /// The guess was moved to the spot cluster nearest the first building of theirs seen (H-MAP-ENEMY-CLUSTER).
+    refined: bool,
     factories: HashMap<UnitId, Vec3>,
 }
 
@@ -45,10 +51,10 @@ impl super::Brain {
                 None if index == 0 => self.world.mirrored(self.home),
                 None => continue,
             };
-            bases.push(EnemyBase { team: Some(*team), at, found: false, dead: false, factories: HashMap::new() });
+            bases.push(EnemyBase { team: Some(*team), at, found: false, dead: false, refined: false, factories: HashMap::new() });
         }
         if bases.is_empty() {
-            bases.push(EnemyBase { team: None, at: self.world.mirrored(self.home), found: false, dead: false, factories: HashMap::new() });
+            bases.push(EnemyBase { team: None, at: self.world.mirrored(self.home), found: false, dead: false, refined: false, factories: HashMap::new() });
         }
         self.enemy_bases = bases;
     }
@@ -89,7 +95,7 @@ impl super::Brain {
             let Some(index) = by_team.or_else(nearest) else { continue };
             // A teamless factory far from every base is a base of its own (a seat the script did not tell us of).
             if by_team.is_none() && self.enemy_bases[index].found && self.enemy_bases[index].at.dist2d(enemy.pos) > BASE_RADIUS {
-                self.enemy_bases.push(EnemyBase { team: enemy.team, at: enemy.pos, found: true, dead: false, factories: HashMap::from([(enemy.id, enemy.pos)]) });
+                self.enemy_bases.push(EnemyBase { team: enemy.team, at: enemy.pos, found: true, dead: false, refined: true, factories: HashMap::from([(enemy.id, enemy.pos)]) });
                 continue;
             }
             self.enemy_bases[index].factories.insert(enemy.id, enemy.pos);
@@ -113,9 +119,45 @@ impl super::Brain {
                 base.dead = !standing;
             }
         }
+        moved |= self.refine_guesses_from_sightings(tick.frame);
         if moved {
             self.resurvey_enemy();
         }
+    }
+
+    /// H-MAP-ENEMY-CLUSTER: the first building of theirs seen near an unfound base's guess moves the guess to the
+    /// metal-spot cluster nearest that building, at the cluster's spot nearest its middle: the reasonable start spot.
+    /// The user, from a Quicksilver game: first contact at 1:52 is enough for a high guess that the enemy's
+    /// extractors are all round D7. True when a guess moved.
+    fn refine_guesses_from_sightings(&mut self, frame: i32) -> bool {
+        let spots = &self.world.hello.metal_spots;
+        let mut moved = false;
+        for base in self.enemy_bases.iter_mut().filter(|b| !b.found && !b.dead && !b.refined) {
+            let Some((_, building, _)) = self.enemy_buildings.values().filter(|(_, pos, _)| pos.dist2d(base.at) < REFINE_RADIUS).min_by(|a, b| a.1.dist2d(base.at).total_cmp(&b.1.dist2d(base.at))) else { continue };
+            let Some(seed) = (0..spots.len()).min_by(|a, b| spots[*a].dist2d(*building).total_cmp(&spots[*b].dist2d(*building))) else { continue };
+            let mut cluster = vec![seed];
+            let mut grew = true;
+            while grew {
+                grew = false;
+                for index in 0..spots.len() {
+                    if !cluster.contains(&index) && cluster.iter().any(|c| spots[*c].dist2d(spots[index]) < CLUSTER_LINK) {
+                        cluster.push(index);
+                        grew = true;
+                    }
+                }
+            }
+            let n = cluster.len() as f32;
+            let middle = cluster.iter().fold(Vec3::default(), |sum, i| Vec3 { x: sum.x + spots[*i].x / n, y: 0.0, z: sum.z + spots[*i].z / n });
+            let at = cluster.iter().map(|i| Vec3 { y: 0.0, ..spots[*i] }).min_by(|a, b| a.dist2d(middle).total_cmp(&b.dist2d(middle))).unwrap();
+            eprintln!(
+                "[ai {}] f={} enemy base guessed at ({:.0}, {:.0}) from a building at ({:.0}, {:.0}): a cluster of {} spots (was ({:.0}, {:.0}))",
+                self.world.hello.ai_id, frame, at.x, at.z, building.x, building.z, cluster.len(), base.at.x, base.at.z
+            );
+            moved |= at.dist2d(base.at) > 1.0;
+            base.at = at;
+            base.refined = true;
+        }
+        moved
     }
 
     /// Bases that still count; all of them when every one is dead (something must be "the enemy's side").

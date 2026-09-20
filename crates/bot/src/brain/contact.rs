@@ -79,10 +79,10 @@ pub(super) struct Assault {
 }
 
 pub(super) struct Contacts {
-    rules: Arc<Rules>,
+    pub(super) rules: Arc<Rules>,
     /// The simulator's unit type for each of the game's, by name; for a unit it lacks, the nearest in metal of the
     /// same kind (mobile or not, armed or not). Filled on first use.
-    sim_defs: HashMap<UnitDefId, usize>,
+    pub(super) sim_defs: HashMap<UnitDefId, usize>,
     responses: Vec<Response>,
     /// Simulator time this minute, for the log: (questions, total ms, longest ms).
     spent: (u32, f64, f64),
@@ -99,7 +99,7 @@ fn flat(pos: Vec3) -> Vec2 {
 }
 
 impl Brain {
-    fn survey_sim_defs(&mut self) {
+    pub(super) fn survey_sim_defs(&mut self) {
         let rules = self.contacts.rules.clone();
         let table = &rules.units;
         for def in &self.world.hello.unit_defs {

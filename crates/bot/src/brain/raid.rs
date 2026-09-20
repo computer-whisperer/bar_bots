@@ -62,8 +62,6 @@ pub struct Raid {
     /// H-ARMY-MARCH: members stopped until the body of the party has come up (Pawns 2000 elmos apart met BARb's
     /// commander one at a time in rush-smoke2).
     held: HashSet<UnitId>,
-    /// Metal spots in the enemy's start box the party has stood at and found nothing (`unscouted_box_spots`).
-    visited: Vec<Vec3>,
     /// Waiting out of reach for reinforcements (logged once).
     waiting: bool,
     /// The last pricing's verdict, held until the next: between pricings the party was "not outmatched" and went
@@ -91,19 +89,12 @@ impl Brain {
         targets
     }
 
-    /// Finding the base: until a base of theirs is found, the metal spots inside the enemy start boxes the party has
-    /// not stood at, nearest `from` first. The presumed base is the box's centre and the opponent may be anywhere in
-    /// it: in Comet Catcher's strips BARb spawns at an end, 2000 elmos from the centre, and the party of rush-7 stood
+    /// Finding the base: spots round the presumed base or in the enemy start boxes nobody has looked at lately
+    /// (`scout.rs`), nearest `from` first. The presumed base is a guess and the opponent may be anywhere in its box:
+    /// in Comet Catcher's strips BARb spawns at an end, 2000 elmos from the centre, and the party of rush-7 stood
     /// at an empty spot for five minutes while the home group was committed to it.
-    fn unscouted_box_spots(&self, from: Vec3) -> Vec<Vec3> {
-        let hello = &self.world.hello;
-        let mut spots: Vec<Vec3> = hello
-            .metal_spots
-            .iter()
-            .filter(|s| hello.start_boxes.iter().any(|b| b.ally_team != hello.ally_team && b.contains(**s)))
-            .map(|s| Vec3 { y: 0.0, ..*s })
-            .filter(|s| !self.raid.visited.iter().any(|v| v.dist2d(*s) < TARGET_RADIUS) && self.reachable_on_foot(*s))
-            .collect();
+    fn unscouted_box_spots(&self, from: Vec3, frame: i32) -> Vec<Vec3> {
+        let mut spots = self.spots_to_look_at(from, frame, 0.0, 1.0);
         spots.sort_by(|a, b| a.dist2d(from).total_cmp(&b.dist2d(from)));
         spots
     }
@@ -127,7 +118,7 @@ impl Brain {
             return Some(*extractor);
         }
         if self.found_enemy_base().is_none()
-            && let Some(spot) = self.unscouted_box_spots(party_at).first()
+            && let Some(spot) = self.unscouted_box_spots(party_at, tick.frame).first()
         {
             return Some(*spot);
         }
@@ -149,7 +140,7 @@ impl Brain {
         let mut candidates: Vec<Vec3> = self.enemy_buildings.values()
             .filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0))
             .map(|(_, pos, _)| *pos)
-            .chain(self.unscouted_box_spots(centre))
+            .chain(self.unscouted_box_spots(centre, tick.frame))
             .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && self.reachable_on_foot(*t))
             .collect();
         candidates.sort_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)));
@@ -216,10 +207,7 @@ impl Brain {
         // The target is gone when we no longer remember an extractor there (seen destroyed, or found missing), or when
         // the party stands on it and sees nothing. A box spot the party reaches is scouted, whatever it found.
         let arrived = self.raid.target.is_some_and(|t| centre.dist2d(t) < TARGET_RADIUS);
-        if arrived && let Some(t) = self.raid.target && self.unscouted_box_spots(t).first().is_some_and(|s| s.dist2d(t) < 1.0) {
-            self.raid.visited.push(t);
-        }
-        let unscouted = self.raid.target.is_some_and(|t| self.unscouted_box_spots(t).first().is_some_and(|s| s.dist2d(t) < 1.0));
+        let unscouted = self.raid.target.is_some_and(|t| self.unscouted_box_spots(t, tick.frame).first().is_some_and(|s| s.dist2d(t) < 1.0));
         let still_there = self.raid.target.is_some_and(|t| self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(t) < 100.0) || (!arrived && (unscouted || t.dist2d(self.enemy_base(t)) < BASE_RADIUS)));
         let target = if still_there { self.raid.target } else { self.pressure_target(centre, tick) };
         // Priced every few seconds against what is in sight of the party and what is known at the target, and every

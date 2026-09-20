@@ -59,7 +59,6 @@ const DEFENDED_RADIUS: f32 = 900.0;
 const QUIET_BEFORE_WAVE_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
 const QUIET_CEILING_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
 /// H-ARMY-SCOUT: a raider goes to look at the enemy this often, so the wave gate weighs something it has seen.
-const SCOUT_EVERY_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 /// An idle attacker this close to the attack target has arrived and needs a new one.
 const ARRIVED_RADIUS: f32 = 400.0;
 /// Home-group units farther than this from the rally point are called in.
@@ -96,8 +95,6 @@ pub struct Army {
     last_retreat_frame: i32,
     /// Since when a full wave has been held back only because things were dying at home.
     held_for_losses_since: Option<i32>,
-    /// The soldier last sent to look at the enemy, and when.
-    scout: Option<(UnitId, i32)>,
     /// Where the attackers are gathering before the assault, and since which frame.
     staging: Option<(Vec3, i32)>,
     /// H-ARMY-MARCH: attackers stopped until the body of the wave has come up.
@@ -449,20 +446,8 @@ impl Brain {
             soldiers.iter().partition(|u| self.army.attackers.contains(&u.id));
         self.team_post.committed = attackers.iter().map(|u| u.def).collect();
 
-        // H-ARMY-SCOUT: unscouted, the wave gate knows only the enemy commander, and lets a wave walk into their whole
-        // army (v18 match 20: "1500 known" against 3205). One raider at a time goes to look, by way of the target.
-        let scouting = self.army.scout.is_some_and(|(id, since)| tick.frame - since < SCOUT_EVERY_FRAMES && soldiers.iter().any(|u| u.id == id));
-        if self.enabled("H-ARMY-SCOUT") && !scouting && tick.frame > 3 * 60 * FRAMES_PER_SECOND
-            && let Some(scout) = home_group.iter().filter(|u| u.def == kit.raider).min_by(|a, b| a.pos.dist2d(target).total_cmp(&b.pos.dist2d(target)))
-        {
-            self.fire("H-ARMY-SCOUT");
-            self.army.scout = Some((scout.id, tick.frame));
-            commands.push(Command::Move { unit: scout.id, to: target, queue: false });
-            // On to a base nobody has seen yet, if there is one.
-            let unseen = self.enemy_bases.iter().filter(|b| !b.found && !b.dead).map(|b| b.at).min_by(|a, b| a.dist2d(target).total_cmp(&b.dist2d(target)));
-            commands.push(Command::Move { unit: scout.id, to: unseen.unwrap_or(self.enemy_base(target)), queue: true });
-        }
-        let scout_id = self.army.scout.map(|(id, _)| id);
+        // H-SCOUT-ROUTE (`scout.rs`): one raider at a time looks round the map; out of the home group meanwhile.
+        let scout_id = self.run_scout(tick, kit, &home_group, commands);
         let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| Some(u.id) != scout_id).collect();
 
         // H-ARMY-CONTACT (`contact.rs`): every enemy party on our ground gets its own answer, or none; whoever answers

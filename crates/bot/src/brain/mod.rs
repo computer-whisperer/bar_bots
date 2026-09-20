@@ -15,6 +15,7 @@ pub mod journal;
 mod march;
 mod opening;
 mod raid;
+mod scout;
 mod reclaim;
 mod squads;
 mod territory;
@@ -75,6 +76,8 @@ pub struct Brain {
     army: army::Army,
     /// H-ARMY-CONTACT: the enemy parties on our ground and who answers each (`contact.rs`).
     contacts: contact::Contacts,
+    /// When each metal spot was last in sight, and the raider out looking (`scout.rs`).
+    spots: scout::Spots,
     squads: squads::Squads,
     wake: wake::WakeState,
     /// The commander's unit mix (unit name to weight); empty means the heuristic batch.
@@ -160,6 +163,7 @@ impl Brain {
             matchups: Default::default(),
             army: army::Army::default(),
             contacts: Default::default(),
+            spots: scout::Spots::default(),
             squads: Default::default(),
             wake: Default::default(),
             production_weights: Default::default(),
@@ -201,6 +205,7 @@ impl Brain {
         self.read_directives(tick.frame);
         self.note_allies(tick);
         self.track_enemy_buildings(tick);
+        self.survey_spots(tick);
         self.track_enemy_bases(tick);
         self.update_territory(tick, &kit);
         self.track_wrecks(tick);
