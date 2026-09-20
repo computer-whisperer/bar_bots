@@ -86,3 +86,10 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   the members within 1500 of the front, and it alone is held for, priced and stands at the target (`target-march`).
   Left for later: the first Pawn a minute late (the executor's 3.5 s between builds), and BARb's Fleas taking 3-7
   extractors a minute at home from minute 4 (H-ARMY-CONTACT's floor of two).
+- 2026-09-20, the production gap (rush-9 placed games against the replays, Pawns finished per game minute 1-4): Matt
+  5 / 7 / 6 / 8 (26 by minute 5), Ben 3 / 4 / 5 / 8; ours 0-2 / 3-6 / 1-5 / 0-2 (9 by minute 5), with 14 extractors by
+  minute 5 to Matt's 7 and two more constructors at minute 5. The opening plan's Pawns stop at its horizon (300 s) and
+  H-PROD-BATCH's mixed batch takes over. BARb's Fleas take 3-7 of our extractors a minute from minute 3; neither player
+  lost one, because BARb was dead or dying by then. The next lever is the production posture behind the pressure:
+  Pawns without a gap from the lab's first minute until the kill or the pressure fails (army part 3, posture) - a
+  decision for the user, with the LLM's `build_priorities` as the other route.

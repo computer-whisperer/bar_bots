@@ -224,7 +224,7 @@ larger maps, where the game stabilises long enough.
 game; the replay's record agrees (below). Not measured over many games.
 **Evidence.** `run/matches/*-replay-player2-vs-medium` (run/replay_match.py on the player's demo): lab by 0:50, 5
 Pawns at minute 2 and 12 at minute 3 with metal income held at 6, BARb's first extractor dead at 2:28, its lab at
-3:30, its commander at 4:45; the player lost 15 Pawns; BARb built no soldier. The second replay (Ben vs medium, `*-replay-ben-vs-medium`) is the
+3:30, its commander at 4:45; the player lost 15 Pawns; BARb built no soldier. Pawns finished per game minute 1-4: 5 / 7 / 6 / 8 (26 by minute 5) beside 2 constructors and 7 extractors; neither player lost an extractor. The second replay (Ben vs medium, `*-replay-ben-vs-medium`) is the
 same shape with expansion beside it: 3 / 7 / 10 / 15 Pawns at minutes 2-5 while extractors go 2 to 9 by minute 6
 (income 6 to 16); BARb, raided from 2:25, never left 2 extractors and income 6, had 2-5 Pawns and 3 LLTs, and its
 commander died at 6:08; Ben lost 22 Pawns and one resurrection bot. Neither player's commander left its base.
