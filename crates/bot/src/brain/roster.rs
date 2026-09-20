@@ -42,7 +42,7 @@ pub const ROSTERS: [Roster; 2] = [
     Roster {
         commander: "corcom", extractor: "cormex", solar: "corsolar", wind: "corwin", advanced_solar: "coradvsol",
         converter: "cormakr", lab: "corlab", turret: "corllt", nano: "cornanotc", radar: "corrad", constructor: "corck",
-        advanced_lab: "coralab", advanced_constructor: "corack", advanced_extractor: "cormoho", advanced_line: "corcan", advanced_second: "cormort",
+        advanced_lab: "coralab", advanced_constructor: "corack", advanced_extractor: "cormoho", advanced_line: "corcan", advanced_second: "corcan",
         raider: "corak", skirmisher: "corstorm", artillery: "corthud", line: "corthud", second: "corstorm",
     },
 ];
