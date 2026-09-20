@@ -287,6 +287,16 @@ def causes(match, curve, fights):
         out.append(f"{len(uphill)} of {len(fights)} engagements began with them at over 1.5x our soldiers-plus-turrets value on the spot; "
                    f"{sum(1 for e in fights if e['where'] in ('in their half', 'at their base'))} were on their side of the map")
     commander = [d for d in deaths if d[1] == "ours" and match.cls(d[2]) == "commander"]
+    if not commander and match.samples:
+        # The record stops when the game does, usually seconds before the commander's death would be written.
+        last = match.samples[-1]
+        ours = [(u[0], match.defs[u[1]]["name"], u[2], u[3], u[4]) for u in last["own"]]
+        for _, name, x, z, health in ours:
+            if match.cls(name) == "commander":
+                near = [u for u in match.theirs_at(last["f"]) if math.dist((u[2], u[3]), (x, z)) < 700 and match.cls(u[1]) == "army"]
+                out.append(f"last sample {clock(last['f'])}: our commander at {health}% health at {match.grid(x, z)} ({match.side_of_map(x, z)}) "
+                           f"with {len(near)} enemy soldiers within 700 ({dict(Counter(u[1] for u in near).most_common(4))}); "
+                           f"a loss means it died moments later")
     if commander:
         f, _, _, x, z, _, killer = commander[-1]
         out.append(f"our commander died at {clock(f)} at {match.grid(x, z)} ({match.side_of_map(x, z)}) to {killer}")

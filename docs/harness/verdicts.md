@@ -9,6 +9,11 @@ that we fix the commonest cause rather than the latest one seen.
 1. `run/analyze_match.py <match>`: read the curves first. Find the last minute the game was still level (extractors and
    army value within ~25 %) and the first minute it clearly was not. The decisive moment lies between them; what
    happens after it is consequence, not cause. A game that was never level was decided by the opening or economy.
+   Against BARb medium the two measures part early (extractors in minute 3-5, army in minute 6-8): take "level" on
+   extractors when raids are the story and on army value when fights are, and say in the evidence where both stood.
+   The summary line's "on the spot before" is a five-second snapshot: an attacker arriving during a long engagement
+   shows as 0 there, so read the scenes. The record ends when the game does, so our commander's death is rarely in
+   it; the report gives its state in the last sample instead.
 2. Read the engagements in that window, and the candidate causes. Pull scenes (`--engagement N`, `--scene MM:SS X Z`)
    for the one or two engagements that moved the curves most, and look at what each side had on the spot, where it
    was, whether our fighters were together, whether turrets were involved, and what role our soldiers had (home group,
