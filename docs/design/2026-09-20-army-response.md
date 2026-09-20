@@ -79,4 +79,10 @@ contact response replaces the defend rules (deleted first). 3. Posture replaces 
 `docs/knowledge/` and `docs/experiments.md`.
 
 ## Status
-Nothing built (2026-09-20).
+- 2026-09-20, part 1, the model half: `combatsim` has economy buildings in its unit table, group intents (`Fight`,
+  `Raid { then }`, `Flee`, `Guard`), escapes, and `chase::Chase` / `Verdict` (caught and when, party metal killed,
+  pursuers' lost, buildings burned, `gain_over` another answer); `combatsim chase` asks it from the command line; the
+  duel regression is unchanged. First answers: three Grunts burn four extractors in about 15 s, so pursuers 1500 away
+  are worth nothing whatever they are, and from 600 away Maces and Pawns both catch them at their work; a fleeing
+  Grunt is never caught by a Mace. 0.4-1.2 ms a run. Known fault: a fleeing party out-ranging its pursuers kills them
+  for nothing, because pursuers never give a chase up. Validation against recorded raids: not done. Parts 2-4: not started.

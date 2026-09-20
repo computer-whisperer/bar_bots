@@ -52,8 +52,9 @@ pub enum Intent {
     #[default]
     Fight,
     /// Go for the other side's unarmed buildings (nearest first) and ignore its soldiers until one of them hurts
-    /// it; from then on it fights like anybody else.
-    Raid,
+    /// it; from then on it fights like anybody else. With nothing left to burn it walks on to `then` (its next
+    /// target, or home) and leaves the field there.
+    Raid { then: Vec2 },
     /// Walk to this point and leave the field there, shooting only what comes into range on the way.
     Flee(Vec2),
     /// Stand at `at`; fight what comes within `radius` of it and go back afterwards.

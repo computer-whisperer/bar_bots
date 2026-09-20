@@ -511,7 +511,7 @@ impl<'a> Sim<'a> {
                 let d = pos.dist2(other.pos);
                 let wanted = match intent {
                     Intent::Fight => true,
-                    Intent::Raid => provoked || other.asset,
+                    Intent::Raid { .. } => provoked || other.asset,
                     Intent::Flee(_) => d <= reach * reach,
                     Intent::Guard { at, radius } => d <= reach * reach || other.pos.dist2(at) <= radius * radius,
                 };
@@ -555,16 +555,19 @@ impl<'a> Sim<'a> {
             let micro = self.micro[side];
             let stop = reach * self.rules.tuning.stop_at;
             let intent = body.intent;
+            let leaving = match intent {
+                Intent::Flee(to) => Some(to),
+                Intent::Raid { then } if target == NONE && !body.provoked => Some(then),
+                _ => None,
+            };
             let goal = match intent {
-                Intent::Flee(to) => to,
+                _ if leaving.is_some() => leaving.unwrap(),
                 _ if target != NONE => self.bodies[target as usize].pos,
                 Intent::Guard { at, .. } => at,
                 _ => self.goal[side],
             };
             let range = pos.dist(goal);
-            if let Intent::Flee(_) = intent
-                && range < ARRIVED
-            {
+            if leaving.is_some() && range < ARRIVED {
                 let body = &mut self.bodies[i];
                 (body.alive, body.escaped) = (false, true);
                 continue;
@@ -573,7 +576,7 @@ impl<'a> Sim<'a> {
                 self.bodies[i].vel = Vec2::default();
                 continue;
             }
-            let fleeing = matches!(intent, Intent::Flee(_));
+            let fleeing = leaving.is_some();
             // A unit too badly hurt to be worth spending turns round and leaves; it still shoots what comes into
             // range on the way, as a unit under a move order does.
             let withdrawing = micro.withdraw_below > 0.0 && hp < max_hp * micro.withdraw_below;

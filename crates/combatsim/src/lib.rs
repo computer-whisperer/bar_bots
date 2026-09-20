@@ -6,6 +6,7 @@
 //! What it is judged by: the duel tables in `docs/data/duels-2026-09-19/`, replayed by `combatsim validate`.
 //! `docs/studies/combat-sim.md` has the numbers and what it still gets wrong.
 
+pub mod chase;
 pub mod duels;
 pub mod field;
 pub mod rng;

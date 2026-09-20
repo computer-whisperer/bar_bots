@@ -6,7 +6,8 @@ mod policies;
 
 use combatsim::duels::{self, DECISIVE};
 use combatsim::field::Field;
-use combatsim::scenario::{Energy, Focus, Group, Micro, Odds, Scenario, Vec2};
+use combatsim::chase::Chase;
+use combatsim::scenario::{Energy, Focus, Group, Intent, Micro, Odds, Scenario, Vec2};
 use combatsim::sim::{Rules, Tuning, odds, simulate};
 use combatsim::units::Units;
 
@@ -19,6 +20,9 @@ combatsim --a <type:count[@delay][,...]> --b <type:count[@delay][,...]>
 combatsim validate [--spacing 56|100|both] [--reps 4] [--worst 15] [--no-collide] [--stored E] [--income E]
 combatsim micro [--reps 8] [--budget 1200] [--ratios 0.7,1,1.4] [--policies LIST] [--detail] [--spacing 56]
 combatsim speed [--reps 200]
+combatsim chase --pursuers <type:count,...> --party <type:count,...> [--distance 1500] [--assets armmex:3] [--intent raid|fight|flee]
+          [--seconds 60] [--reps 8]    (the party stands among the assets, the pursuers start --distance away; a fleeing
+          party runs directly away from them; printed beside the same contact with nobody sent)
 
 Unit names are the game's internal ones (armham, corllt). Side A stands in the west, B in the east.
 A side's types are laid out front to back in the order listed, so `--b corllt:12,corthud:20` is a tower line
@@ -43,6 +47,7 @@ fn main() {
         Some("validate") => validate(&rules, &flags),
         Some("micro") => policies::sweep(&rules, &flags),
         Some("speed") => speed(&rules, &flags),
+        Some("chase") => chase(&rules, &flags),
         Some("--help" | "-h") | None => println!("{USAGE}"),
         _ => query(&rules, &flags),
     }
@@ -234,6 +239,37 @@ fn validate(rules: &Rules, flags: &Flags) {
 }
 
 /// Queries a second, by fight size, on this machine.
+fn chase(rules: &Rules, flags: &Flags) {
+    let pairs = |spec: String| -> Vec<(usize, u32)> {
+        spec.split(',').filter(|p| !p.is_empty()).map(|part| {
+            let (name, count) = part.split_once(':').unwrap_or((part, "1"));
+            (rules.units.index(name).unwrap_or_else(|| panic!("unknown unit {name}")), count.parse().expect("count"))
+        }).collect()
+    };
+    let distance: f32 = flags.num("distance", 1500.0);
+    let at = Vec2::new(0.0, 0.0);
+    let intent = match flags.get("intent").unwrap_or("raid").to_string().as_str() {
+        "raid" => Intent::Raid { then: Vec2::new(4000.0, 0.0) },
+        "fight" => Intent::Fight,
+        "flee" => Intent::Flee(Vec2::new(4000.0, 0.0)),
+        other => panic!("unknown intent {other}"),
+    };
+    // The buildings in a row beside the party, 250 apart: an outpost cluster.
+    let assets: Vec<(usize, Vec2)> = pairs(flags.get("assets").unwrap_or("armmex:3").to_string()).into_iter()
+        .flat_map(|(def, count)| (0..count).map(move |i| (def, Vec2::new(150.0, 250.0 * (i as f32 - (count - 1) as f32 / 2.0))))).collect();
+    let sent = Chase { pursuers: pairs(flags.get("pursuers").unwrap_or("").to_string()), from: Vec2::new(-distance, 0.0), party: pairs(flags.get("party").unwrap_or("").to_string()), at, intent, assets, seconds: flags.num("seconds", 60.0) };
+    let reps = flags.num("reps", 8.0) as u32;
+    let started = std::time::Instant::now();
+    let with = sent.verdict(rules, reps);
+    let each = started.elapsed().as_secs_f64() * 1000.0 / reps as f64;
+    let without = Chase { pursuers: Vec::new(), ..sent.clone() }.verdict(rules, reps);
+    for (label, v) in [("sent", &with), ("nobody sent", &without)] {
+        println!("{label:12} caught in {:3.0} % of runs after {:4.1} s; party metal killed {:5.0}, pursuers' lost {:5.0}, buildings lost {:5.0}, survived {:3.0} %",
+            v.caught * 100.0, v.caught_after, v.party_killed, v.pursuers_lost, v.assets_lost, v.survived * 100.0);
+    }
+    println!("sending them is worth {:+.0} metal ({each:.2} ms a run)", with.gain_over(&without));
+}
+
 fn speed(rules: &Rules, flags: &Flags) {
     let reps: u32 = flags.num("reps", 200);
     let (ham, ak) = (rules.units.index("armham").unwrap(), rules.units.index("corak").unwrap());
