@@ -7,7 +7,7 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 |---|---|---|---|---|
 | H-COM-LEASH | Commander builds only within 900 elmos of home | `economy.rs` `claim_spot`, `COMMANDER_LEASH` | K-rules-commander-death-ends-game | active |
 | H-COM-RETREAT | Commander under 70% health, just damaged and away from home walks home | `mod.rs` `protect_commander` | K-rules-commander-death-ends-game | active |
-| H-ECO-OPENING | 2 extractors, then one solar's worth of energy (2 wind generators on a windy map), then the lab; no orders in the first 2 s (the engine drops them) and a builder is not re-planned within 45 frames of an order | `economy.rs` `plan_for`, `run_economy` | K-open-sim-* (build-order study), K-rules-early-orders-are-lost | active. Until 2026-09-19 the first extractor order was lost and the second overwritten in every game: first extractor at ~78 s |
+| H-ECO-OPENING | Extractors within 300 of the start first, generators placed beside the commander wherever it stands (no walking), then the lab, then a second extractor farther off; no orders in the first 2 s (the engine drops them) and a builder is not re-planned within 45 frames of an order | `economy.rs` `plan_for`, `run_economy` | K-open-sim-* (build-order study), K-rules-early-orders-are-lost | active. Until 2026-09-19 the first extractor order was lost and the second overwritten in every game: first extractor at ~78 s |
 | H-ECO-ENERGY-BY-STORAGE | Build generators when stored energy < 40% of storage; no cap on builders | `economy.rs` `plan_for` | K-eco-judge-energy-by-storage | active |
 | H-ECO-ADV-SOLAR | Advanced solar once energy income > 250 | `economy.rs` `ADVANCED_SOLAR_INCOME` | (unexamined) | active |
 | H-ECO-EXPAND | Constructors take the nearest free metal spot | `economy.rs` `claim_spot` | K-eco-expansion-before-conversion | active |
@@ -45,6 +45,10 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 | H-PROD-MIX | Factory batch: line, raider, constructor-or-line, line, second (Armada: Mace, Pawn, Mace, Centurion; Cortex: Thug, Grunt, Thug, Aggravator). Was raider, raider, support, skirmisher, skirmisher | `economy.rs` `production_batch`, `roster.rs` | K-units-duel-* | active (untested) |
 | H-ARMY-RETREAT | Every 2 s the attackers within 1000 of the nearest enemy in sight are weighed against the enemy soldiers and remembered turrets there (`combat.rs` odds); below 0.6 every attacker goes home and no wave leaves for 90 s | `army.rs` `run_army`, `combat.rs` | K-army-combat-prediction | active (untested) |
 | H-ARMY-WAVE-GATE (changed) | The gate uses predicted odds (matchup-weighted, turrets x1.5) of 1.3 instead of a plain metal comparison; responders are added until odds of 1.5 against the raiders in sight | `army.rs`, `combat.rs` | K-army-combat-prediction | active (untested) |
+| H-ECO-REACH | Constructors take metal spots within 1500 + 50 per soldier of home on foot (the `expansion_radius` directive overrides it) | `economy.rs` `claim_spot` | K-army-verdicts-v18 | not yet built or measured |
+| H-ARMY-SCOUT | From minute 3, one raider every 90 s walks to the attack target and on to the enemy start, so the wave gate has seen something | `army.rs` `run_army` | K-army-verdicts-v18 | not yet built or measured |
+| H-ARMY-STATION (changed) | The station keeps 450 from every factory; fallbacks 900, 1200, 700 ahead of home | `army.rs` `station` | K-army-verdicts-v18 (production stalled with the army parked on the lab exits) | not yet built or measured |
+| H-ARMY-WAVE-GATE (changed again) | Also counts the biggest enemy soldier force seen in one look in the last 2 minutes; the quiet-at-home clause can hold a ready wave for 2 minutes at most | `army.rs` | K-army-verdicts-v18 | not yet built or measured |
 | H-ARMY-SWEEP | Idle attackers at an empty target sweep metal spots from the enemy side | `army.rs` `run_army` | (unexamined) | active |
 
 Retired:

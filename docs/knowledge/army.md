@@ -142,3 +142,22 @@ log loss-share ratio 0.85. The selection is by outcome (decisive fights only), s
 fight goes to the finish, not the accuracy of "should we start it".
 **Would be wrong if.** With retreat and launch decided by these odds, our share of metal lost in their half did not fall.
 **Used by.** H-ARMY-WAVE-GATE, H-ARMY-RETREAT, H-ARMY-RESPONDERS (`brain/combat.rs`).
+
+### K-army-verdicts-v18
+**Claim.** With raided spots closed, turrets on the ring and a wave gate, the lone-raider losses are gone and the bot
+reaches minute 10 level; what decides games now is (1) one mobile enemy ball of 700-3000 metal that our split-up
+defence meets in packets, (2) a wave gate that weighs only what stands at the target while their army is a roaming
+block it has never scouted ("1500 known" against a real 3205), (3) our force arriving in speed order, light raiders
+first and rocket infantry 600 elmos behind, so we lose fights we outweigh, (4) constructor attrition: 16-31
+constructors lost a game, the bigger bill behind every extractor count, and (5) a far line of spots 2000-2400 from
+home bought and swept in every game.
+**Status.** supported (2026-09-19): 12 losses of v18-verdict-fixes read by three analysts; the production-stall and
+global "turret on its way" bugs they reported were confirmed in the code and logs.
+**Evidence.** `run/tally_verdicts.py run/matches/1789870160-v18-verdict-fixes`. Bugs found: the army parked in the lab
+yard jams the factory exits (1500 metal banked for five minutes with two labs alive, soldiers' moves failing beside the
+base); `unguarded_outpost` treated any turret under construction anywhere as cover for every outpost; the
+quiet-at-home clause of the gate never clears under continuous raiding.
+**Would be wrong if.** After the fixes (station clear of labs, positional cover test, gate ceiling and remembered
+army, scout, expansion reach) the same tags led the next tally.
+**Used by.** H-ARMY-STATION, H-ARMY-WAVE-GATE, H-ARMY-SCOUT, H-ECO-REACH, H-ECO-OUTPOST-TURRET.
+

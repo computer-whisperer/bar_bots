@@ -67,6 +67,11 @@ const TURRET_LINE: f32 = 650.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
 const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
+/// H-ECO-REACH: constructors take spots within this walking distance of home, plus this much per soldier we have.
+const EXPANSION_REACH: f32 = 1500.0;
+const EXPANSION_REACH_PER_SOLDIER: f32 = 50.0;
+/// Metal spots within this walking distance of the start are built before anything else; farther ones after the lab.
+const OPENING_REACH: f32 = 300.0;
 /// Generators before the first lab, counting a wind generator as one and a solar as two.
 const OPENING_GENERATORS: usize = 2;
 /// No orders before this frame: the engine loses them.
@@ -271,7 +276,17 @@ impl Brain {
         let yard = self.forward_of_home(LAB_YARD);
         let front = self.forward_of_home(TURRET_LINE);
 
+        // H-ECO-OPENING: the first minute is limited by the commander's walking, not by resources (1000 of each in
+        // the bank), so the opening is laid out around where the commander stands: the extractors it can reach
+        // almost from the start point, generators right beside it, then the lab; a second extractor farther off
+        // waits until the lab is going up.
+        let lab_started = planned(kit.lab) >= 1;
+        // The nearest free spot is the one `claim_spot` hands the commander, so "a free spot near home" decides it.
+        let spot_near_home = self.world.hello.metal_spots.iter().enumerate().any(|(i, s)| {
+            self.walk_from_home(*s) < OPENING_REACH && !self.spot_claims.contains_key(&i) && !self.spot_taken(*s, snapshot.own_units.as_slice(), kit)
+        });
         if planned(kit.extractor) < 2
+            && (lab_started || spot_near_home)
             && let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame)
         {
             return (Plan::Extractor(spot), "H-ECO-OPENING");
@@ -280,7 +295,8 @@ impl Brain {
         // carries the lab, and four generators first overflowed it and delayed the lab to 0:58 (docs/studies/build-order.md).
         let opening_energy = planned(kit.wind) + 2 * planned(kit.solar);
         if opening_energy < OPENING_GENERATORS {
-            return (Plan::Near(small_generator, base), "H-ECO-OPENING");
+            // Beside the commander, wherever it is: no walking between the first buildings.
+            return (Plan::Beside(small_generator, builder.pos), "H-ECO-OPENING");
         }
         if planned(kit.lab) < 1 {
             return (Plan::Near(kit.lab, yard), "H-ECO-OPENING");
@@ -369,6 +385,7 @@ impl Brain {
         if commander_station.is_some() || expansion_radius.is_some() {
             self.fire(if is_commander { "D-COMMANDER-STATION" } else { "D-EXPANSION-RADIUS" });
         }
+        let soldiers = own.iter().filter(|u| self.is_army(u, kit)).count();
         let reachable = |spot: Vec3| {
             if is_commander {
                 match commander_station {
@@ -376,7 +393,10 @@ impl Brain {
                     None => self.walk_from_home(spot) < COMMANDER_LEASH,
                 }
             } else {
-                self.spot_is_ours(spot) && expansion_radius.is_none_or(|radius| self.walk_from_home(spot) <= radius as f32)
+                // H-ECO-REACH: no farther from home than the army can answer for. The far line of spots (2000-2400
+                // out) was bought and swept in every game, constructors and all.
+                let reach = expansion_radius.map_or(EXPANSION_REACH + EXPANSION_REACH_PER_SOLDIER * soldiers as f32, |radius| radius as f32);
+                self.spot_is_ours(spot) && (!self.enabled("H-ECO-REACH") && expansion_radius.is_none() || self.walk_from_home(spot) <= reach)
             }
         };
         let (index, spot) = self
@@ -426,6 +446,10 @@ impl Brain {
         Some(self.wreck_sites.swap_remove(index).0)
     }
 
+    fn spot_taken(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
+        own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
+    }
+
     /// Whether we lost an extractor or a constructor at this metal spot lately.
     fn is_hot(&self, spot: Vec3, frame: i32) -> bool {
         self.hot_spots.iter().any(|(hot, until)| *until > frame && hot.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
@@ -452,7 +476,13 @@ impl Brain {
     fn unguarded_outpost(&self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Option<Vec3> {
         let guarded = |pos: Vec3| {
             let turret_near = own.iter().any(|u| u.def == kit.turret && u.pos.dist2d(pos) < OUTPOST_GUARD_RADIUS);
-            let on_its_way = self.jobs.iter().any(|(id, job)| *job == kit.turret && *id != builder.id);
+            // Somebody is already building a turret for THIS place. (The test used to ignore the place, so one turret
+            // under construction anywhere made every outpost count as guarded and they were built one at a time.)
+            let on_its_way = self.jobs.iter().any(|(id, job)| {
+                *job == kit.turret
+                    && *id != builder.id
+                    && self.last_orders.get(id).is_some_and(|(_, _, near)| near.dist2d(pos) < 2.0 * OUTPOST_GUARD_RADIUS)
+            });
             turret_near || on_its_way
         };
         // Hot spots count as outposts to be: the turret goes up first, and the spot reopens once it stands.

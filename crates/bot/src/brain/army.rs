@@ -55,6 +55,8 @@ const DEFENDED_RADIUS: f32 = 900.0;
 const QUIET_BEFORE_WAVE_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
 const QUIET_CEILING_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
 /// How long the biggest enemy force seen stays in mind.
+/// H-ARMY-SCOUT: a raider goes to look at the enemy this often, so the wave gate weighs something it has seen.
+const SCOUT_EVERY_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 const ENEMY_ARMY_MEMORY_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
 /// H-ARMY-RESPONDERS: raiders are met by the nearest soldiers, at least this many and as many as good odds take,
 /// not by the whole home group trailing across the map.
@@ -100,6 +102,8 @@ pub struct Army {
     /// The biggest enemy soldier force seen in one look lately, and when: the opponent's army is one mobile block,
     /// so what stands at a target now says little about what a wave will meet there.
     enemy_army_seen: Option<(Force, i32)>,
+    /// The soldier last sent to look at the enemy, and when.
+    scout: Option<(UnitId, i32)>,
     /// Where the attackers are gathering before the assault, and since which frame.
     staging: Option<(Vec3, i32)>,
 }
@@ -357,6 +361,20 @@ impl Brain {
         }
         let (attackers, home_group): (Vec<&OwnUnit>, Vec<&OwnUnit>) =
             soldiers.iter().partition(|u| self.army.attackers.contains(&u.id));
+
+        // H-ARMY-SCOUT: unscouted, the wave gate knows only the enemy commander, and lets a wave walk into their whole
+        // army (v18 match 20: "1500 known" against 3205). One raider at a time goes to look, by way of the target.
+        let scouting = self.army.scout.is_some_and(|(id, since)| tick.frame - since < SCOUT_EVERY_FRAMES && soldiers.iter().any(|u| u.id == id));
+        if self.enabled("H-ARMY-SCOUT") && !scouting && tick.frame > 3 * 60 * FRAMES_PER_SECOND
+            && let Some(scout) = home_group.iter().filter(|u| u.def == kit.raider).min_by(|a, b| a.pos.dist2d(target).total_cmp(&b.pos.dist2d(target)))
+        {
+            self.fire("H-ARMY-SCOUT");
+            self.army.scout = Some((scout.id, tick.frame));
+            commands.push(Command::Move { unit: scout.id, to: target, queue: false });
+            commands.push(Command::Move { unit: scout.id, to: self.enemy_start, queue: true });
+        }
+        let scout_id = self.army.scout.map(|(id, _)| id);
+        let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| Some(u.id) != scout_id).collect();
 
         // Defence first: the home group turns on intruders at the base, then on raiders at any
         // extractor, and no wave leaves meanwhile.
