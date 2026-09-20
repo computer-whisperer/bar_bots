@@ -85,6 +85,7 @@ OWN_ECON = ["own_t1mex", "own_t2mex", "own_conv1", "own_conv2", "own_income"]
 COLUMNS = META + ["m_spots", "f_min"] + FEATURES + RAW_TARGETS + OWN_ECON
 
 BANDS = [(1, 5), (5, 8), (8, 11), (11, 15), (15, 20), (20, 40)]
+DEFAULT_MAP = "Quicksilver Remake 1.24"  # 430 of the 511 games with ground truth; the other four maps have 16 each
 
 
 # ----------------------------------------------------------------------------------------------- extraction
@@ -802,14 +803,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--matches", default=os.path.join(here, "run", "matches"))
     parser.add_argument("--dataset", default=os.path.join(data, "samples.csv.gz"))
-    parser.add_argument("--params", default=os.path.join(data, "tempo-params.json"))
+    parser.add_argument("--params", default="", help="where to write the fitted numbers (default: beside the dataset)")
     parser.add_argument("--extract", action="store_true", help="re-read the match records even if the dataset exists")
     parser.add_argument("--jobs", type=int, default=os.cpu_count())
-    parser.add_argument("--map", default="Quicksilver Remake 1.24", help='fit on this map ("" for every map)')
+    parser.add_argument("--map", default=DEFAULT_MAP, help='fit on this map ("" for every map)')
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--interval", type=float, default=0.8)
     parser.add_argument("--no-search", action="store_true", help="skip the per-feature and greedy searches")
     args = parser.parse_args()
+    if not args.params:
+        # A run with other settings writes its own file rather than quietly replacing the shipped one.
+        default = (args.map, args.folds, args.interval, args.no_search) == (DEFAULT_MAP, 5, 0.8, False)
+        suffix = "" if default else "-variant"
+        args.params = os.path.join(data, f"tempo-params{suffix}.json")
 
     if args.extract or not os.path.exists(args.dataset):
         extract(args.matches, args.dataset, args.jobs)
