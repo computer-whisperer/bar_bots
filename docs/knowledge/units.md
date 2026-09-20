@@ -218,6 +218,46 @@ Not checked in a replay.
 **Used by.** K-units-rockets-outrange-llt (supports it, with the cost: rockets take return fire unless held at range);
 K-units-artillery-outranges-everything-t1 (qualifies it: range without sight is not stand-off)
 
+### K-units-towers-fire-at-the-rate-energy-arrives
+**Claim.** A light laser tower's 20 energy a shot, not its damage, is what decides a tower line's output where
+there is no economy behind it. A duel team is one idle commander: 30 energy a second, 1500 of storage. Fourteen
+Sentries want 600 a second. In the duel rows the towers fire at exactly the rate energy arrives, plus whatever the
+previous duel left in the store: `armham` against `armllt` dealt 3904 damage in 34.5 s (52 shots = 20 x 52 =
+1040 energy = the income alone, an empty store), `armpw` against `armllt` 8840 in 24.5 s (118 shots = income plus a
+full 1500). This is the quantitative form of K-units-laser-towers-need-energy, and it is why the highest damage
+per metal in the tier-1 table has a row mean of -10. In a real match the same line behind a working economy is a
+different unit.
+**Status.** supported (2026-09-20) — arithmetic on the existing duel rows, no new engine run
+**Evidence.** `docs/data/duels-2026-09-19/tight-duels.csv`, rows `armham,armllt` and `armpw,armllt`
+(`damage_taken_x` against `seconds`); `energypershot = 20` in `ArmBuildings/LandDefenceOffence/armllt.lua`,
+`energymake = 30` and `energystorage = 500` in `units/armcom.lua`, `startenergy`/`startenergystorage` 1000 in
+`modoptions.lua`. Modelling it moves `crates/combatsim`'s agreement with the tight table from 71 % to 76 % and its
+mean error from 0.40 to 0.30 (`docs/studies/combat-sim.md`).
+**Would be wrong if.** A duel run with the tower team's energy storage deliberately filled (or drained) before the
+duel gave the same result either way.
+**Used by.** (candidate: value a scouted tower line by the enemy's energy income, not only its metal; our own
+H-ECO-BASE-TURRETS is worth less during an energy stall)
+
+### K-units-lead-prediction-is-mostly-guesswork
+**Claim.** Most BAR ground weapons do not lead a moving target properly. The engine's `predictBoost` defaults to
+0, which its own tag description defines as "over- or under-estimate target speed by between 0-2x its actual
+value", redrawn every 15 frames; the lead is `target speed x flight time x that multiplier`. Of the weapons in the
+duel table only five set it to 1 (Lasher's missiles among them); Mace and Thug set 0.4; artillery
+(`armart`, `corwolv`), rockets (`armrock`, `corstorm`), Pounder, Janus, Stout and Brute leave it at 0. So against
+anything fast, a slow unguided shot lands anywhere from the target's current position to twice its lead — which is
+the mechanism behind K-units-rockets-weak-vs-fast, and it is a property of the weapon, not of the unit's speed.
+Separately, the def's raw aim-error numbers are angles through `sin(x * pi / 0xafff)`, so a Pawn's `sprayangle`
+of 1180 is 4.7 degrees.
+**Status.** supported (2026-09-20) — engine source; the size of the effect in a real fight is conjectured
+**Evidence.** `upstream/RecoilEngine/rts/Sim/Weapons/WeaponDef.cpp` (`predictBoost` default 0, `AccuracyToSin`),
+`Weapon.cpp:784` (`predictSpeedMod` redrawn each SlowUpdate) and `GetLeadVec`. `predictboost` is absent from
+`armart.lua`, `corwolv.lua`, `armrock.lua`, `corstorm.lua`, `corlevlr.lua`, `armjanus.lua`, `armstump.lua`,
+`corraid.lua`. Modelling it took `crates/combatsim`'s wide-table correlation from 0.74 to 0.81 when it was added.
+**Would be wrong if.** A duel of rockets or artillery against a stationary target of the same metal and health
+traded no better than against a moving one.
+**Used by.** (candidate: prefer tracking or hitscan weapons against raiders; do not count artillery damage against
+anything that is moving)
+
 ### K-units-duel-caveats
 **Claim.** The duel tables rank units for one situation — two single-type blobs of ~1200 metal charging each other on
 flat ground — and are wrong to the extent a real fight differs:
