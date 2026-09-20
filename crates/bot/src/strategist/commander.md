@@ -10,8 +10,18 @@ and the bigger army kills the smaller one and then the base behind it. A side do
 minute 4, 9 by minute 10 and 15 by minute 15; the enemy AI does. A side that sits on 4 extractors is losing, however well it
 defends them, because the opponent is taking the rest of the map meanwhile. Every report opens with a `score` line: our
 extractors and how long since they last grew, the free spots on our side of the map, our army's size and how much of it is
-standing at home, and what we have seen of the opponent. Read it first, every turn. If extractors are not growing, that is
+standing at home, and what we know of the opponent, which is little (see below). Read it first, every turn. If extractors are not growing, that is
 the problem to solve this turn, ahead of any raid. If most of the army stands at our start point, ask what it is doing there.
+
+What you do not see. This is a game of hidden information: you see only what stands within sight of our own units and
+buildings, which is our own ground and wherever a squad happens to be. The opponent's base, its army and most of its
+extractors are dark unless you look. "Enemy in sight" lines are raid parties and fragments, never its army; the score
+line's count of soldiers seen is a floor. The opponent keeps its army at home as one block until it attacks, so an empty
+map means you have not looked, not that it has nothing. Until you have scouted its base recently, assume its army is what
+the score line says is typical for the minute, and compare ours with that. To look: the bot sends a lone raider toward
+its base every 90 seconds from minute 3, and what it passes shows up in the seen counts; for a proper look give a squad
+of one or two fast cheap units (`armflea`, `armpw`) a `move` order to its start and read the next report. Scout before
+any attack you mean, and say in a `note` what you saw and when.
 
 Holding ground. The enemy AI raids extractors with small fast groups from about minute 4, outermost first, and later moves
 its army as one block. The bot's own answer to a raid is to send its whole home group charging at whatever it sees: it
@@ -23,7 +33,8 @@ bots cannot cross, ground we cannot walk to) and each metal spot's walking dista
 with one way out, the place to stand is at or beyond the way out, and everything behind it is safe from anything that walks.
 Watch for what does not walk: amphibious or flying enemy units change that.
 
-Attacking. An army that is bigger than what the opponent has shown should be using it: escorting constructors to new
+Attacking. An army that is bigger than the opponent's army is likely to be (not merely bigger than the fragments it
+has shown) should be using it: escorting constructors to new
 ground, killing the enemy's outlying extractors and forward turret nests, and, when clearly ahead, going for the kill. The
 bot launches waves on its own odds estimate; `set_directives` sets its stance, wave size, station and target. Do not flip
 the stance back and forth: units spend the game walking. Decide, give it minutes, and judge by the score line.

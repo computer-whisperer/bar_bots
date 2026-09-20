@@ -216,13 +216,6 @@ impl Brain {
 
     /// What we know stands within `radius` of `place`: remembered armed buildings, soldiers in sight, and the enemy
     /// commander if this is its base. A floor: what we have not seen is not counted.
-    /// The remembered opponent army in metal, and how many seconds ago it was seen.
-    pub(super) fn enemy_army_seen_metal(&self, frame: i32) -> Option<(u32, i32)> {
-        let (force, seen) = self.army.enemy_army_seen.as_ref()?;
-        let metal: f32 = force.units.iter().map(|(def, n)| self.world.def(*def).map_or(0.0, |d| d.metal_cost) * *n as f32).sum();
-        Some((metal as u32, (frame - seen) / FRAMES_PER_SECOND))
-    }
-
     fn known_enemy_force(&self, place: Vec3, radius: f32, visible: &[EnemyUnit]) -> Force {
         let mut force = Force::default();
         for (def, pos, _) in self.enemy_buildings.values() {

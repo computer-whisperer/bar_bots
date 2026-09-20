@@ -237,8 +237,13 @@ pub struct Score {
     pub soldiers_near_home: usize,
     /// Opponent extractors seen and not known to be dead: a floor, since we see little of their side.
     pub enemy_extractors_seen: usize,
-    /// The biggest opponent army seen in one look lately, in metal, and how many seconds ago.
-    pub enemy_army_seen: Option<(u32, i32)>,
+    /// Metal of the opponent's soldiers we have seen and not seen die: a floor on its army, usually far below it.
+    pub enemy_soldiers_seen_metal: u32,
+    /// How many of those were seen in the last two minutes.
+    pub enemy_soldiers_seen_lately: usize,
+    pub enemy_soldiers_seen: usize,
+    /// What this opponent's army has been worth at this minute in recorded games.
+    pub enemy_army_typical: u32,
 }
 
 #[derive(Clone, Debug, Serialize)]

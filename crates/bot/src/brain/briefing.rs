@@ -114,12 +114,16 @@ impl Brain {
         for event in &tick.events {
             if let Event::EnemyDestroyed { enemy } = event {
                 self.enemy_buildings.remove(enemy);
+                self.enemy_soldiers.remove(enemy);
             }
         }
         for enemy in &tick.snapshot.enemies {
             let Some(def) = enemy.def else { continue };
-            if self.world.def(def).is_some_and(|d| d.speed == 0.0) {
+            let Some(info) = self.world.def(def) else { continue };
+            if info.speed == 0.0 {
                 self.enemy_buildings.insert(enemy.id, (def, enemy.pos, tick.frame));
+            } else if info.weapon_count > 0 && info.build_speed == 0.0 {
+                self.enemy_soldiers.insert(enemy.id, (def, tick.frame));
             }
         }
     }

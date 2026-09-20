@@ -66,7 +66,10 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
 - Keep the army out of the base: 40 soldiers among the buildings on the peninsula jam, and everything they do starts
   with a walk through the neck.
 
-**What earlier commanders did wrong.** [experiments ledger: commander-1, -2, -3]
+**What earlier commanders did wrong.** [experiments ledger: commander-1 to -4]
+- Game 4: read "army worth 983 metal seen" as the opponent's army, concluded "we have a 2.3x advantage" and later "well
+  ahead (3212 vs unseen enemy)", when the opponent's army was 3032 and 3872. What is in sight is a fragment. The
+  report's wording was at fault and has been changed; the habit of reading absence as weakness is yours to watch.
 - Game 2: every squad posted on our own lab yard, expansion radius 900, focus "defence": 2-5 extractors against 20 for
   half an hour, and a loss.
 - Game 3: expanded well (13 extractors against 6 at minute 8), then lost 8 of them to raids with the expansion radius

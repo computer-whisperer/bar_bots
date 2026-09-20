@@ -37,7 +37,7 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     let s = &field.score;
     let clock = |seconds: i32| format!("{}:{:02}", seconds / 60, seconds % 60);
     lines.push(format!(
-        "score: extractors {} (most held {}, no new high for {}; free spots on our side {}, {} of them within 2500 walk of home) | army {} soldiers worth {} metal, {} of them within 800 of our start | opponent, as far as seen: {} extractors, {}",
+        "score: extractors {} (most held {}, no new high for {}; free spots on our side {}, {} of them within 2500 walk of home) | army {} soldiers worth {} metal, {} of them within 800 of our start | opponent: we see only what our units see. Extractors seen {}. Soldiers seen and not seen dead: {} worth {} metal ({} of them seen in the last 2 min); that is a floor, not its army. At this minute this opponent's army has typically been worth about {} metal: assume that unless you have scouted its base lately",
         s.extractors,
         s.extractor_peak,
         clock(s.seconds_since_growth),
@@ -47,7 +47,10 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         s.army_metal,
         s.soldiers_near_home,
         s.enemy_extractors_seen,
-        s.enemy_army_seen.map_or("no army seen in the last 2 min".to_string(), |(metal, ago)| format!("army worth {metal} metal seen {} ago", clock(ago)))
+        s.enemy_soldiers_seen,
+        s.enemy_soldiers_seen_metal,
+        s.enemy_soldiers_seen_lately,
+        s.enemy_army_typical
     ));
     lines.push(format!(
         "eco: metal {:.0} ({:+.1}/-{:.1}), energy {:.0}/{:.0} ({:+.0}) | extractors {} constructors {} labs {} turrets {} converters {}",
