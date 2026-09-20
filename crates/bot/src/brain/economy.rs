@@ -68,6 +68,11 @@ const LAB_GAP: i32 = 8;
 /// Distances from the start point along the line to the enemy: generators behind, labs ahead, turrets beyond them.
 const BACK_FIELD: f32 = 150.0;
 const LAB_YARD: f32 = 350.0;
+/// How far a building's anchor keeps from anything of ours standing or started, so the engine's closest free site
+/// to it stays within the builder's reach: the lab's gap (LAB_GAP squares) plus half of it and a neighbour, and a
+/// small building's gap plus a little.
+const LAB_CLEARANCE: f32 = 230.0;
+const BUILDING_CLEARANCE: f32 = 90.0;
 const TURRET_LINE: f32 = 650.0;
 /// `buildorder::sim::Scenario::base_radius`.
 const PLANNED_BESIDE_RADIUS: f32 = 600.0;
@@ -303,11 +308,11 @@ impl Brain {
         match def {
             // The yard, but no farther from the builder than its reach: the commander built the lab at its feet in
             // both experienced players' replays and never took a step for it (rush-2-ab: ours walked 280 for it).
-            d if d == kit.lab => Plan::Near(d, self.within_reach_of(builder, self.forward_of_home(LAB_YARD))),
+            d if d == kit.lab => Plan::Near(d, self.beside_builder(builder, self.forward_of_home(LAB_YARD), own, LAB_CLEARANCE)),
             d if d == kit.turret => Plan::Near(d, self.forward_of_home(TURRET_LINE)),
             d if d == kit.nano && lab.is_some() => Plan::Beside(d, lab.unwrap().pos),
             // As the simulator places them: beside a builder that is about the base, no walking.
-            d if d != kit.nano && builder.pos.dist2d(self.home) < PLANNED_BESIDE_RADIUS => Plan::Beside(d, self.beside_builder(builder)),
+            d if d != kit.nano && builder.pos.dist2d(self.home) < PLANNED_BESIDE_RADIUS => Plan::Beside(d, self.beside_builder(builder, self.enemy_base(builder.pos), own, BUILDING_CLEARANCE)),
             d => Plan::Near(d, self.forward_of_home(-BACK_FIELD)),
         }
     }
@@ -315,24 +320,24 @@ impl Brain {
     /// Where a building goes up beside `builder` without it taking a step: the engine's site search does not count
     /// units as in the way, so a site asked for at the builder's own position is its own position, and the game then
     /// has the builder walk off, turn round and come back (five seconds a building, rush-2-ab). A point one reach
-    /// away on the enemy's side of it, so the base grows forward, and the search's closest site to that.
-    fn beside_builder(&self, builder: &OwnUnit) -> Vec3 {
+    /// away toward `toward`, so the base grows that way, turned round the builder in 45-degree steps until nothing
+    /// of ours stands or is started within `clearance` of it: the engine's closest free site to an anchor on the first
+    /// extractor's nanoframe lay beyond the extractor, out of reach, and the commander walked for the lab
+    /// (rush-7-comet-std-noplace 09).
+    fn beside_builder(&self, builder: &OwnUnit, toward: Vec3, own: &[OwnUnit], clearance: f32) -> Vec3 {
         let reach = self.world.def(builder.def).map_or(100.0, |d| d.build_distance.max(60.0));
-        let toward = self.enemy_base(builder.pos);
-        let (dx, dz) = (toward.x - builder.pos.x, toward.z - builder.pos.z);
-        let len = dx.hypot(dz).max(1.0);
-        Vec3 { x: builder.pos.x + dx / len * reach, y: 0.0, z: builder.pos.z + dz / len * reach }
-    }
-
-    /// `wanted`, or the point on the way to it that `builder` can build at from where it stands.
-    fn within_reach_of(&self, builder: &OwnUnit, wanted: Vec3) -> Vec3 {
-        let reach = self.world.def(builder.def).map_or(100.0, |d| d.build_distance.max(60.0));
-        let (dx, dz) = (wanted.x - builder.pos.x, wanted.z - builder.pos.z);
-        let len = dx.hypot(dz);
-        if len <= reach {
-            return wanted;
-        }
-        Vec3 { x: builder.pos.x + dx / len * reach, y: 0.0, z: builder.pos.z + dz / len * reach }
+        let heading = (toward.z - builder.pos.z).atan2(toward.x - builder.pos.x);
+        let at = |turn: f32| {
+            let angle = heading + turn.to_radians();
+            Vec3 { x: builder.pos.x + angle.cos() * reach, y: 0.0, z: builder.pos.z + angle.sin() * reach }
+        };
+        let standing = |p: Vec3| own.iter().any(|u| u.id != builder.id && self.world.def(u.def).is_some_and(|d| d.speed == 0.0) && u.pos.dist2d(p) < clearance);
+        let started = |p: Vec3| self.last_orders.iter().any(|(id, (_, _, near))| *id != builder.id && self.jobs.contains_key(id) && near.dist2d(p) < clearance);
+        [0.0, 45.0, -45.0, 90.0, -90.0, 135.0, -135.0, 180.0]
+            .into_iter()
+            .map(at)
+            .find(|p| !standing(*p) && !started(*p))
+            .unwrap_or_else(|| at(0.0))
     }
 
     /// A builder whose move failed could not reach its site. Remember that, or it is sent there again at once,
@@ -412,7 +417,7 @@ impl Brain {
         let opening_energy = planned(kit.wind) + 2 * planned(kit.solar);
         if opening_energy < OPENING_GENERATORS {
             // Beside the commander, wherever it is: no walking between the first buildings.
-            return (Plan::Beside(small_generator, self.beside_builder(builder)), "H-ECO-OPENING");
+            return (Plan::Beside(small_generator, self.beside_builder(builder, self.enemy_base(builder.pos), snapshot.own_units.as_slice(), BUILDING_CLEARANCE)), "H-ECO-OPENING");
         }
         if planned(kit.lab) < 1 {
             return (Plan::Near(kit.lab, yard), "H-ECO-OPENING");

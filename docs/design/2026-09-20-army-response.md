@@ -114,4 +114,7 @@ contact response replaces the defend rules (deleted first). 3. Posture replaces 
   chased into what follows the party, the loss the simulator under-predicts. 80 decisions a game on lone units. What
   to change before part 3: price the answer against the party plus the enemy soldiers remembered within reach of it
   (`enemy_soldiers` with places, or the threat memory), no chase beyond held ground, and a floor of two on an answer.
-
+- 2026-09-20, the user, from the rush-7 games on Comet: the army is dragged back and forth as one group along our
+  front while the enemy picks at it. Suggested: a subagent's review of BARb's own movement logic (`upstream/CircuitAI`)
+  and a complete overhaul on our side. Not the near-term priority: the flaw may not show on Quicksilver, where the
+  benchmark returns until the players' Comet replays arrive. Belongs to part 3 (posture).
