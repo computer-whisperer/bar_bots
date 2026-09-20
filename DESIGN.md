@@ -142,7 +142,11 @@ LLM levers belong. BARb is the reference for economy and army hoarding, not for 
   (`docs/studies/perception.md`). Now the commander is the player and the bot its staff: the prompt states how the game
   is won and what a healthy extractor curve is, every report opens with a `score` line (extractors and time since they
   last grew, free spots, army size and how much of it stands at home, what is known of the opponent), and the
-  commander is woken when extractors have not grown for four minutes, a condition it cannot switch off. Rejected:
+  commander is woken when extractors have not grown for four minutes, a condition it cannot switch off. The report
+  states observations only (opponent soldiers seen and not seen dead, labelled a floor) and a `curves` line (levels
+  now, 3 and 6 minutes ago); what the opponent usually has is knowledge and lives in `docs/briefs/commander.md`, which
+  follows the role prompt. Tempo and hidden information are taught in the prompt as ways of reading the position, not
+  as rules (the user's direction, 2026-09-20). Rejected:
   keeping the narrow remit and fixing expansion in the heuristics, because the commander already had the directives
   that starved it and used them for defence.
 - **Squads, not unit ids.** `squad {name, take: {type: count}, near?, post?, order?, release?}`. `take` draws from the

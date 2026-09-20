@@ -24,6 +24,10 @@ pub struct WakeState {
     pub(super) extractor_peak: usize,
     pub(super) growth_frame: i32,
     last_stagnation_wake: i32,
+    /// Once a minute: (frame, extractors, metal income, army metal). The commander is shown the curve, not only the level.
+    pub(super) history: Vec<(i32, usize, f32, u32)>,
+    /// Frames at which we lost an extractor, for the last few minutes (the brain's own list forgets after one).
+    pub(super) losses: Vec<i32>,
     /// Reasons that fired while a turn could not be taken yet.
     pending: Vec<String>,
 }
@@ -35,6 +39,22 @@ impl Brain {
             self.wake.extractor_peak = extractors;
             self.wake.growth_frame = tick.frame;
         }
+        let lost_now = self.extractor_losses.iter().filter(|f| **f == tick.frame).count();
+        self.wake.losses.extend(std::iter::repeat_n(tick.frame, lost_now));
+        self.wake.losses.retain(|f| tick.frame - f < 3 * 60 * FRAMES_PER_SECOND);
+        if self.wake.history.last().is_none_or(|(frame, ..)| tick.frame - frame >= 60 * FRAMES_PER_SECOND) {
+            let army: f32 = tick.snapshot.own_units.iter().filter(|u| self.is_army(u, kit)).filter_map(|u| self.world.def(u.def)).map(|d| d.metal_cost).sum();
+            self.wake.history.push((tick.frame, extractors, tick.snapshot.metal.income, army as u32));
+        }
+    }
+
+    /// The history sample nearest to `minutes` ago, if the game is that old: (extractors, metal income, army metal).
+    pub(super) fn minutes_ago(&self, frame: i32, minutes: i32) -> Option<(usize, f32, u32)> {
+        let then = frame - minutes * 60 * FRAMES_PER_SECOND;
+        if then < 0 {
+            return None;
+        }
+        self.wake.history.iter().min_by_key(|(f, ..)| (f - then).abs()).map(|(_, x, income, army)| (*x, *income, *army))
     }
 
     pub(super) fn wake_commander_if_due(&mut self, tick: &Tick, kit: &Kit) {

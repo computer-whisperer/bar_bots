@@ -237,6 +237,10 @@ pub struct Score {
     pub soldiers_near_home: usize,
     /// Opponent extractors seen and not known to be dead: a floor, since we see little of their side.
     pub enemy_extractors_seen: usize,
+    pub metal_income: f32,
+    /// (minutes ago, extractors, metal income, army metal) for 3 and 6 minutes ago, when the game is that old.
+    pub trend: Vec<(i32, usize, f32, u32)>,
+    pub extractors_lost_3_min: usize,
     /// Metal of the opponent's soldiers we have seen and not seen die: a floor on its army, usually far below it.
     pub enemy_soldiers_seen_metal: u32,
     /// How many of those were seen in the last two minutes.

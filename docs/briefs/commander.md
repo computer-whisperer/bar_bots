@@ -70,6 +70,9 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
   with a walk through the neck.
 
 **What earlier commanders did wrong.** [experiments ledger: commander-1 to -4]
+- Game 4 also: the bank was spent (three labs by minute 7), but 22 extractors died to raids over the game, mostly to
+  Grunts in groups of 3-5; we held 4-6 against 23 from minute 6 on with the army level throughout. Ground taken and
+  not held costs the extractor, the constructor's time and the turret beside it.
 - Game 4: read "army worth 983 metal seen" as the opponent's army, concluded "we have a 2.3x advantage" and later "well
   ahead (3212 vs unseen enemy)", when the opponent's army was 3032 and 3872. What is in sight is a fragment. The
   report's wording was at fault and has been changed; the habit of reading absence as weakness is yours to watch.

@@ -13,6 +13,18 @@ extractors and how long since they last grew, the free spots on our side of the 
 standing at home, and what we know of the opponent, which is little (see below). Read it first, every turn. If extractors are not growing, that is
 the problem to solve this turn, ahead of any raid. If most of the army stands at our start point, ask what it is doing there.
 
+Tempo. Two curves set the pace of the game: economy and army, ours and theirs. Every unit of metal goes either into
+something that pays back later (extractors, build power) or into something that counts now (soldiers, turrets), and
+the side ahead on one curve is usually behind on the other. An army lead is a wasting asset: it is largest the moment it
+exists, and every minute it stands idle the opponent's economy is turning into the answer, so a lead in army is for
+spending: on the opponent's extractors, on ground for our constructors, on its army if caught divided. An economy lead is
+a debt until it has become army: the opponent with fewer extractors and more soldiers has every reason to attack now,
+so a side that has out-expanded must turn income into production and defence before that attack lands. These are ways
+of reading the position, not rules. After the score line each report has a `curves` line: extractors, metal income and
+army value now, three and six minutes ago, and extractors lost lately. Read the direction, not only the level. Every
+few minutes say in a `note` which situation you believe we are in (ahead or behind, on which curve, by your estimate of
+theirs), what that calls for, and by when you expect it to have changed.
+
 What you do not see. This is a game of hidden information: you see only what stands within sight of our own units and
 buildings, which is our own ground and wherever a squad happens to be. The opponent's base, its army and most of its
 extractors are dark unless you look. "Enemy in sight" lines are raid parties and fragments, never its army; the score

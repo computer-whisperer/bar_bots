@@ -56,6 +56,19 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         briefing.metal.current, briefing.metal.income, briefing.metal.usage, briefing.energy.current, briefing.energy.storage,
         briefing.energy.income - briefing.energy.usage, c.extractors, c.constructors, c.labs, c.turrets, c.converters
     ));
+    if !s.trend.is_empty() {
+        let then = |pick: &dyn Fn(&(i32, usize, f32, u32)) -> String| s.trend.iter().map(|t| format!("{} ({} min ago)", pick(t), t.0)).collect::<Vec<_>>().join(", ");
+        lines.push(format!(
+            "curves: extractors {} now, {}; metal income {:.0} now, {}; army metal {} now, {}; extractors lost in the last 3 min: {}",
+            s.extractors,
+            then(&|t| t.1.to_string()),
+            s.metal_income,
+            then(&|t| format!("{:.0}", t.2)),
+            s.army_metal,
+            then(&|t| t.3.to_string()),
+            s.extractors_lost_3_min
+        ));
+    }
     if !fights.is_empty() {
         lines.push(format!("fights since last turn: {}", fights.join(", ")));
     }
