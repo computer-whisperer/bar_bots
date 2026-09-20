@@ -3,8 +3,8 @@
 //! H-REC-FIELDS: wrecks in sight are remembered and grouped into fields; a field is safe when it lies on ground we hold
 //! (`territory.rs`) with no enemy soldier in sight near it. H-REC-CREW: resurrection bots are built in proportion to the
 //! metal lying in safe fields and work the richest field for the walk. H-REC-RESURRECT: a wreck of a soldier worth
-//! having is raised when energy is plentiful and metal is not short; everything else is taken apart. Constructors short
-//! of metal go to the same fields (H-ECO-RECLAIM), where they used to go to wherever something of ours had died.
+//! having is raised when energy is plentiful; everything else is taken apart. Constructors short of metal go to the
+//! same fields (H-ECO-RECLAIM) and, while we have a resurrection bot, leave it the wrecks worth raising.
 
 use std::collections::HashMap;
 
@@ -30,11 +30,11 @@ const MAX_CREW: usize = 6;
 const METAL_PER_WORKER: f32 = 300.0;
 /// Wrecks queued in one order.
 const QUEUE: usize = 5;
-/// H-REC-RESURRECT: soldiers worth at least this much metal, with stored energy above this share of storage and at least
-/// this much metal banked (short of metal, metal now beats a unit later).
+/// H-REC-RESURRECT: soldiers worth at least this much metal, with stored energy above this share of storage. Raising
+/// costs energy and no metal; a test on banked metal stood here and failed whenever the metal was being spent well
+/// (the commander games, 2026-09-20: 869 wrecks taken apart for 89 raised).
 const RAISE_MIN_METAL: f32 = 100.0;
 const RAISE_ENERGY: f32 = 0.5;
-const RAISE_METAL_BANKED: f32 = 100.0;
 
 pub struct WreckField {
     pub at: Vec3,
@@ -52,6 +52,8 @@ pub struct Reclaim {
     /// Units just raised and the bot that raised them: a raised unit arrives with a twentieth of its health (rec-2:
     /// 48-102 of 755-1890), and the bot that raised it mends it before anything else.
     pub(super) to_mend: Vec<(UnitId, UnitId)>,
+    /// Resurrection bots we have.
+    crew: usize,
 }
 
 impl Brain {
@@ -65,6 +67,7 @@ impl Brain {
                 self.reclaim.to_mend.push((*builder, *unit));
             }
         }
+        self.reclaim.crew = tick.snapshot.own_units.iter().filter(|u| !u.being_built && self.kit.is_some_and(|kit| kit.is_resurrector(u.def))).count();
         let Some(seen) = &tick.snapshot.wrecks else { return };
         let listed: std::collections::HashSet<FeatureId> = seen.iter().map(|w| w.id).collect();
         for wreck in seen {
@@ -126,9 +129,28 @@ impl Brain {
             })
     }
 
+    /// A soldier's wreck worth having back.
+    fn worth_raising(&self, wreck: &Wreck) -> bool {
+        wreck.resurrects_into.and_then(|def| self.world.def(def)).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0 && d.build_speed == 0.0 && d.metal_cost >= RAISE_MIN_METAL)
+    }
+
+    /// The wrecks of the field at `at` a constructor takes apart, the nearest first: not the ones worth raising while
+    /// there is a resurrection bot to raise them. An area order took everything, and 71-91 % of those orders were given
+    /// over a field where a soldier worth raising had just died (the commander games, 2026-09-20).
+    pub(super) fn wrecks_to_take(&self, at: Vec3, builder: &OwnUnit) -> Vec<FeatureId> {
+        let Some(field) = self.reclaim.fields.iter().find(|f| f.at.dist2d(at) < 1.0) else { return Vec::new() };
+        let mut wrecks: Vec<&Wreck> = field.wrecks.iter().filter_map(|id| self.reclaim.wrecks.get(id)).map(|(w, _)| w).collect();
+        wrecks.retain(|w| self.reclaim.crew == 0 || !self.worth_raising(w));
+        wrecks.sort_by(|a, b| a.pos.dist2d(builder.pos).total_cmp(&b.pos.dist2d(builder.pos)));
+        wrecks.into_iter().take(QUEUE).map(|w| w.id).collect()
+    }
+
     /// H-ECO-RECLAIM: where a constructor short of metal goes to take wrecks apart.
     pub(super) fn claim_wreck_field(&mut self, builder: &OwnUnit, within: f32, frame: i32) -> Option<Vec3> {
         let at = self.reclaim.fields[self.field_for(builder, within)?].at;
+        if self.wrecks_to_take(at, builder).is_empty() {
+            return None;
+        }
         self.reclaim.workers.insert(builder.id, (at, frame));
         Some(at)
     }
@@ -142,18 +164,15 @@ impl Brain {
             }
             return;
         };
-        let (energy, metal) = (&tick.snapshot.energy, &tick.snapshot.metal);
+        let energy = &tick.snapshot.energy;
         let allowed = self.directives.resurrect.is_none_or(|d| d.value) && self.enabled("H-REC-RESURRECT");
-        let can_raise = allowed && energy.current > RAISE_ENERGY * energy.storage && metal.current >= RAISE_METAL_BANKED;
+        let can_raise = allowed && energy.current > RAISE_ENERGY * energy.storage;
         let field = &self.reclaim.fields[index];
         let mut wrecks: Vec<&Wreck> = field.wrecks.iter().filter_map(|id| self.reclaim.wrecks.get(id)).map(|(w, _)| w).collect();
         wrecks.sort_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos)));
-        let worth_raising = |wreck: &Wreck| {
-            wreck.resurrects_into.and_then(|def| self.world.def(def)).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0 && d.build_speed == 0.0 && d.metal_cost >= RAISE_MIN_METAL)
-        };
         let mut raised = 0;
         for (n, wreck) in wrecks.iter().take(QUEUE).enumerate() {
-            if can_raise && worth_raising(wreck) {
+            if can_raise && self.worth_raising(wreck) {
                 raised += 1;
                 commands.push(Command::Resurrect { unit: unit.id, feature: wreck.id, queue: n > 0 });
             } else {

@@ -30,7 +30,6 @@ const BUILDING_REPAIR_BELOW: f32 = 0.7;
 /// H-ECO-RECLAIM: with less metal than this banked, a constructor reclaims the wrecks of a recent fight within this
 /// walking distance before anything else; one constructor per site.
 const RECLAIM_WHEN_METAL_BELOW: f32 = 150.0;
-const RECLAIM_RADIUS: f32 = 350.0;
 const RECLAIM_WITHIN: f32 = 1800.0;
 /// A stationed commander (D-COMMANDER-STATION) builds within this distance of its station and walks back beyond it.
 const COMMANDER_STATION_REACH: f32 = 500.0;
@@ -202,7 +201,8 @@ impl Brain {
                     self.fire(rule);
                     // Busy, but building nothing: the commander's type stands for "no building" in the job counts.
                     self.jobs.insert(unit.id, kit.commander);
-                    commands.push(Command::ReclaimArea { unit: unit.id, centre: site, radius: RECLAIM_RADIUS, queue: false });
+                    let wrecks = self.wrecks_to_take(site, unit);
+                    commands.extend(wrecks.into_iter().enumerate().map(|(n, feature)| Command::ReclaimFeature { unit: unit.id, feature, queue: n > 0 }));
                     continue;
                 }
                 let planned_def = match plan {
