@@ -266,8 +266,6 @@ pub enum Command {
     SetRepeat { unit: UnitId, repeat: bool },
     /// Follow and help `target`: a builder guarding a factory adds its build power to whatever the factory makes.
     Guard { unit: UnitId, target: UnitId },
-    /// Reclaim every wreck and rock within `radius` of `centre` for their metal.
-    ReclaimArea { unit: UnitId, centre: Vec3, radius: f32, queue: bool },
     /// Take one feature apart for its metal.
     ReclaimFeature { unit: UnitId, feature: FeatureId, queue: bool },
     /// Raise the unit a wreck was (resurrection bots only); it costs energy and time, no metal.

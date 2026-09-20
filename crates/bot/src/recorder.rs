@@ -191,7 +191,6 @@ impl Recorder {
                 Command::SetRepeat { unit, repeat } => json!(["repeat", unit.0, repeat as i32]),
                 Command::Guard { unit, target } => json!(["guard", unit.0, target.0]),
                 Command::Repair { unit, target, .. } => json!(["repair", unit.0, target.0]),
-                Command::ReclaimArea { unit, centre, radius, .. } => json!(["reclaim", unit.0, centre.x as i32, centre.z as i32, radius as i32]),
                 Command::ReclaimFeature { unit, feature, .. } => json!(["reclaim_feature", unit.0, feature.0]),
                 Command::Resurrect { unit, feature, .. } => json!(["resurrect", unit.0, feature.0]),
                 Command::GiveUnit { def, at } => json!(["give", self.def(Some(def)), at.x as i32, at.z as i32]),

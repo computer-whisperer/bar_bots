@@ -174,7 +174,6 @@ impl Instance {
                 | Command::Stop { unit }
                 | Command::SetRepeat { unit, .. }
                 | Command::Guard { unit, .. }
-                | Command::ReclaimArea { unit, .. }
                 | Command::ReclaimFeature { unit, .. }
                 | Command::Resurrect { unit, .. }
                 | Command::Repair { unit, .. }

@@ -560,17 +560,6 @@ impl Engine {
                 timeOut: NO_TIMEOUT,
                 toRepairUnitId: target.0,
             }),
-            Command::ReclaimArea { unit, centre, radius, queue } => {
-                let mut pos = [centre.x, centre.y, centre.z];
-                self.handle(sys::COMMAND_UNIT_RECLAIM_AREA, &mut sys::SReclaimAreaUnitCommand {
-                    unitId: unit.0,
-                    groupId: NO_GROUP,
-                    options: options(queue),
-                    timeOut: NO_TIMEOUT,
-                    pos_posF3: pos.as_mut_ptr(),
-                    radius,
-                })
-            }
             // Creating a unit makes the engine call back into `handleEvent` before it returns, so it cannot be
             // issued from inside an export that holds the instance table; see `Spawner`.
             Command::GiveUnit { .. } => Err(-1),
