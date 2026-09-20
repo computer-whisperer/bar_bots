@@ -18,7 +18,10 @@ A 31MB Linux archive ships `spring`, `spring-headless`, `spring-dedicated`, `pr-
 ## Game data
 `pr-downloader --filesystem-writepath run/data --download-game byar:test` (and `--download-map "<name>"`) with env
 `PRD_RAPID_USE_STREAMER=false PRD_RAPID_REPO_MASTER=https://repos-cdn.beyondallreason.dev/repos.gz
-PRD_HTTP_SEARCH_URL=https://files-cdn.beyondallreason.dev/find`. Currently: test-31357, Quicksilver Remake 1.24.
+PRD_HTTP_SEARCH_URL=https://files-cdn.beyondallreason.dev/find`. Currently: test-31357; maps Quicksilver Remake 1.24, Isidis crack 1.1, Feast of Hades 1.0.1, Comet Catcher Remake 1.8,
+Mithril Mountain v2.0.1 (the last four fetched 2026-09-20 as the most played on gex.honu.pw; pass the exact name to the
+arena's `--map`). The arena's start boxes are the north-west and south-east 30 % corners on every map, which is not
+where people start on a left-against-right map such as Comet Catcher.
 
 ## Native AI interface
 - Discovery: `<data dir>/AI/Skirmish/<ShortName>/<Version>/{AIInfo.lua,libSkirmishAI.so}` (AILibraryManager.cpp:183); any data
