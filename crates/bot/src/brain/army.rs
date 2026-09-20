@@ -53,6 +53,9 @@ const RESPONSE_ODDS: f32 = 1.5;
 const DEFENDED_RADIUS: f32 = 900.0;
 /// No wave leaves within this long of losing something on our side of the map.
 const QUIET_BEFORE_WAVE_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
+const QUIET_CEILING_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
+/// How long the biggest enemy force seen stays in mind.
+const ENEMY_ARMY_MEMORY_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
 /// H-ARMY-RESPONDERS: raiders are met by the nearest soldiers, at least this many and as many as good odds take,
 /// not by the whole home group trailing across the map.
 const MIN_RESPONDERS: usize = 4;
@@ -60,6 +63,8 @@ const MIN_RESPONDERS: usize = 4;
 const ARRIVED_RADIUS: f32 = 400.0;
 /// Home-group units farther than this from the rally point are called in.
 const RALLY_RADIUS: f32 = 600.0;
+/// The station keeps this far from every factory.
+const LAB_CLEARANCE: f32 = 450.0;
 /// H-ARMY-STAGE: attackers gather this far short of the target before going in together.
 const STAGE_DISTANCE: f32 = 1500.0;
 /// Attackers this close to the staging point have gathered.
@@ -90,6 +95,11 @@ pub struct Army {
     station_failures: u32,
     /// When the attackers last broke off; no new wave for a while after.
     last_retreat_frame: i32,
+    /// Since when a full wave has been held back only because things were dying at home.
+    held_for_losses_since: Option<i32>,
+    /// The biggest enemy soldier force seen in one look lately, and when: the opponent's army is one mobile block,
+    /// so what stands at a target now says little about what a wave will meet there.
+    enemy_army_seen: Option<(Force, i32)>,
     /// Where the attackers are gathering before the assault, and since which frame.
     staging: Option<(Vec3, i32)>,
 }
@@ -139,12 +149,16 @@ impl Brain {
             let len = dx.hypot(dz).max(1.0);
             Vec3 { x: extractor.pos.x + dx / len * STATION_LEAD, y: 0.0, z: extractor.pos.z + dz / len * STATION_LEAD }
         });
-        let candidates = [outpost, Some(self.forward_of_home(500.0)), Some(self.forward_of_home(150.0))];
+        // Never in the lab yard: thirty soldiers parked on the factory exits jam the labs, and production stalls with
+        // metal in the bank (v18 match 14: 1500 banked for five minutes, soldiers' moves failing beside the base).
+        let labs: Vec<Vec3> = tick.snapshot.own_units.iter().filter(|u| u.def == kit.lab).map(|u| u.pos).collect();
+        let clear_of_labs = |point: &Vec3| labs.iter().all(|lab| lab.dist2d(*point) > LAB_CLEARANCE);
+        let candidates = [outpost, Some(self.forward_of_home(900.0)), Some(self.forward_of_home(1200.0)), Some(self.forward_of_home(700.0))];
         let usable = |point: &Vec3| {
             !self.army.bad_stations.iter().any(|(bad, until)| *until > tick.frame && bad.dist2d(*point) < BAD_STATION_RADIUS)
         };
         // Never the start point itself: it stands in the middle of the generator field.
-        candidates.into_iter().flatten().find(usable).unwrap_or(self.forward_of_home(150.0))
+        candidates.into_iter().flatten().filter(clear_of_labs).find(usable).unwrap_or(self.forward_of_home(900.0))
     }
 
     /// Home-group units that cannot reach the station mean the station is a bad place; give it up for a while.
@@ -259,6 +273,17 @@ impl Brain {
                     self.army.target.map(|t| (t.x as i32, t.z as i32))
                 );
             }
+        }
+
+        let in_sight = self.known_enemy_force(Vec3::default(), f32::INFINITY, snapshot.enemies.as_slice());
+        let in_sight = Force { turret_metal: 0.0, ..in_sight };
+        let nothing = Force::default();
+        let stale = self.army.enemy_army_seen.as_ref().is_none_or(|(_, seen)| tick.frame - seen > ENEMY_ARMY_MEMORY_FRAMES);
+        let bigger = self.army.enemy_army_seen.as_ref().is_none_or(|(army, _)| self.odds(&in_sight, &nothing) >= self.odds(army, &nothing));
+        if !in_sight.units.is_empty() && (stale || bigger) {
+            self.army.enemy_army_seen = Some((in_sight, tick.frame));
+        } else if stale {
+            self.army.enemy_army_seen = None;
         }
 
         let committed = self.army.attackers.len();
@@ -385,10 +410,19 @@ impl Brain {
             let mut by_station: Vec<&OwnUnit> = home_group.clone();
             by_station.sort_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)));
             let wave: Vec<&OwnUnit> = by_station.into_iter().skip(guard).collect();
-            let quiet = tick.frame - self.last_loss_at_home_frame >= QUIET_BEFORE_WAVE_FRAMES
+            // Under continuous raiding it is never quiet; then the clause would keep the army home for good. It may
+            // hold a ready wave for QUIET_CEILING_FRAMES at most.
+            let overruled = self.army.held_for_losses_since.is_some_and(|since| tick.frame - since > QUIET_CEILING_FRAMES);
+            let quiet = (overruled || tick.frame - self.last_loss_at_home_frame >= QUIET_BEFORE_WAVE_FRAMES)
                 && (self.army.last_retreat_frame == 0 || tick.frame - self.army.last_retreat_frame >= AFTER_RETREAT_FRAMES);
             // H-ARMY-WAVE-GATE: weigh the wave against what we know stands at the target.
-            let defenders = self.known_enemy_force(target, DEFENDED_RADIUS, snapshot.enemies.as_slice());
+            let mut defenders = self.known_enemy_force(target, DEFENDED_RADIUS, snapshot.enemies.as_slice());
+            if let Some((army, _)) = &self.army.enemy_army_seen {
+                // Their army will come to the fight wherever it is: count it, unless more than it already stands there.
+                if self.odds(army, &Force::default()) > self.odds(&Force { turret_metal: 0.0, ..defenders.clone() }, &Force::default()) {
+                    defenders.units = army.units.clone();
+                }
+            }
             let odds = self.odds(&Self::force_of(&wave), &defenders);
             let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || odds >= WAVE_ADVANTAGE;
             let ordered_attack = stance == Some(Stance::Attack);
@@ -398,6 +432,11 @@ impl Brain {
                     self.ai(), tick.frame, wave.len(), target.x, target.z, if quiet { "" } else { "; losses at home in the last 30 s" }
                 );
             }
+            let ready = may_launch && wave.len() >= wave_size;
+            self.army.held_for_losses_since = match (ready && outweighs && !quiet, self.army.held_for_losses_since) {
+                (true, since) => since.or(Some(tick.frame)),
+                (false, _) => None,
+            };
             let home_group = wave;
             if may_launch && home_group.len() >= wave_size && (ordered_attack || (quiet && outweighs)) {
                 self.army.waves_sent += 1;
