@@ -74,7 +74,7 @@ defence is preferred for this job because it has more range and damage per metal
 https://www.crdhq.com/articles/bar-new-player-guide-getting-started (towers should cover metal spots and generators, not
 just the commander).
 **Would be wrong if.** Extractor losses per match did not fall when H-ECO-OUTPOST-TURRET was active versus disabled.
-**Used by.** H-ECO-OUTPOST-TURRET (first outside support), H-ARMY-DEFEND (candidate: defenders hold at the threatened
+**Used by.** H-ECO-OUTPOST-TURRET (first outside support), H-ARMY-CONTACT (candidate: a guard answer, defenders holding at the threatened
 extractor instead of pursuing)
 
 ### K-units-static-defence-value

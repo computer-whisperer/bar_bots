@@ -9,6 +9,7 @@ mod army;
 mod bases;
 mod briefing;
 mod combat;
+mod contact;
 mod economy;
 pub mod journal;
 mod march;
@@ -72,6 +73,8 @@ pub struct Brain {
     last_loss_at_home_frame: i32,
     matchups: combat::Matchups,
     army: army::Army,
+    /// H-ARMY-CONTACT: the enemy parties on our ground and who answers each (`contact.rs`).
+    contacts: contact::Contacts,
     squads: squads::Squads,
     wake: wake::WakeState,
     /// The commander's unit mix (unit name to weight); empty means the heuristic batch.
@@ -156,6 +159,7 @@ impl Brain {
             last_loss_at_home_frame: i32::MIN / 2,
             matchups: Default::default(),
             army: army::Army::default(),
+            contacts: Default::default(),
             squads: Default::default(),
             wake: Default::default(),
             production_weights: Default::default(),

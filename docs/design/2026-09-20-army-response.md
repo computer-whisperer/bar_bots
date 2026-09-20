@@ -91,3 +91,19 @@ contact response replaces the defend rules (deleted first). 3. Posture replaces 
   predicted 89 / 47 / 23 / 19 %; 71 % agreement episode by episode; our answer's losses under-predicted by 40-80 %.
   Good enough to rank answers; the loss side needs a safety factor or the units following the party. 1.2 ms a
   question at 4 seeds. Parts 2-4: not started.
+- 2026-09-20, sight against range (the user's intel: a unit with the range may not see what it chases). The
+  simulator already let nobody shoot what its side does not see (sight shared across a side, buildings' sight
+  included, no radar). What it had wrong: a side walked at the true middle of the other, seen or not, so pursuers
+  homed in on a party out of everybody's sight. Now each side walks at where it last saw the other. On the 1106
+  raids: answers from within 600 predicted 83 % "any raider killed" (was 89, played 79) and 632 metal killed (was 681,
+  played 464); answers from 600-1500 39 % (was 47, played 52): in play those pursuers are re-ordered from what the
+  whole team and its radar see, which a scenario holding only the party and the answer cannot know. Not modelled:
+  radar (units shoot at radar contacts, with a wobble), and the brain's re-orders.
+- 2026-09-20, part 2, first version: H-ARMY-DEFEND, -DEFEND-OUTPOST and -RESPONDERS are deleted; `contact.rs`
+  (H-ARMY-CONTACT) groups enemies on our ground into parties, prices 2-32 of the soldiers who would arrive first
+  against nobody with `combatsim::chase` every 4 s, sends the best answer worth 20 metal or more (always for a party
+  at the lab or the commander), keeps responders on their party until it is dead, unseen for 6 s or priced out twice
+  running; everyone else carries on (station, detachments, waves). Costs up to 100 ms a game minute. Not in it yet:
+  the guard answer, walking distances (chases are priced over straight lines), the threat memory for intent, asset
+  prices from measurement (1.7, 3 and 20 are guesses). First A/B ran against BARb easy by mistake (contact-1): no
+  clear difference; re-run against medium as contact-2.

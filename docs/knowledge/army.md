@@ -144,7 +144,7 @@ what we have not seen.
 log loss-share ratio 0.85. The selection is by outcome (decisive fights only), so this is the accuracy given that a
 fight goes to the finish, not the accuracy of "should we start it".
 **Would be wrong if.** With retreat and launch decided by these odds, our share of metal lost in their half did not fall.
-**Used by.** H-ARMY-WAVE-GATE, H-ARMY-RETREAT, H-ARMY-RESPONDERS (`brain/combat.rs`).
+**Used by.** H-ARMY-WAVE-GATE, H-ARMY-RETREAT, the posted squads' intruder response (`brain/combat.rs`).
 
 ### K-army-verdicts-v18
 **Claim.** With raided spots closed, turrets on the ring and a wave gate, the lone-raider losses are gone and the bot
@@ -331,9 +331,10 @@ reproduces those rates from the units and distances alone (89 / 47 / 23 / 19 %) 
 mid-range) — it knows only the party within 900, not what follows it.
 **Status.** measured (2026-09-20), 1106 raids in 48 games (now-quicksilver, now-isidis, now-mithril), medium BARb.
 Extractor losses in these episodes are not a fair test of the model: an episode is found by an extractor dying.
+**Update 2026-09-20.** With pursuers walking at where their side last saw the party (not at where it is), the same episodes predict 83 / 39 / 22 / 19 %: nearer the played 79 % from within 600, farther from the played 52 % from 600-1500, where play has the team's whole sight and radar to re-order by and the scenario has only the units in it.
 **Evidence.** `run/raid_episodes.py <batches>`, `combatsim chase-file`, `run/raid_episodes.py --compare`.
 **Would be wrong if.** Episodes found another way (every party that came within 900 of an extractor, died or not) gave
 different rates by distance.
-**Used by.** (none yet) — the contact response of `docs/design/2026-09-20-army-response.md`: answer from near or not
+**Used by.** H-ARMY-CONTACT (`docs/design/2026-09-20-army-response.md`): answer from near or not
 at all, guard where parties go, and price the answer's own losses higher than the model says.
 

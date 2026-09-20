@@ -1,4 +1,4 @@
-//! Combat units: defend the base, gather, attack in growing waves.
+//! Combat units: gather, attack in growing waves. Enemies on our ground are `contact.rs`'s.
 //!
 //! Units are either in the home group or committed attackers. Membership, not position or
 //! idleness, decides which: a crowd at the rally point is never all idle at once.
@@ -25,10 +25,6 @@ const MIN_ORDERED_WAVE: usize = 3;
 const NOTABLE_WAVE: usize = 5;
 /// Enemies this close to home are an attack on the base.
 pub(super) const BASE_RADIUS: f32 = 1400.0;
-/// Enemies this close to one of our extractors are raiding it.
-const RAID_RADIUS: f32 = 500.0;
-/// The strategist is woken for a base attack of at least this many; lone raiders are routine.
-const NOTABLE_INTRUSION: usize = 3;
 /// The default station stands this far from the most exposed extractor, on its home side.
 const STATION_LEAD: f32 = 250.0;
 /// H-ARMY-DETACH: posts are at least this far from the station and from each other; nearer, one group answers for both.
@@ -57,8 +53,6 @@ const RETREAT_ODDS: f32 = 0.6;
 const AFTER_RETREAT_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 const RETREAT_CHECK_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
 pub(super) const CONTACT_RADIUS: f32 = 1000.0;
-/// Responders are added until the odds against the raiders reach this.
-pub(super) const RESPONSE_ODDS: f32 = 1.5;
 /// Known defenders are the remembered armed buildings and the soldiers in sight this close to the target.
 const DEFENDED_RADIUS: f32 = 900.0;
 /// No wave leaves within this long of losing something on our side of the map.
@@ -66,9 +60,6 @@ const QUIET_BEFORE_WAVE_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
 const QUIET_CEILING_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
 /// H-ARMY-SCOUT: a raider goes to look at the enemy this often, so the wave gate weighs something it has seen.
 const SCOUT_EVERY_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
-/// H-ARMY-RESPONDERS: raiders are met by the nearest soldiers, at least this many and as many as good odds take,
-/// not by the whole home group trailing across the map.
-pub(super) const MIN_RESPONDERS: usize = 4;
 /// An idle attacker this close to the attack target has arrived and needs a new one.
 const ARRIVED_RADIUS: f32 = 400.0;
 /// Home-group units farther than this from the rally point are called in.
@@ -84,7 +75,6 @@ const STAGE_QUORUM: f32 = 0.7;
 const STAGE_PATIENCE_FRAMES: i32 = 150 * FRAMES_PER_SECOND;
 /// This many enemies at the base call every attacker home.
 const RECALL_INTRUDERS: usize = 6;
-const DEFEND_REORDER_FRAMES: i32 = 5 * FRAMES_PER_SECOND;
 
 #[derive(Default)]
 pub struct Army {
@@ -94,7 +84,6 @@ pub struct Army {
     target: Option<Vec3>,
     /// Next metal spot to sweep when attackers find nothing at their target.
     sweep_index: usize,
-    last_defend_order: i32,
     /// Stations given up as unreachable, with the frame until which to avoid them.
     bad_stations: Vec<(Vec3, i32)>,
     /// Attack targets given up as unreachable, with the frame until which to avoid them.
@@ -393,9 +382,6 @@ impl Brain {
             self.trigger("wave-lost", tick.frame, format!("Our attack group of {committed} has been wiped out."));
         }
 
-        let nearest_to = |point: Vec3| {
-            snapshot.enemies.iter().min_by(|a, b| a.pos.dist2d(point).total_cmp(&b.pos.dist2d(point)))
-        };
         // H-ARMY-TARGET: attack buildings, never whatever unit was seen last. Raiders near our own base used to
         // drag every wave back into our half of the map. Roll the enemy up from the outside: the remembered
         // building nearest to us, else where the enemy presumably started.
@@ -451,7 +437,6 @@ impl Brain {
             self.journal.note(tick.frame, "recall", serde_json::json!({ "intruders": intruders }), serde_json::json!({ "attackers_called_home": self.army.attackers.len() }));
             self.army.attackers.clear();
             self.army.staging = None;
-            self.army.last_defend_order = 0;
         }
         let (attackers, home_group): (Vec<&OwnUnit>, Vec<&OwnUnit>) =
             soldiers.iter().partition(|u| self.army.attackers.contains(&u.id));
@@ -473,163 +458,117 @@ impl Brain {
         let scout_id = self.army.scout.map(|(id, _)| id);
         let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| Some(u.id) != scout_id).collect();
 
+        // H-ARMY-CONTACT (`contact.rs`): every enemy party on our ground gets its own answer, or none; whoever answers
+        // one is out of the home group until that is over, and everybody else carries on.
+        let answering = self.run_contacts(tick, kit, &home_group, commands);
+        let home_group: Vec<&OwnUnit> = home_group.into_iter().filter(|u| !answering.contains(&u.id)).collect();
+
         let detached = self.run_detachments(tick, kit, &home_group, rally, commands);
 
-        // Defence first: the home group turns on intruders at the base, then on raiders at any
-        // extractor, and no wave leaves meanwhile.
-        let at_base = nearest_to(self.home).filter(|e: &&EnemyUnit| e.pos.dist2d(self.home) < BASE_RADIUS);
-        let raider = || {
-            let extractors = snapshot.own_units.iter().filter(|u| kit.is_extractor(u.def));
-            extractors
-                .filter_map(|x| nearest_to(x.pos).filter(|e| e.pos.dist2d(x.pos) < RAID_RADIUS))
-                .min_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)))
+        let own_wave_size = (FIRST_WAVE + WAVE_GROWTH * self.army.waves_sent).min(MAX_WAVE);
+        let wave_size = match (stance, self.directives.wave_size) {
+            (Some(Stance::Attack), _) => MIN_ORDERED_WAVE,
+            (_, Some(ordered)) => ordered.value,
+            _ => own_wave_size,
         };
-        let (intruder, rule) = match at_base {
-            Some(enemy) => (Some(enemy), "H-ARMY-DEFEND"),
-            None if self.enabled("H-ARMY-DEFEND-OUTPOST") => (raider(), "H-ARMY-DEFEND-OUTPOST"),
-            None => (None, "H-ARMY-DEFEND-OUTPOST"),
+        let may_launch = !matches!(stance, Some(Stance::Defend | Stance::Gather));
+        // H-ARMY-HOME-GUARD: the soldiers nearest the station stay; the rest are the wave.
+        let guard = if self.enabled("H-ARMY-HOME-GUARD") { HOME_GUARD } else { 0 };
+        let mut by_station: Vec<&OwnUnit> = home_group.iter().filter(|u| !detached.contains(&u.id)).copied().collect();
+        by_station.sort_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)));
+        let wave: Vec<&OwnUnit> = by_station.into_iter().skip(guard).collect();
+        // Under continuous raiding it is never quiet; then the clause would keep the army home for good. It may
+        // hold a ready wave for QUIET_CEILING_FRAMES at most.
+        let overruled = self.army.held_for_losses_since.is_some_and(|since| tick.frame - since > QUIET_CEILING_FRAMES);
+        let quiet = (overruled || tick.frame - self.last_loss_at_home_frame >= QUIET_BEFORE_WAVE_FRAMES)
+            && (self.army.last_retreat_frame == 0 || tick.frame - self.army.last_retreat_frame >= AFTER_RETREAT_FRAMES);
+        // H-ARMY-WAVE-GATE: weigh the wave against what we know stands at the target.
+        let mut defenders = self.known_enemy_force(target, DEFENDED_RADIUS, snapshot.enemies.as_slice());
+        // Their army is one mobile block and will come to the fight wherever it is: count it, unless more than it
+        // already stands there. H-ARMY-GATE-ALL-SEEN: their army is every soldier of theirs we have seen and not seen
+        // die. The biggest force in sight at once within two minutes, which this used to be, read 2300 metal against
+        // a true 4900 from minute 20 (the tempo study, 430 games); everything seen alive reads 3400, still a floor.
+        let all_seen = self.enabled("H-ARMY-GATE-ALL-SEEN").then(|| {
+            let mut army = Force::default();
+            self.enemy_soldiers.values().for_each(|(def, _)| army.add(*def));
+            army
+        });
+        if let Some(army) = &all_seen {
+            if self.odds(army, &Force::default()) > self.odds(&Force { turret_metal: 0.0, ..defenders.clone() }, &Force::default()) {
+                defenders.units = army.units.clone();
+            }
+        }
+        // H-TEAM-WAVES: the other seats' ready waves and attackers go to the same place and count beside ours.
+        let mut ours = Self::force_of(&wave);
+        if self.enabled("H-TEAM-WAVES") {
+            self.team_mates.with_us.iter().for_each(|def| ours.add(*def));
+        }
+        let odds = self.odds(&ours, &defenders);
+        let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || odds >= WAVE_ADVANTAGE;
+        let ordered_attack = stance == Some(Stance::Attack);
+        if may_launch && wave.len() >= wave_size && !ordered_attack && (!quiet || !outweighs) && tick.frame % (30 * FRAMES_PER_SECOND) == 0 {
+            eprintln!(
+                "[ai {}] f={} wave held: {} soldiers at odds {odds:.2} against what is known at ({:.0}, {:.0}){}",
+                self.ai(), tick.frame, wave.len(), target.x, target.z, if quiet { "" } else { "; losses at home in the last 30 s" }
+            );
+        }
+        let ready = may_launch && wave.len() >= wave_size;
+        if ready && quiet {
+            self.team_post.offer = wave.iter().map(|u| u.def).collect();
+        }
+        self.army.held_for_losses_since = match (ready && outweighs && !quiet, self.army.held_for_losses_since) {
+            (true, since) => since.or(Some(tick.frame)),
+            (false, _) => None,
         };
-        // H-TEAM-DEFEND: with nothing at our own door, enemies at an ally's base are ours to answer too. A seat was
-        // overrun in nine minutes while its partner's 24 soldiers stood at their station (team-2v2-board, match 0).
-        let at_ally = || {
-            let bases = self.ally_starts.values();
-            bases.filter_map(|base| nearest_to(*base).filter(|e| e.pos.dist2d(*base) < BASE_RADIUS)).min_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)))
-        };
-        let (intruder, rule) = match intruder {
-            None if self.enabled("H-TEAM-DEFEND") => (at_ally(), "H-TEAM-DEFEND"),
-            found => (found, rule),
-        };
-        if let Some(intruder) = intruder {
-            if tick.frame - self.army.last_defend_order >= DEFEND_REORDER_FRAMES {
-                self.army.last_defend_order = tick.frame;
-                self.fire(rule);
-                let count = snapshot.enemies.iter().filter(|e| e.pos.dist2d(self.home) < BASE_RADIUS).count();
-                if count >= NOTABLE_INTRUSION {
-                    let grid = self.world.grid(intruder.pos);
-                    self.trigger("base-attack", tick.frame, format!("Our base is under attack: {count} enemies near {grid}."));
-                }
-                // An attack on the base is everyone's business; raiders at an outpost are met by the nearest few.
-                let mut nearest: Vec<&&OwnUnit> = home_group.iter().collect();
-                nearest.sort_by(|a, b| a.pos.dist2d(intruder.pos).total_cmp(&b.pos.dist2d(intruder.pos)));
-                let wanted = if rule == "H-ARMY-DEFEND" || !self.enabled("H-ARMY-RESPONDERS") {
-                    home_group.len()
-                } else {
-                    // The nearest soldiers, as many as it takes for good odds against the raiders in sight there.
-                    let raiders = self.known_enemy_force(intruder.pos, RAID_RADIUS, snapshot.enemies.as_slice());
-                    let enough = (MIN_RESPONDERS..=nearest.len()).find(|&k| {
-                        let group: Vec<&OwnUnit> = nearest[..k].iter().map(|u| **u).collect();
-                        self.odds(&Self::force_of(&group), &raiders) >= RESPONSE_ODDS
-                    });
-                    enough.unwrap_or(nearest.len())
-                };
-                commands.extend(nearest.iter().take(wanted).map(|u| Command::Fight { unit: u.id, to: intruder.pos, queue: false }));
-            }
-        } else {
-            let own_wave_size = (FIRST_WAVE + WAVE_GROWTH * self.army.waves_sent).min(MAX_WAVE);
-            let wave_size = match (stance, self.directives.wave_size) {
-                (Some(Stance::Attack), _) => MIN_ORDERED_WAVE,
-                (_, Some(ordered)) => ordered.value,
-                _ => own_wave_size,
-            };
-            let may_launch = !matches!(stance, Some(Stance::Defend | Stance::Gather));
-            // H-ARMY-HOME-GUARD: the soldiers nearest the station stay; the rest are the wave.
-            let guard = if self.enabled("H-ARMY-HOME-GUARD") { HOME_GUARD } else { 0 };
-            let mut by_station: Vec<&OwnUnit> = home_group.iter().filter(|u| !detached.contains(&u.id)).copied().collect();
-            by_station.sort_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)));
-            let wave: Vec<&OwnUnit> = by_station.into_iter().skip(guard).collect();
-            // Under continuous raiding it is never quiet; then the clause would keep the army home for good. It may
-            // hold a ready wave for QUIET_CEILING_FRAMES at most.
-            let overruled = self.army.held_for_losses_since.is_some_and(|since| tick.frame - since > QUIET_CEILING_FRAMES);
-            let quiet = (overruled || tick.frame - self.last_loss_at_home_frame >= QUIET_BEFORE_WAVE_FRAMES)
-                && (self.army.last_retreat_frame == 0 || tick.frame - self.army.last_retreat_frame >= AFTER_RETREAT_FRAMES);
-            // H-ARMY-WAVE-GATE: weigh the wave against what we know stands at the target.
-            let mut defenders = self.known_enemy_force(target, DEFENDED_RADIUS, snapshot.enemies.as_slice());
-            // Their army is one mobile block and will come to the fight wherever it is: count it, unless more than it
-            // already stands there. H-ARMY-GATE-ALL-SEEN: their army is every soldier of theirs we have seen and not seen
-            // die. The biggest force in sight at once within two minutes, which this used to be, read 2300 metal against
-            // a true 4900 from minute 20 (the tempo study, 430 games); everything seen alive reads 3400, still a floor.
-            let all_seen = self.enabled("H-ARMY-GATE-ALL-SEEN").then(|| {
-                let mut army = Force::default();
-                self.enemy_soldiers.values().for_each(|(def, _)| army.add(*def));
-                army
-            });
-            if let Some(army) = &all_seen {
-                if self.odds(army, &Force::default()) > self.odds(&Force { turret_metal: 0.0, ..defenders.clone() }, &Force::default()) {
-                    defenders.units = army.units.clone();
-                }
-            }
-            // H-TEAM-WAVES: the other seats' ready waves and attackers go to the same place and count beside ours.
-            let mut ours = Self::force_of(&wave);
-            if self.enabled("H-TEAM-WAVES") {
-                self.team_mates.with_us.iter().for_each(|def| ours.add(*def));
-            }
-            let odds = self.odds(&ours, &defenders);
-            let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || odds >= WAVE_ADVANTAGE;
-            let ordered_attack = stance == Some(Stance::Attack);
-            if may_launch && wave.len() >= wave_size && !ordered_attack && (!quiet || !outweighs) && tick.frame % (30 * FRAMES_PER_SECOND) == 0 {
-                eprintln!(
-                    "[ai {}] f={} wave held: {} soldiers at odds {odds:.2} against what is known at ({:.0}, {:.0}){}",
-                    self.ai(), tick.frame, wave.len(), target.x, target.z, if quiet { "" } else { "; losses at home in the last 30 s" }
-                );
-            }
-            let ready = may_launch && wave.len() >= wave_size;
-            if ready && quiet {
-                self.team_post.offer = wave.iter().map(|u| u.def).collect();
-            }
-            self.army.held_for_losses_since = match (ready && outweighs && !quiet, self.army.held_for_losses_since) {
-                (true, since) => since.or(Some(tick.frame)),
-                (false, _) => None,
-            };
-            let home_group = wave;
-            // H-TEAM-WAVES: a seat of ours has just gone, counting on the wave we offered; its estimate and ours of what
-            // stands there may differ, and the worst outcome is one of us going alone.
-            let joining = self.enabled("H-TEAM-WAVES") && quiet && self.team_mates.launched.is_some_and(|at| tick.frame - at < JOIN_WITHIN_FRAMES);
-            if may_launch && ((home_group.len() >= wave_size && (ordered_attack || (quiet && outweighs))) || (joining && 2 * home_group.len() >= wave_size)) {
-                self.team_post.launched = Some(tick.frame);
-                self.army.waves_sent += 1;
-                self.fire(if wave_size == own_wave_size { "H-ARMY-WAVES" } else { "D-WAVE-LAUNCH" });
-                let grid = self.world.grid(target);
-                eprintln!(
-                    "[ai {}] f={} wave {}: {} units to ({:.0}, {:.0})",
-                    self.ai(), tick.frame, self.army.waves_sent, home_group.len(), target.x, target.z
-                );
-                self.event(tick.frame, format!("wave {} launched: {} units towards {grid}", self.army.waves_sent, home_group.len()));
-                // H-ARMY-REINFORCE: a few more soldiers joining a body already out there go to it, and the body carries on.
-                // Every wave used to call everyone committed back to a fresh staging point; under an `attack` stance
-                // waves of three leave every half minute, and 100 attackers stood at the staging point for three
-                // minutes while the commander wondered why (commander game 9, south-east, 32400-37800).
-                let body: Vec<&OwnUnit> = soldiers.iter().filter(|u| self.army.attackers.contains(&u.id)).copied().collect();
-                if self.enabled("H-ARMY-REINFORCE") && body.len() >= 2 * home_group.len() {
-                    self.fire("H-ARMY-REINFORCE");
-                    let n = body.len() as f32;
-                    let centre = body.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / n, y: 0.0, z: sum.z + u.pos.z / n });
-                    self.army.attackers.extend(home_group.iter().map(|u| u.id));
-                    commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: centre, queue: false }));
-                    commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: target, queue: true }));
-                    return;
-                }
+        let home_group = wave;
+        // H-TEAM-WAVES: a seat of ours has just gone, counting on the wave we offered; its estimate and ours of what
+        // stands there may differ, and the worst outcome is one of us going alone.
+        let joining = self.enabled("H-TEAM-WAVES") && quiet && self.team_mates.launched.is_some_and(|at| tick.frame - at < JOIN_WITHIN_FRAMES);
+        if may_launch && ((home_group.len() >= wave_size && (ordered_attack || (quiet && outweighs))) || (joining && 2 * home_group.len() >= wave_size)) {
+            self.team_post.launched = Some(tick.frame);
+            self.army.waves_sent += 1;
+            self.fire(if wave_size == own_wave_size { "H-ARMY-WAVES" } else { "D-WAVE-LAUNCH" });
+            let grid = self.world.grid(target);
+            eprintln!(
+                "[ai {}] f={} wave {}: {} units to ({:.0}, {:.0})",
+                self.ai(), tick.frame, self.army.waves_sent, home_group.len(), target.x, target.z
+            );
+            self.event(tick.frame, format!("wave {} launched: {} units towards {grid}", self.army.waves_sent, home_group.len()));
+            // H-ARMY-REINFORCE: a few more soldiers joining a body already out there go to it, and the body carries on.
+            // Every wave used to call everyone committed back to a fresh staging point; under an `attack` stance
+            // waves of three leave every half minute, and 100 attackers stood at the staging point for three
+            // minutes while the commander wondered why (commander game 9, south-east, 32400-37800).
+            let body: Vec<&OwnUnit> = soldiers.iter().filter(|u| self.army.attackers.contains(&u.id)).copied().collect();
+            if self.enabled("H-ARMY-REINFORCE") && body.len() >= 2 * home_group.len() {
+                self.fire("H-ARMY-REINFORCE");
+                let n = body.len() as f32;
+                let centre = body.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / n, y: 0.0, z: sum.z + u.pos.z / n });
                 self.army.attackers.extend(home_group.iter().map(|u| u.id));
-                // H-ARMY-STAGE: sent straight at the target, a wave arrives fastest-first and dies one by one.
-                // Everyone committed, survivors of earlier waves included, gathers short of the target first.
-                let approach = self.walk_from_home(target);
-                let first_stop = if self.enabled("H-ARMY-STAGE") && approach > 2.0 * STAGE_DISTANCE {
-                    self.fire("H-ARMY-STAGE");
-                    let t = STAGE_DISTANCE / target.dist2d(self.home).max(1.0);
-                    let straight = Vec3 { x: target.x + (self.home.x - target.x) * t, y: 0.0, z: target.z + (self.home.z - target.z) * t };
-                    let point = self.on_the_way_to(target, approach - STAGE_DISTANCE).unwrap_or(straight);
-                    self.army.staging = Some((point, tick.frame));
-                    point
-                } else {
-                    target
-                };
-                self.journal_wave(tick.frame, self.army.waves_sent, home_group.len(), target, first_stop);
-                let committed = soldiers.iter().filter(|u| self.army.attackers.contains(&u.id));
-                commands.extend(committed.map(|u| Command::Fight { unit: u.id, to: first_stop, queue: false }));
-            } else {
-                // H-ARMY-STATION: wait where raids arrive, not scattered around the labs.
-                let stragglers = home_group.iter().filter(|u| u.idle && u.pos.dist2d(rally) > RALLY_RADIUS && !detached.contains(&u.id));
-                commands.extend(stragglers.map(|u| Command::Move { unit: u.id, to: rally, queue: false }));
+                commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: centre, queue: false }));
+                commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: target, queue: true }));
+                return;
             }
+            self.army.attackers.extend(home_group.iter().map(|u| u.id));
+            // H-ARMY-STAGE: sent straight at the target, a wave arrives fastest-first and dies one by one.
+            // Everyone committed, survivors of earlier waves included, gathers short of the target first.
+            let approach = self.walk_from_home(target);
+            let first_stop = if self.enabled("H-ARMY-STAGE") && approach > 2.0 * STAGE_DISTANCE {
+                self.fire("H-ARMY-STAGE");
+                let t = STAGE_DISTANCE / target.dist2d(self.home).max(1.0);
+                let straight = Vec3 { x: target.x + (self.home.x - target.x) * t, y: 0.0, z: target.z + (self.home.z - target.z) * t };
+                let point = self.on_the_way_to(target, approach - STAGE_DISTANCE).unwrap_or(straight);
+                self.army.staging = Some((point, tick.frame));
+                point
+            } else {
+                target
+            };
+            self.journal_wave(tick.frame, self.army.waves_sent, home_group.len(), target, first_stop);
+            let committed = soldiers.iter().filter(|u| self.army.attackers.contains(&u.id));
+            commands.extend(committed.map(|u| Command::Fight { unit: u.id, to: first_stop, queue: false }));
+        } else {
+            // H-ARMY-STATION: wait where raids arrive, not scattered around the labs.
+            let stragglers = home_group.iter().filter(|u| u.idle && u.pos.dist2d(rally) > RALLY_RADIUS && !detached.contains(&u.id));
+            commands.extend(stragglers.map(|u| Command::Move { unit: u.id, to: rally, queue: false }));
         }
 
         if tick.frame % (60 * FRAMES_PER_SECOND) == 0 && !attackers.is_empty() {

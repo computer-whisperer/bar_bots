@@ -5,7 +5,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use bot_protocol::{Command, OwnUnit, Tick, UnitId, Vec3};
 
-use super::army::{MIN_RESPONDERS, RESPONSE_ODDS};
 use super::roster::Kit;
 use super::territory::Ground;
 use super::{Brain, FRAMES_PER_SECOND};
@@ -17,6 +16,9 @@ const REORDER_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
 const POST_SLACK: f32 = 0.4;
 /// Intruders this close together are one group.
 const GROUP_RADIUS: f32 = 400.0;
+/// A posted squad meets intruders with its nearest members, at least this many and as many as these odds take.
+const MIN_RESPONDERS: usize = 4;
+const RESPONSE_ODDS: f32 = 1.5;
 
 #[derive(Default)]
 pub struct Squads {

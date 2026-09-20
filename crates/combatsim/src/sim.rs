@@ -358,7 +358,13 @@ impl<'a> Sim<'a> {
                     self.guns[gun].predict_mod = self.rng.unit() * 2.0;
                 }
                 self.retarget(frame);
-                self.goal = [centre(&self.bodies, 1, frame), centre(&self.bodies, 0, frame)];
+                // A side walks at where it last saw the other (its buildings are known without being seen), not at
+                // where the other is: a party that gets out of everybody's sight is lost, whatever the guns reach.
+                for side in 0..2 {
+                    if let Some(known) = self.known_centre(1 - side, frame) {
+                        self.goal[side] = known;
+                    }
+                }
             }
             if frame % (5 * FPS as u32) == 0 {
                 timeline.push(self.value_left());
@@ -476,6 +482,19 @@ impl<'a> Sim<'a> {
                 }
             }
         }
+    }
+
+    /// The middle of what the other side knows of `side`: its units in sight and its buildings.
+    fn known_centre(&self, side: usize, frame: u32) -> Option<Vec2> {
+        let mut sum = Vec2::default();
+        let mut n = 0.0;
+        for (j, body) in self.bodies.iter().enumerate() {
+            if body.here(frame) && body.side as usize == side && (self.seen[j] || body.asset) {
+                sum = sum + body.pos;
+                n += 1.0;
+            }
+        }
+        (n > 0.0).then(|| sum * (1.0 / n))
     }
 
     /// What each side can see, then the nearest visible enemy for everyone who can shoot one.
