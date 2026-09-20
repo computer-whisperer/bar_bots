@@ -49,3 +49,15 @@ Until 2026-09-19 we built no nano turrets and never issued a reclaim order.
 **Would be wrong if.** A version with nano turrets and wreck reclaim near home showed no gain in army built by minute 10.
 **Used by.** H-ECO-NANO, H-ECO-RECLAIM.
 
+### K-eco-production-is-the-bottleneck
+**Claim.** Once early expansion works, one lab cannot spend the income: metal piles up while the opponent, on half the
+extractors, builds the bigger army. Build power (construction turrets, labs, later tier 2) has to follow income.
+**Status.** observed once (2026-09-19), first noticed by the user watching the game.
+**Evidence.** commander-3-play-to-win: extractors 12 v 6 at minute 5, 13 v 6 at minute 8; income 25-30 and spending
+11-19 with one lab; 1393-1749 metal banked from minute 6 to 9; army value 1938 v 2286 at minute 9. One construction
+turret and 7 converters by minute 10. The rules that add build power sat behind "expand" in every focus order, and with
+free spots left the order never got past it; under the expand focus the turret step was not in the list at all. No
+build-site refusals: room was not the limit. There is no tier-2 logic in the bot at all.
+**Would be wrong if.** With H-ECO-SPEND the bank still sat above 500 for minutes, or army value did not follow income.
+**Used by.** H-ECO-SPEND.
+

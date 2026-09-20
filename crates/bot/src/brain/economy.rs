@@ -320,6 +320,22 @@ impl Brain {
         {
             return (Plan::Extractor(spot), "H-ECO-EARLY-EXPAND");
         }
+        // H-ECO-SPEND: metal in the bank is army we do not have. When it piles up the factory is the bottleneck,
+        // whatever the focus says: construction turrets on the labs we have, then another lab. (Commander game 3:
+        // 12 extractors against 6 by minute 5, then 1400-1750 banked for five minutes behind one lab, income 28
+        // and spending 12, while the opponent's army passed ours.)
+        if self.enabled("H-ECO-SPEND") && snapshot.metal.current > FLOATING_METAL && !energy_short {
+            let labs: Vec<Vec3> = snapshot.own_units.iter().filter(|u| u.def == kit.lab && !u.being_built).map(|u| u.pos).collect();
+            if can_build(kit.nano)
+                && planned(kit.nano) < labs.len() * NANOS_PER_LAB
+                && let Some(lab) = labs.iter().min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
+            {
+                return (Plan::Beside(kit.nano, *lab), "H-ECO-SPEND");
+            }
+            if planned(kit.lab) < MAX_LABS && planned(kit.lab) <= labs.len() {
+                return (Plan::Near(kit.lab, yard), "H-ECO-SPEND");
+            }
+        }
         let focus = self.directives.economy_focus.map(|f| f.value);
         if energy_short || (focus == Some(Focus::Energy) && energy.current < energy.storage * 0.9) {
             return (Plan::Near(generator, base), if energy_short { "H-ECO-ENERGY-BY-STORAGE" } else { "D-FOCUS-ENERGY" });
@@ -383,7 +399,8 @@ impl Brain {
                         return (Plan::Extractor(spot), "H-ECO-EXPAND");
                     }
                 }
-                Step::Convert if energy_rich && planned(kit.converter) < MAX_CONVERTERS => {
+                // Not with metal in the bank: a converter then buys metal we already cannot spend.
+                Step::Convert if energy_rich && planned(kit.converter) < MAX_CONVERTERS && snapshot.metal.current < FLOATING_METAL => {
                     return (Plan::Near(kit.converter, base), "H-ECO-CONVERT-SURPLUS");
                 }
                 _ => {}
