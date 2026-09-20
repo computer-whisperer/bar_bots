@@ -255,7 +255,9 @@ impl Brain {
                 self.raid.waiting = false;
                 // H-ARMY-KILL: at their base with no soldier of theirs in sight, and the commander either out of sight
                 // or outnumbered, the home group comes to finish it.
-                let kill_open = !armed_in_sight && (!commander_in_sight || party_metal >= COMMANDER_PARTY_METAL);
+                // A party too small for the commander is no kill, in sight of it or not: it is usually a step away
+                // (cmd-harness-smoke: the commander was woken nine times by one to three Pawns at the base).
+                let kill_open = !armed_in_sight && party_metal >= COMMANDER_PARTY_METAL;
                 let at_their_base = centre.dist2d(self.enemy_base(centre)) < BASE_RADIUS && self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(centre) < BASE_RADIUS);
                 if at_their_base && kill_open && self.enabled("H-ARMY-KILL") {
                     self.raid.kill_offered = Some(target);
