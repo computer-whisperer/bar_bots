@@ -61,3 +61,18 @@ build-site refusals: room was not the limit. There is no tier-2 logic in the bot
 **Would be wrong if.** With H-ECO-SPEND the bank still sat above 500 for minutes, or army value did not follow income.
 **Used by.** H-ECO-SPEND.
 
+
+### K-eco-raided-ground-is-raided-again
+**Claim.** Against BARb medium the unit that killed an extractor leaves within seconds, but the ground does not become
+safe: an armed enemy is near the spot again inside a minute about half the time. What we forgo by not expanding is far
+larger than what rebuild delays cost: most of it is spots we never walk to, which the opponent then holds.
+**Status.** measured in hindsight (2026-09-20), `run/spot_regret.py` over 96 heuristic games with ground truth (v23-v26).
+**Evidence.** 1147 extractor losses. Armed enemy within 600 of the spot after the loss: median 16 s, 90th percentile 47 s.
+Quiet after that: median 42 s (NW 30 s, SE 65 s); armed enemy back or still there within 60 s in 48 %, within 120 s in
+65 %, within 240 s in 76 % (NW 85 %, SE 69 %). We rebuilt 70 %, the spot standing empty a median 135 s, so cover reopens
+most hot spots before H-ECO-HOT-SPOTS' four minutes run out. Per game we held a median 134 extractor-minutes (NW 94,
+SE 251) and left 466 quiet, usable extractor-minutes untaken (quiet runs over 60 s, less 60 s to get there). From NW the
+8 spots 2-3k out: ours 1 minute a game, theirs 70, quiet and usable 78.
+**Limits.** Hindsight: an extractor standing there might have drawn the visit that never came, and "quiet" on the
+opponent's side is quiet because it is the opponent's side. Straight-line distance, not walking distance. "Armed enemy
+within 600" counts an army passing through and ignores whether we had cover there.
