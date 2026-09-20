@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Within Reason match viewer</title>
+<link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+<header id="top">
+  <h1 id="title">Within Reason match viewer</h1>
+  <span id="subtitle"></span>
+  <label class="open">Open files <input type="file" id="files" multiple></label>
+</header>
+
+<main>
+  <section id="map-pane">
+    <canvas id="map"></canvas>
+    <div id="tooltip" class="tooltip" hidden></div>
+    <fieldset id="layers">
+      <legend>Layers</legend>
+      <label><input type="checkbox" data-layer="grid" checked> grid</label>
+      <label><input type="checkbox" data-layer="spots" checked> metal spots</label>
+      <label><input type="checkbox" data-layer="census" checked> census (truth)</label>
+      <label><input type="checkbox" data-layer="orders" checked> orders</label>
+      <label><input type="checkbox" data-layer="intent" checked> intent</label>
+      <label><input type="checkbox" data-layer="deaths" checked> deaths</label>
+    </fieldset>
+    <ul id="map-legend" class="legend"></ul>
+  </section>
+
+  <section id="side-pane">
+    <div id="now" class="panel"></div>
+    <div class="panel">
+      <h2>Rules fired this minute <span id="rules-minute" class="muted"></span></h2>
+      <div id="rules"></div>
+    </div>
+    <div class="panel grow">
+      <h2>Decisions
+        <span class="filters" id="decision-filters"></span>
+      </h2>
+      <ol id="decisions"></ol>
+    </div>
+    <details class="panel">
+      <summary>bot.log near the playhead</summary>
+      <pre id="botlog"></pre>
+    </details>
+  </section>
+</main>
+
+<footer>
+  <div id="controls">
+    <button id="play" title="space">Play</button>
+    <button id="back" title="left arrow">-10 s</button>
+    <button id="forward" title="right arrow">+10 s</button>
+    <label>speed
+      <select id="speed">
+        <option value="1">1x</option><option value="5">5x</option><option value="10" selected>10x</option>
+        <option value="30">30x</option><option value="60">60x</option><option value="120">120x</option>
+      </select>
+    </label>
+    <output id="clock">0:00</output>
+    <span id="status" class="muted"></span>
+  </div>
+  <div id="timeline-wrap">
+    <canvas id="timeline"></canvas>
+    <div id="chart-tooltip" class="tooltip" hidden></div>
+  </div>
+</footer>
+
+<script src="record.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
