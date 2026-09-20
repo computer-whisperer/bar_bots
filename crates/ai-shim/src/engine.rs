@@ -178,6 +178,46 @@ impl Engine {
         (found[0] >= 0.0).then_some(Vec3 { x: found[0], y: found[1], z: found[2] })
     }
 
+    /// Everything the enemy owns, by type, with its economy where the engine tells: a study aid, never the brain's
+    /// input. Cheat access is switched on for the length of this call only, so the bot's own view stays fair.
+    pub fn enemy_census(&mut self) -> String {
+        call!(self, Cheats_setEnabled(true));
+        let max = self.id_buf.len() as c_int;
+        let count = call!(self, getEnemyUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        let census = self.census(count);
+        call!(self, Cheats_setEnabled(false));
+        census
+    }
+
+    /// Our own units in the census format, for setting beside the enemy's.
+    pub fn own_census(&mut self) -> String {
+        let max = self.id_buf.len() as c_int;
+        let count = call!(self, getTeamUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        self.census(count)
+    }
+
+    /// `name x count @ mean position` for the first `count` ids in the id buffer.
+    fn census(&self, count: usize) -> String {
+        let mut by_name: std::collections::BTreeMap<String, (u32, f32, f32)> = Default::default();
+        for &id in &self.id_buf[..count] {
+            let def = call!(self, Unit_getDef(id));
+            if def < 0 {
+                continue;
+            }
+            let name = self.string(call!(self, UnitDef_getName(def)));
+            let pos = self.unit_pos(id);
+            let entry = by_name.entry(name).or_default();
+            entry.0 += 1;
+            entry.1 += pos.x;
+            entry.2 += pos.z;
+        }
+        by_name
+            .into_iter()
+            .map(|(name, (n, x, z))| format!("{name}x{n}@{:.0},{:.0}", x / n as f32, z / n as f32))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     /// What stands within `radius` of `pos`, for diagnosing a build site the engine refused.
     pub fn describe_site(&mut self, def: UnitDefId, pos: Vec3, radius: f32) -> String {
         let mut at = [pos.x, pos.y, pos.z];

@@ -16,7 +16,8 @@ const MAX_CONVERTERS: usize = 40;
 /// An extractor beyond this distance from home gets a turret of its own.
 const OUTPOST_DISTANCE: f32 = 1200.0;
 const OUTPOST_GUARD_RADIUS: f32 = 350.0;
-const MAX_CONSTRUCTORS: usize = 6;
+/// BARb medium runs 4-6 constructors by minute 10 and 10-20 later; we ran 2-4 and never rebuilt what raids took (observe-2).
+const MAX_CONSTRUCTORS: usize = 10;
 /// Constructors die with the outposts they build; the count must not shrink with the extractor count.
 const MIN_CONSTRUCTORS: usize = 3;
 /// Stored metal above which the base is under-spending and wants another lab.
@@ -281,7 +282,7 @@ impl Brain {
         // H-PROD-CONSTRUCTOR-FLOOR
         let own_floor = if self.enabled("H-PROD-CONSTRUCTOR-FLOOR") { MIN_CONSTRUCTORS } else { 0 };
         let floor = self.directives.min_constructors.map_or(own_floor, |d| d.value);
-        let wanted_constructors = (2 + count(kit.extractor) / 4).min(MAX_CONSTRUCTORS).max(floor);
+        let wanted_constructors = (3 + count(kit.extractor) / 2).min(MAX_CONSTRUCTORS).max(floor);
         let support = if count(kit.constructor) < wanted_constructors { kit.constructor } else { kit.artillery };
         // Fighters first: early raids arrive before an all-constructor opening pays off.
         [kit.raider, kit.raider, support, kit.skirmisher, kit.skirmisher].into_iter()

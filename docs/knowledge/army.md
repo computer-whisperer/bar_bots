@@ -92,5 +92,7 @@ medium's small fast groups strip ours.
 **Status.** supported (2026-09-19)
 **Evidence.** v13-medium: per game we killed 3.1 enemy extractors from NW and 7.4 from SE, and lost 22.2 and 18.5.
 **Would be wrong if.** With raid squads the enemy extractors killed per game did not rise.
-**Used by.** H-ARMY-RAID.
+**Outcome.** It did not (3.1 -> 4.9, noise): BARb medium guards its extractors with a turret each, and squads of three light
+raiders die to them. The claim stands as a description; raiding as a remedy is retired.
+**Used by.** (none; H-ARMY-RAID retired)
 

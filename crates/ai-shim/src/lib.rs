@@ -23,6 +23,8 @@ const TICK_INTERVAL: i32 = 15;
 const RECONNECT_INTERVAL: i32 = 30;
 /// Frames between heartbeat lines in the engine log; the arena reads game time from them.
 const HEARTBEAT_INTERVAL: i32 = 30 * 30;
+/// Frames between census lines (`WITHIN_REASON_OBSERVE`): what the opponent owns, for studying how it plays.
+const CENSUS_INTERVAL: i32 = 60 * 30;
 
 struct Instance {
     ai_id: c_int,
@@ -53,6 +55,12 @@ impl Instance {
     fn update(&mut self, frame: i32) {
         if frame % HEARTBEAT_INTERVAL == 0 {
             self.log(format_args!("heartbeat f={frame}"));
+        }
+        if frame % CENSUS_INTERVAL == 0 && std::env::var_os("WITHIN_REASON_OBSERVE").is_some() {
+            let census = self.engine.enemy_census();
+            self.log(format_args!("census f={frame} enemy {census}"));
+            let census = self.engine.own_census();
+            self.log(format_args!("census f={frame} own {census}"));
         }
         if self.link.is_none() && frame % RECONNECT_INTERVAL == 0 {
             self.connect(frame);

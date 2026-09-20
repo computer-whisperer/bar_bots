@@ -532,3 +532,23 @@ metal spots.
    hard batch.
 9. **Second-largest-group gate (K-barb-attack-gate).** Whether splitting our army into two visible blobs measurably
    delays its first attack is untested and may be swamped by the "attack task already exists" shortcut. Low priority.
+
+### K-barb-medium-observed-build
+**Claim.** BARb medium on Quicksilver plays one lab plus one nano turret for the whole game, builds about one turret per
+extractor, keeps 1-2 constructors until minute 9 and then 10-20, and hoards its army: it grows every minute (20-35 by
+minute 10, 40-80 by minute 18) rather than being spent. At equal extractor counts to minute 9 it is not richer than us.
+**Status.** supported (2026-09-19) — 18 observed games, census once a minute
+**Evidence.** `run/compare_census.py run/matches/*observe-*/NN`.
+**Would be wrong if.** Censuses on another map showed a second lab or early army spending.
+**Used by.** FIRST_WAVE 20; constructor cap 10.
+
+### K-barb-we-lose-the-fights-not-the-build
+**Claim.** Against medium we build as many soldiers as BARb by minute 10 and lose the game in the exchanges: 10-25 of
+ours lost for 2-14 of theirs, in our own half, before any wave leaves. Holding the army at home does not protect
+extractors either: they fall while 20-37 soldiers stand at the station.
+**Status.** supported (2026-09-19)
+**Evidence.** observe-3 (built 26-45 vs 21-66, lost 10-25, killed 2-14), observe-5 match 02.
+**Would be wrong if.** A change to how the home group fights (staying together, fighting under our turrets, unit mix)
+left the early exchange ratio unchanged.
+**Used by.** (none yet)
+

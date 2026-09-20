@@ -41,3 +41,11 @@ usual ~58% at both 8 and 12 parallel. Games ran long and both sides developed sl
 threaded planning runs on wall-clock time, or our tick round-trip falls behind when frames are not paced (at a capped speed
 the client sleeps between frames, `Game.cpp:1825-1835`). Until explained, evaluate at `--speed 50` (the default) and never
 compare batches run at different requested speeds.
+
+## Watching the opponent
+
+`WITHIN_REASON_OBSERVE=1` makes the shim write a census of both sides to `engine.log` once a game minute (unit types,
+counts, mean positions). It switches the engine's cheat callbacks on for the length of that one query only; the bot's own
+view stays fair. `run/compare_census.py run/matches/<batch>/<NN> [--detail MINUTE]` prints the two sides beside each other.
+`--corner nw|se` fixes our start; `--swap-corners` puts team 0 in the south-east.
+
