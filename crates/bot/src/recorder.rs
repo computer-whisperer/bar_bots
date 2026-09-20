@@ -294,7 +294,7 @@ fn header(hello: &Hello, mode: &str) -> Value {
         "ai_id": hello.ai_id, "team": hello.team, "ally_team": hello.ally_team, "start_frame": hello.frame,
         "frames_per_second": 30, "sample_frames": SAMPLE_FRAMES, "mode": mode,
         "wall_start": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
-        "map": { "name": map.name, "width": map.width, "height": map.height, "wind_min": map.wind_min, "wind_max": map.wind_max },
+        "map": { "name": map.name, "width": map.width, "height": map.height, "wind_min": map.wind_min, "wind_max": map.wind_max, "extractor_radius": map.extractor_radius },
         "grid": { "columns": 8, "rows": 8 },
         "metal_spots": spots,
         "terrain": {

@@ -89,6 +89,9 @@ pub struct MapInfo {
     /// Wind speed range; a wind generator produces the current wind speed in energy, up to its cap.
     pub wind_min: f32,
     pub wind_max: f32,
+    /// How far from a metal spot's squares an extractor still draws from them (`Game.extractorRadius`): the game
+    /// (cmd_mex_denier.lua) allows an extractor anywhere its radius covers the whole spot.
+    pub extractor_radius: f32,
 }
 
 /// The ground, at the engine's slope-map resolution. Rows run north to south (z), cells west to east (x).

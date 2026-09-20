@@ -67,6 +67,8 @@ const BUILDING_GAP: i32 = 5;
 const LAB_GAP: i32 = 8;
 /// Distances from the start point along the line to the enemy: generators behind, labs ahead, turrets beyond them.
 const BACK_FIELD: f32 = 150.0;
+/// How far a metal spot's squares may lie from its reported centre, taken off the extractor radius for the offset.
+const MEX_PATCH: f32 = 40.0;
 const LAB_YARD: f32 = 350.0;
 /// How far a building's anchor keeps from anything of ours standing or started, so the engine's closest free site
 /// to it stays within the builder's reach: the lab's gap (LAB_GAP squares) plus half of it and a neighbour, and a
@@ -133,14 +135,20 @@ impl Brain {
         // A queued build the engine has started is the builder's job now.
         for event in &tick.events {
             let bot_protocol::Event::UnitCreated { unit, builder: Some(builder) } = event else { continue };
+            self.job_started.insert(*builder, tick.frame);
+            self.step_begun(*builder);
             let Some((def, near, _)) = self.queued.get(builder).copied() else { continue };
-            if own.iter().any(|u| u.id == *unit && u.def == def) {
+            // The queued build has started when the builder's last order was this type too, or was not a build: the
+            // current job (its own nanoframe) comes first, and only a second creation of the queued type is the queued one.
+            let current_is_same = self.jobs.get(builder).is_some_and(|job| *job == def) && self.last_orders.get(builder).is_some_and(|(frame, _, _)| self.job_started.get(builder).is_some_and(|started| started > frame && *started < tick.frame));
+            if own.iter().any(|u| u.id == *unit && u.def == def) && (!self.jobs.get(builder).is_some_and(|job| *job == def) || current_is_same) {
                 self.queued.remove(builder);
                 self.jobs.insert(*builder, def);
                 self.last_orders.insert(*builder, (tick.frame, def, near));
             }
         }
         self.queued.retain(|id, _| own.iter().any(|u| u.id == *id));
+        self.job_started.retain(|id, _| own.iter().any(|u| u.id == *id && !u.idle));
 
         // The engine drops orders given in the first second of the game; the lost extractor order then held its
         // spot's claim, and the opening went on without it.
@@ -245,7 +253,7 @@ impl Brain {
                 let (def_id, site) = match plan {
                     // The game rejects an extractor that is not exactly on its spot (cmd_mex_denier.lua), and the shim
                     // places extractors exactly at `near`, searching nowhere.
-                    Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: 0.0, min_dist: 0 }),
+                    Plan::Extractor(spot) => (kit.extractor, BuildSite { near: self.extractor_site(spot, unit), search_radius: 0.0, min_dist: 0 }),
                     // Where the builder stands is reachable by definition; fall back to it when the usual anchor is not.
                     Plan::Near(def_id, anchor) if self.is_unreachable(anchor) => {
                         (def_id, BuildSite { near: unit.pos, search_radius: 500.0, min_dist: self.gap_around(def_id, kit) })
@@ -261,6 +269,12 @@ impl Brain {
                     && tick.frame - frame <= 2 * TICK_FRAMES
                 {
                     self.dropped_orders += 1;
+                    // An extractor refused off its centre: that spot takes the exact centre from now on.
+                    if earlier == kit.extractor
+                        && let Some(i) = self.world.hello.metal_spots.iter().position(|s| s.dist2d(near) < MEX_PATCH + 1.0 && s.dist2d(near) > 1.0)
+                    {
+                        self.centre_only.insert(i);
+                    }
                     if self.dropped_orders <= 40 {
                         eprintln!(
                             "[ai {}] f={} DROPPED order: {} (unit {}) at ({:.0}, {:.0}) was to build {} near ({:.0}, {:.0}), {:.0} away",
@@ -380,7 +394,9 @@ impl Brain {
             .filter(|u| !u.idle && !u.being_built && (u.def == kit.commander || u.def == kit.constructor))
             .filter(|u| !(u.def == kit.commander && stationed))
             .filter(|u| self.jobs.contains_key(&u.id) && !self.queued.contains_key(&u.id))
-            .filter(|u| self.last_orders.get(&u.id).is_some_and(|(frame, _, _)| tick.frame - frame >= ORDER_GRACE_FRAMES))
+            // Busy means the current order has its nanoframe, not that time has passed: a builder walking to a site
+            // it will never build at, re-ordered every tick, was queued the same site again and again (rush-18).
+            .filter(|u| self.last_orders.get(&u.id).is_some_and(|(frame, _, _)| self.job_started.get(&u.id).is_some_and(|started| started >= frame)))
             .cloned()
             .collect();
         for unit in &busy {
@@ -397,6 +413,26 @@ impl Brain {
         }
     }
 
+    /// Where an extractor for `spot` goes: the game allows it anywhere its extractor radius covers the spot's metal
+    /// (cmd_mex_denier.lua), so the nearest such point to the builder saves the walk when the spot's centre lies just
+    /// beyond reach (the user, rush-17: "the second mex is reachable without moving, but it chooses the far corner").
+    /// The spot's squares are taken to lie within `MEX_PATCH` of its centre; a refused offset puts that spot on the
+    /// exact centre from then on.
+    fn extractor_site(&self, spot: Vec3, builder: &OwnUnit) -> Vec3 {
+        let index = self.world.hello.metal_spots.iter().position(|s| s.dist2d(spot) < 1.0);
+        if index.is_some_and(|i| self.centre_only.contains(&i)) {
+            return spot;
+        }
+        let slack = (self.world.hello.map.extractor_radius - MEX_PATCH).max(0.0);
+        let reach = self.world.def(builder.def).map_or(100.0, |d| d.build_distance.max(60.0));
+        let d = spot.dist2d(builder.pos);
+        let offset = (d - reach + 8.0).clamp(0.0, slack);
+        if offset <= 0.0 || d <= 0.0 {
+            return spot;
+        }
+        Vec3 { x: spot.x + (builder.pos.x - spot.x) / d * offset, y: spot.y, z: spot.z + (builder.pos.z - spot.z) / d * offset }
+    }
+
     /// What a plan builds and where the engine is asked to put it. None when the builder cannot build it.
     fn build_site_for(&self, plan: &Plan, unit: &OwnUnit, kit: &Kit) -> Option<(UnitDefId, BuildSite)> {
         let planned_def = match plan {
@@ -410,7 +446,7 @@ impl Brain {
         Some(match *plan {
             // The game rejects an extractor that is not exactly on its spot (cmd_mex_denier.lua), and the shim
             // places extractors exactly at `near`, searching nowhere.
-            Plan::Extractor(spot) => (kit.extractor, BuildSite { near: spot, search_radius: 0.0, min_dist: 0 }),
+            Plan::Extractor(spot) => (kit.extractor, BuildSite { near: self.extractor_site(spot, unit), search_radius: 0.0, min_dist: 0 }),
             // Where the builder stands is reachable by definition; fall back to it when the usual anchor is not.
             Plan::Near(def_id, anchor) if self.is_unreachable(anchor) => (def_id, BuildSite { near: unit.pos, search_radius: 500.0, min_dist: self.gap_around(def_id, kit) }),
             Plan::Near(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: self.gap_around(def_id, kit) }),

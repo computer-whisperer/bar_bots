@@ -24,7 +24,7 @@ mod wake;
 mod roster;
 mod routes;
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use bot_protocol::{Command, Event, OwnUnit, Tick, UnitDefId, UnitId, Vec3};
@@ -126,6 +126,10 @@ pub struct Brain {
     /// A plan step given to a busy builder as a queued build, until the engine starts it (its job then) or the builder
     /// goes idle without it (wound back): what, near where, since when.
     queued: HashMap<UnitId, (UnitDefId, Vec3, i32)>,
+    /// Per builder, the frame its current order produced a nanoframe: the queue pass waits for that, not for time.
+    job_started: HashMap<UnitId, i32>,
+    /// Metal spots (by index) where an extractor offset toward the builder was refused: the exact centre from then on.
+    centre_only: HashSet<usize>,
     dropped_orders: u32,
     move_failures: u32,
     /// Places a builder failed to walk to, with the frame until which to avoid them.
@@ -195,6 +199,8 @@ impl Brain {
             last_station: Vec3::default(),
             last_orders: HashMap::new(),
             queued: HashMap::new(),
+            job_started: HashMap::new(),
+            centre_only: HashSet::new(),
             dropped_orders: 0,
             move_failures: 0,
             unreachable: Vec::new(),

@@ -161,6 +161,13 @@ impl Brain {
         (!batch.is_empty()).then_some(batch)
     }
 
+    /// `builder`'s last step has begun (its nanoframe exists): it is not given again as lost.
+    pub(super) fn step_begun(&mut self, builder: UnitId) {
+        if let Some(opening) = self.opening.as_mut() {
+            opening.last.remove(&builder);
+        }
+    }
+
     /// A step given to `builder` as a queued build that the engine never started: back to it.
     pub(super) fn unqueue_step(&mut self, builder: UnitId) {
         if let Some(opening) = self.opening.as_mut()
