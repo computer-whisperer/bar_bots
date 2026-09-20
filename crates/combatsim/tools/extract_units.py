@@ -219,6 +219,8 @@ def main():
             "armor": classes.get(name, "standard"),
             "air": bool(udef.get("canfly")),
             "builder": bool(udef.get("workertime")),
+            # `customparams.techlevel`, which only the tier-2 and tier-3 files set; everything else is tier 1.
+            "tech": int(udef.get("customparams", {}).get("techlevel", 1)),
             "max_slope": moves.get(udef.get("movementclass", ""), (0, 0.0))[0],
             "max_depth": moves.get(udef.get("movementclass", ""), (0, 0.0))[1],
             "weapons": weapons,

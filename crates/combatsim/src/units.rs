@@ -114,6 +114,10 @@ impl Weapon {
     }
 }
 
+fn one() -> u32 {
+    1
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Unit {
     pub metal: f32,
@@ -128,6 +132,9 @@ pub struct Unit {
     pub armor: String,
     pub air: bool,
     pub builder: bool,
+    /// The unit file's `customparams.techlevel`: 1 unless the file says otherwise.
+    #[serde(default = "one")]
+    pub tech: u32,
     /// The steepest ground this unit's movement class can stand on, in the engine's slope units (the terrain
     /// grid's own scale), and the deepest water it can wade. Both come from `gamedata/movedefs.lua`, not from the
     /// unit file's legacy `maxslope`.

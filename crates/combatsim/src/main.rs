@@ -12,7 +12,7 @@ const USAGE: &str = "\
 combatsim --a <type:count[@delay][,...]> --b <type:count[@delay][,...]>
           [--spacing 56] [--apart 1100] [--reps 1] [--seed 0] [--delay-a S] [--delay-b S]
           [--hold-a] [--hold-b] [--terrain FILE:W:H] [--at X,Z] [--from X,Z] [--no-collide] [--verbose]
-          [--stored 500] [--income 30] (the side's energy, which is what laser towers fire with)
+          [--stored 500] [--income 30] (both sides; --stored-a/--income-b for one side only)
 combatsim validate [--spacing 56|100|both] [--reps 4] [--worst 15] [--no-collide] [--stored E] [--income E]
 combatsim speed [--reps 200]
 
@@ -112,7 +112,7 @@ fn query(rules: &Rules, flags: &Flags) {
     let (from, at) = (flags.point("from").unwrap_or(Vec2::new(0.0, 0.0)), flags.point("at"));
     let at = at.unwrap_or(Vec2::new(from.x + apart, from.z));
     let mut scenario = Scenario::new();
-    scenario.energy = [energy(flags); 2];
+    scenario.energy = [energy(flags, "a"), energy(flags, "b")];
     scenario.sides[0] = force(rules, a, from, from.towards(at), flags, "a");
     scenario.sides[1] = force(rules, b, at, at.towards(from), flags, "b");
     if let Some(spec) = flags.get("terrain") {
@@ -168,8 +168,11 @@ fn terrain(spec: &str) -> Field {
     Field::from_bytes(&bytes, width, height, 16.0).expect("terrain file too short")
 }
 
-fn energy(flags: &Flags) -> Energy {
-    Energy { stored: flags.num("stored", Energy::default().stored), income: flags.num("income", Energy::default().income) }
+/// One side's energy: `--stored`/`--income` for both, `--stored-a`/`--income-b` and so on to give the two sides
+/// different economies, which is the usual case once a base is involved (a tower line is fed by a real grid).
+fn energy(flags: &Flags, side: &str) -> Energy {
+    let per_side = |name: &str, shared: f32| flags.num(&format!("{name}-{side}"), flags.num(name, shared));
+    Energy { stored: per_side("stored", Energy::default().stored), income: per_side("income", Energy::default().income) }
 }
 
 fn validate(rules: &Rules, flags: &Flags) {
@@ -182,7 +185,8 @@ fn validate(rules: &Rules, flags: &Flags) {
         .collect();
     for (name, spacing, pairs) in tables {
         let started = std::time::Instant::now();
-        let agreement = duels::validate(rules, &pairs, spacing, reps, energy(flags));
+        // Both duel teams have the same economy, so the shared `--stored`/`--income` is the whole story here.
+        let agreement = duels::validate(rules, &pairs, spacing, reps, energy(flags, "a"));
         println!(
             "{name} (spacing {spacing:.0}, {} pairings, {reps} seeds each, {:.1}s):\n  \
              sign agreement {}/{} decisive (|margin| >= {DECISIVE:.2}) = {:.0}%, mean |error| {:.3}, correlation {:.3}, slope {:.2}",

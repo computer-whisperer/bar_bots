@@ -20,6 +20,7 @@
 "radius": 10.25,
 "sight": 400,
 "speed": 47.4,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 150,
@@ -89,6 +90,7 @@
 "radius": 12.5,
 "sight": 380,
 "speed": 33,
+"tech": 2,
 "weapons": []
 },
 "armacv": {
@@ -103,6 +105,7 @@
 "radius": 19.5,
 "sight": 330,
 "speed": 52.5,
+"tech": 2,
 "weapons": []
 },
 "armalab": {
@@ -117,6 +120,7 @@
 "radius": 66.0,
 "sight": 286,
 "speed": 0.0,
+"tech": 2,
 "weapons": []
 },
 "armamb": {
@@ -131,6 +135,7 @@
 "radius": 30.0,
 "sight": 442,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -202,6 +207,7 @@
 "radius": 26.5,
 "sight": 201,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 150,
@@ -244,6 +250,7 @@
 "radius": 12.0,
 "sight": 380,
 "speed": 90,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -314,6 +321,7 @@
 "radius": 27.0,
 "sight": 780,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -357,6 +365,7 @@
 "radius": 16.25,
 "sight": 364,
 "speed": 54,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -401,6 +410,7 @@
 "radius": 12.5,
 "sight": 380,
 "speed": 37,
+"tech": 2,
 "weapons": []
 },
 "armavp": {
@@ -415,6 +425,7 @@
 "radius": 67.5,
 "sight": 283.39999,
 "speed": 0.0,
+"tech": 2,
 "weapons": []
 },
 "armbeamer": {
@@ -429,6 +440,7 @@
 "radius": 16.5,
 "sight": 475,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -473,6 +485,7 @@
 "radius": 18.75,
 "sight": 330,
 "speed": 42,
+"tech": 1,
 "weapons": []
 },
 "armbrtha": {
@@ -487,6 +500,7 @@
 "radius": 24.0,
 "sight": 273,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -531,6 +545,7 @@
 "radius": 24.0,
 "sight": 494,
 "speed": 62,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -575,6 +590,7 @@
 "radius": 25.0,
 "sight": 380,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 300,
@@ -617,6 +633,7 @@
 "radius": 13.5,
 "sight": 380,
 "speed": 36,
+"tech": 1,
 "weapons": []
 },
 "armclaw": {
@@ -631,6 +648,7 @@
 "radius": 8.0,
 "sight": 440,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -674,6 +692,7 @@
 "radius": 14.0,
 "sight": 450,
 "speed": 37.5,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -775,6 +794,7 @@
 "radius": 15.5,
 "sight": 500,
 "speed": 78,
+"tech": 2,
 "weapons": []
 },
 "armcroc": {
@@ -789,6 +809,7 @@
 "radius": 24.0,
 "sight": 500,
 "speed": 54,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -860,6 +881,7 @@
 "radius": 21.25,
 "sight": 330,
 "speed": 54,
+"tech": 1,
 "weapons": []
 },
 "armdecom": {
@@ -874,6 +896,7 @@
 "radius": 14.0,
 "sight": 450,
 "speed": 37.5,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -972,6 +995,7 @@
 "radius": 35.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 150,
@@ -1014,6 +1038,7 @@
 "radius": 9.5,
 "sight": 380,
 "speed": 75,
+"tech": 2,
 "weapons": []
 },
 "armfast": {
@@ -1028,6 +1053,7 @@
 "radius": 14.0,
 "sight": 380,
 "speed": 111.3,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1071,6 +1097,7 @@
 "radius": 11.75,
 "sight": 635,
 "speed": 168,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1114,6 +1141,7 @@
 "radius": 19.0,
 "sight": 510,
 "speed": 30,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1158,6 +1186,7 @@
 "radius": 23.0,
 "sight": 375,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 1500,
@@ -1200,6 +1229,7 @@
 "radius": 13.5,
 "sight": 400,
 "speed": 69,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1243,6 +1273,7 @@
 "radius": 18.0,
 "sight": 525,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1285,6 +1316,7 @@
 "radius": 14.0,
 "sight": 350,
 "speed": 101,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1328,6 +1360,7 @@
 "radius": 10.0,
 "sight": 600,
 "speed": 132,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1371,6 +1404,7 @@
 "radius": 15.75,
 "sight": 494,
 "speed": 70.5,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1414,6 +1448,7 @@
 "radius": 24.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1485,6 +1520,7 @@
 "radius": 14.5,
 "sight": 380,
 "speed": 46.2,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1528,6 +1564,7 @@
 "radius": 18.0,
 "sight": 494,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1572,6 +1609,7 @@
 "radius": 14.0,
 "sight": 330,
 "speed": 43,
+"tech": 2,
 "weapons": []
 },
 "armjanus": {
@@ -1586,6 +1624,7 @@
 "radius": 14.5,
 "sight": 330,
 "speed": 54,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 80,
@@ -1659,6 +1698,7 @@
 "radius": 14.0,
 "sight": 380,
 "speed": 56.25,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 101,
@@ -1728,6 +1768,7 @@
 "radius": 22.0,
 "sight": 494,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 75,
@@ -1771,6 +1812,7 @@
 "radius": 42.0,
 "sight": 290,
 "speed": 0.0,
+"tech": 1,
 "weapons": []
 },
 "armlatnk": {
@@ -1785,6 +1827,7 @@
 "radius": 16.0,
 "sight": 390,
 "speed": 90,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1854,6 +1897,7 @@
 "radius": 16.0,
 "sight": 494,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1899,6 +1943,7 @@
 "radius": 19.5,
 "sight": 650,
 "speed": 42,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -1942,6 +1987,7 @@
 "radius": 10.5,
 "sight": 900,
 "speed": 40.5,
+"tech": 2,
 "weapons": []
 },
 "armmart": {
@@ -1956,6 +2002,7 @@
 "radius": 18.5,
 "sight": 330,
 "speed": 60,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2000,6 +2047,7 @@
 "radius": 18.0,
 "sight": 550,
 "speed": 50,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2043,6 +2091,7 @@
 "radius": 30.0,
 "sight": 600,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 1000,
@@ -2085,6 +2134,7 @@
 "radius": 25.0,
 "sight": 330,
 "speed": 33,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 100,
@@ -2129,6 +2179,7 @@
 "radius": 14.25,
 "sight": 450,
 "speed": 75,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2171,6 +2222,7 @@
 "radius": 12.0,
 "sight": 598,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2216,6 +2268,7 @@
 "radius": 15.5,
 "sight": 500,
 "speed": 63,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2259,6 +2312,7 @@
 "radius": 11.0,
 "sight": 429,
 "speed": 87,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2302,6 +2356,7 @@
 "radius": 12.0,
 "sight": 430,
 "speed": 78,
+"tech": 1,
 "weapons": []
 },
 "armrl": {
@@ -2316,6 +2371,7 @@
 "radius": 24.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 200,
@@ -2358,6 +2414,7 @@
 "radius": 12.0,
 "sight": 380,
 "speed": 50.7,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 120,
@@ -2400,6 +2457,7 @@
 "radius": 17.5,
 "sight": 620,
 "speed": 55,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 110,
@@ -2470,6 +2528,7 @@
 "radius": 23.0,
 "sight": 450,
 "speed": 51,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 150,
@@ -2512,6 +2571,7 @@
 "radius": 15.5,
 "sight": 900,
 "speed": 57,
+"tech": 2,
 "weapons": []
 },
 "armshockwave": {
@@ -2526,6 +2586,7 @@
 "radius": 20.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2569,6 +2630,7 @@
 "radius": 45.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 100,
@@ -2639,6 +2701,7 @@
 "radius": 15.0,
 "sight": 455,
 "speed": 33,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2682,6 +2745,7 @@
 "radius": 21.0,
 "sight": 440,
 "speed": 47,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 70,
@@ -2725,6 +2789,7 @@
 "radius": 10.25,
 "sight": 550,
 "speed": 65,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2767,6 +2832,7 @@
 "radius": 18.5,
 "sight": 350,
 "speed": 75,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2810,6 +2876,7 @@
 "radius": 53.0,
 "sight": 273,
 "speed": 0.0,
+"tech": 1,
 "weapons": []
 },
 "armvulc": {
@@ -2824,6 +2891,7 @@
 "radius": 45.0,
 "sight": 700,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2868,6 +2936,7 @@
 "radius": 15.0,
 "sight": 380,
 "speed": 45,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -2911,6 +2980,7 @@
 "radius": 17.25,
 "sight": 390,
 "speed": 70.5,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 101,
@@ -2980,6 +3050,7 @@
 "radius": 17.5,
 "sight": 380,
 "speed": 48,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -3022,6 +3093,7 @@
 "radius": 12.25,
 "sight": 390,
 "speed": 34.5,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 141,
@@ -3091,6 +3163,7 @@
 "radius": 14.5,
 "sight": 380,
 "speed": 33,
+"tech": 2,
 "weapons": []
 },
 "coracv": {
@@ -3105,6 +3178,7 @@
 "radius": 20.75,
 "sight": 330,
 "speed": 49.5,
+"tech": 2,
 "weapons": []
 },
 "corak": {
@@ -3119,6 +3193,7 @@
 "radius": 12.0,
 "sight": 520,
 "speed": 81,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -3162,6 +3237,7 @@
 "radius": 72.0,
 "sight": 288.60001,
 "speed": 0.0,
+"tech": 2,
 "weapons": []
 },
 "coramph": {
@@ -3176,6 +3252,7 @@
 "radius": 16.0,
 "sight": 400,
 "speed": 55.5,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 20,
@@ -3246,6 +3323,7 @@
 "radius": 72.0,
 "sight": 286,
 "speed": 0.0,
+"tech": 2,
 "weapons": []
 },
 "corban": {
@@ -3260,6 +3338,7 @@
 "radius": 21.0,
 "sight": 650,
 "speed": 54,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 180,
@@ -3303,6 +3382,7 @@
 "radius": 40.0,
 "sight": 650,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -3405,6 +3485,7 @@
 "radius": 40.0,
 "sight": 700,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -3449,6 +3530,7 @@
 "radius": 15.5,
 "sight": 380,
 "speed": 38,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -3519,6 +3601,7 @@
 "radius": 12.5,
 "sight": 380,
 "speed": 34.5,
+"tech": 1,
 "weapons": []
 },
 "corcom": {
@@ -3533,6 +3616,7 @@
 "radius": 14.0,
 "sight": 450,
 "speed": 37.5,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -3634,6 +3718,7 @@
 "radius": 15.0,
 "sight": 380,
 "speed": 53.49,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 101,
@@ -3703,6 +3788,7 @@
 "radius": 21.0,
 "sight": 330,
 "speed": 51,
+"tech": 1,
 "weapons": []
 },
 "cordecom": {
@@ -3717,6 +3803,7 @@
 "radius": 14.0,
 "sight": 450,
 "speed": 37.5,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -3815,6 +3902,7 @@
 "radius": 24.0,
 "sight": 780,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -3913,6 +4001,7 @@
 "radius": 16.0,
 "sight": 380,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 300,
@@ -3955,6 +4044,7 @@
 "radius": 18.5,
 "sight": 330,
 "speed": 41,
+"tech": 2,
 "weapons": []
 },
 "corexp": {
@@ -3969,6 +4059,7 @@
 "radius": 20.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4013,6 +4104,7 @@
 "radius": 10.25,
 "sight": 520,
 "speed": 90,
+"tech": 2,
 "weapons": []
 },
 "corfav": {
@@ -4027,6 +4119,7 @@
 "radius": 10.5,
 "sight": 600,
 "speed": 153,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4070,6 +4163,7 @@
 "radius": 14.0,
 "sight": 525,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4112,6 +4206,7 @@
 "radius": 24.0,
 "sight": 195,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 150,
@@ -4154,6 +4249,7 @@
 "radius": 16.5,
 "sight": 500,
 "speed": 58.5,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4197,6 +4293,7 @@
 "radius": 14.0,
 "sight": 330,
 "speed": 85,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4240,6 +4337,7 @@
 "radius": 25.0,
 "sight": 395,
 "speed": 39,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4284,6 +4382,7 @@
 "radius": 16.0,
 "sight": 475,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4357,6 +4456,7 @@
 "radius": 19.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4401,6 +4501,7 @@
 "radius": 14.75,
 "sight": 380,
 "speed": 54,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 100,
@@ -4443,6 +4544,7 @@
 "radius": 36.0,
 "sight": 273,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4487,6 +4589,7 @@
 "radius": 25.0,
 "sight": 494,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 75,
@@ -4530,6 +4633,7 @@
 "radius": 45.0,
 "sight": 290,
 "speed": 0.0,
+"tech": 1,
 "weapons": []
 },
 "corlevlr": {
@@ -4544,6 +4648,7 @@
 "radius": 15.25,
 "sight": 330,
 "speed": 40,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4588,6 +4693,7 @@
 "radius": 16.0,
 "sight": 494,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4633,6 +4739,7 @@
 "radius": 20.0,
 "sight": 450,
 "speed": 51,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 150,
@@ -4675,6 +4782,7 @@
 "radius": 22.5,
 "sight": 375,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 160,
@@ -4717,6 +4825,7 @@
 "radius": 15.0,
 "sight": 600,
 "speed": 75,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4760,6 +4869,7 @@
 "radius": 19.75,
 "sight": 330,
 "speed": 58,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4804,6 +4914,7 @@
 "radius": 8.0,
 "sight": 422,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4848,6 +4959,7 @@
 "radius": 37.5,
 "sight": 676,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -4919,6 +5031,7 @@
 "radius": 18.75,
 "sight": 620,
 "speed": 52,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 110,
@@ -4989,6 +5102,7 @@
 "radius": 18.75,
 "sight": 450,
 "speed": 69,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5031,6 +5145,7 @@
 "radius": 14.0,
 "sight": 380,
 "speed": 50,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5074,6 +5189,7 @@
 "radius": 18.0,
 "sight": 330,
 "speed": 40.5,
+"tech": 1,
 "weapons": []
 },
 "cornecro": {
@@ -5088,6 +5204,7 @@
 "radius": 14.0,
 "sight": 430,
 "speed": 78,
+"tech": 1,
 "weapons": []
 },
 "corparrow": {
@@ -5102,6 +5219,7 @@
 "radius": 24.25,
 "sight": 500,
 "speed": 51,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5146,6 +5264,7 @@
 "radius": 26.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5218,6 +5337,7 @@
 "radius": 14.0,
 "sight": 380,
 "speed": 82.5,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5261,6 +5381,7 @@
 "radius": 16.0,
 "sight": 350,
 "speed": 72,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5304,6 +5425,7 @@
 "radius": 18.0,
 "sight": 462,
 "speed": 69,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5347,6 +5469,7 @@
 "radius": 16.0,
 "sight": 455,
 "speed": 0.0,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 150,
@@ -5389,6 +5512,7 @@
 "radius": 15.5,
 "sight": 385,
 "speed": 72,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5431,6 +5555,7 @@
 "radius": 31.5,
 "sight": 600,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 1000,
@@ -5473,6 +5598,7 @@
 "radius": 21.0,
 "sight": 338,
 "speed": 69,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 101,
@@ -5542,6 +5668,7 @@
 "radius": 43.5,
 "sight": 455,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 100,
@@ -5612,6 +5739,7 @@
 "radius": 14.5,
 "sight": 380,
 "speed": 35,
+"tech": 2,
 "weapons": []
 },
 "corspy": {
@@ -5626,6 +5754,7 @@
 "radius": 11.5,
 "sight": 550,
 "speed": 62,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5668,6 +5797,7 @@
 "radius": 11.0,
 "sight": 380,
 "speed": 47.7,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 120,
@@ -5710,6 +5840,7 @@
 "radius": 18.5,
 "sight": 510,
 "speed": 23,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5780,6 +5911,7 @@
 "radius": 22.0,
 "sight": 380,
 "speed": 50,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5824,6 +5956,7 @@
 "radius": 14.5,
 "sight": 380,
 "speed": 45,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5867,6 +6000,7 @@
 "radius": 18.75,
 "sight": 416,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5940,6 +6074,7 @@
 "radius": 22.0,
 "sight": 351,
 "speed": 40.5,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 0.0,
@@ -5984,6 +6119,7 @@
 "radius": 29.5,
 "sight": 455,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 150,
@@ -6027,6 +6163,7 @@
 "radius": 12.0,
 "sight": 546,
 "speed": 0.0,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 400,
@@ -6072,6 +6209,7 @@
 "radius": 13.0,
 "sight": 925,
 "speed": 38,
+"tech": 2,
 "weapons": []
 },
 "corvp": {
@@ -6086,6 +6224,7 @@
 "radius": 48.0,
 "sight": 279,
 "speed": 0.0,
+"tech": 1,
 "weapons": []
 },
 "corvrad": {
@@ -6100,6 +6239,7 @@
 "radius": 13.25,
 "sight": 900,
 "speed": 50,
+"tech": 2,
 "weapons": []
 },
 "corvroc": {
@@ -6114,6 +6254,7 @@
 "radius": 21.0,
 "sight": 330,
 "speed": 33,
+"tech": 2,
 "weapons": [
 {
 "acceleration": 100,
@@ -6158,6 +6299,7 @@
 "radius": 16.5,
 "sight": 330,
 "speed": 48,
+"tech": 1,
 "weapons": [
 {
 "acceleration": 0.0,
