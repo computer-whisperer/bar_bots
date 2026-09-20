@@ -32,6 +32,7 @@ impl Brain {
 
     /// Notes something for the strategist's next look.
     pub(super) fn event(&mut self, frame: i32, text: String) {
+        self.journal.note(frame, "event", serde_json::Value::Null, json!(text));
         if self.strategist.is_none() {
             return;
         }

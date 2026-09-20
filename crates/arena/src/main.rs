@@ -9,10 +9,12 @@
 //!              [--disable H-ID,H-ID]   (ablation: switch heuristics off by registry ID)
 //!              [--ab-disable H-ID,H-ID]   (interleaved A/B: arm B also switches these off; blocks of four matches)
 //!              [--claude-config-dir DIR]   (subscription for --strategist sessions; default ~/.claude2)
+//!              [--base-port N]   (default 9100; match i uses N+2i and N+2i+1, so a second arena needs another range)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
 //!              [--commander]    (Sonnet field commander per match; the game is held still during its turns, so any --speed)
 
 mod autohost;
+mod record;
 mod script;
 
 use std::fs::{self, File};
@@ -61,6 +63,8 @@ struct Options {
     ab_disable: Option<String>,
     /// Claude Code config dir for strategist sessions (which subscription they run on).
     claude_config_dir: Option<String>,
+    /// First of the UDP ports the matches use (two each); a second arena on the same machine needs its own range.
+    base_port: u16,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -183,7 +187,7 @@ fn main() -> io::Result<()> {
 fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> io::Result<MatchResult> {
     let dir = batch_dir.join(format!("{index:02}"));
     fs::create_dir_all(&dir)?;
-    let host_port = BASE_PORT + 2 * index as u16;
+    let host_port = options.base_port + 2 * index as u16;
     let setup = MatchSetup {
         map: &options.map,
         opponent_profile: &options.profile,
@@ -225,6 +229,8 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .env("WITHIN_REASON_SOCKET", &socket)
         .env("WITHIN_REASON_LOG_DIR", &dir)
         .env("WITHIN_REASON_DISABLE", &disable)
+        // Every match leaves a record for `run/view_match.py`: 0.1-0.3 MB per game minute (docs/harness/record-format.md).
+        .env("WITHIN_REASON_RECORD", "1")
         .envs(options.claude_config_dir.as_ref().map(|dir| ("WITHIN_REASON_CLAUDE_CONFIG_DIR", dir)))
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
@@ -250,7 +256,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     let _ = fs::remove_file(&socket);
     let outcome = result?;
     let game_minutes = last_frame(&dir.join("engine.log")) as f32 / (30.0 * 60.0);
-    Ok(MatchResult {
+    let result = MatchResult {
         index,
         arm,
         outcome,
@@ -258,7 +264,11 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         our_corner: if setup.we_are_first != setup.swap_corners { "NW" } else { "SE" },
         game_minutes,
         wall_seconds: started.elapsed().as_secs_f32(),
-    })
+    };
+    if let Err(e) = record::finish(&dir, &result, &options.profile) {
+        eprintln!("match {index}: could not close the match record: {e}");
+    }
+    Ok(result)
 }
 
 /// Follows one match over the autohost channel until it is decided or out of time.
@@ -438,6 +448,7 @@ fn parse_args() -> Options {
         disable: String::new(),
         ab_disable: None,
         claude_config_dir: None,
+        base_port: BASE_PORT,
     };
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
@@ -464,6 +475,7 @@ fn parse_args() -> Options {
         match flag.as_str() {
             "--matches" => options.matches = value().parse().unwrap_or_else(|_| usage("--matches")),
             "--parallel" => options.parallel = value().parse().unwrap_or_else(|_| usage("--parallel")),
+            "--base-port" => options.base_port = value().parse().unwrap_or_else(|_| usage("--base-port")),
             "--speed" => options.speed = value().parse().unwrap_or_else(|_| usage("--speed")),
             "--max-minutes" => options.max_minutes = value().parse().unwrap_or_else(|_| usage("--max-minutes")),
             "--profile" => options.profile = value(),
@@ -494,7 +506,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--base-port N]");
     std::process::exit(2)
 }
 

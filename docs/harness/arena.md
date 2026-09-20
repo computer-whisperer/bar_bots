@@ -1,12 +1,14 @@
 # Arena — batch evaluation
 
 `target/release/arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive] [--map NAME]
-[--max-minutes N] [--label TEXT]`
+[--max-minutes N] [--label TEXT] [--base-port N]`
 
-Per match: a directory `run/matches/<unix-stamp>-<label>/NN/` holding `script.txt`, `engine.log`, `bot.log`, the replay under
-`demos/`, and the engine's write-dir litter; `results.jsonl` per batch. The arena rebuilds and reinstalls the AI first
+Per match: a directory `run/matches/<unix-stamp>-<label>/NN/` holding `script.txt`, `engine.log`, `bot.log`, the match record
+`record-<ai_id>.jsonl` (`record-format.md`; open it with `run/view_match.py <match dir>`), the replay under `demos/`, and the engine's write-dir litter; `results.jsonl` per batch. The arena rebuilds and reinstalls the AI first
 (`run/install_ai.sh`), starts one bot and one engine per match with a private socket and ports `9100 + 2*index`, requests
 the speed over the autohost channel, reads the winner from SERVER_GAMEOVER, and ends the engine with `/kill`.
+- Two arenas on one machine need separate port ranges: give the second `--base-port 9300` (match i uses N+2i, N+2i+1).
+  Without it the second arena's matches fail to bind the autohost port of the first.
 - Corner and faction alternate by match index; the opponent gets the other faction, or ours with `--mirror`.
 - After a batch the arena prints mean heuristic firings per match for wins against losses (from the `rules:` lines in
   `bot.log`) and a ledger row for `docs/experiments.md`; `batch.json` records label, commit and options.

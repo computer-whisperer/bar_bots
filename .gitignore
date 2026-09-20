@@ -1,9 +1,9 @@
 upstream/
 run/engine
-run/engines/
-run/data/
+run/engines
+run/data
 target/
 run/logs/
 run/matches/
-run/cache-template/
+run/cache-template
 run/usage-*.json

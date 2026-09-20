@@ -51,4 +51,4 @@ W-L-T = wins, losses, timeouts; (n) = aborted by engine crash.
 | observe-4-noraids | 370ecc7+ | medium, NW | 4 | 0-4 | raid squads removed | armies level to minute 9 (13-35 vs 18-26); the first wave of 20 leaves about then and dies, and BARb counter-attacks |
 | observe-5-hold40 | 370ecc7+ | medium, NW | 4 | 1-3 | first wave at 40 (not kept) | holding the army at home does not save extractors: 37 soldiers at home at minute 12 while extractors fell 13 -> 6 -> 2, then 21 soldiers lost in one minute to ~14 vehicles (flash, janus, stumpy) |
 | v14-easy-sanity | 370ecc7+ | easy | 12 | 9-3-0 | first wave 20, constructor cap 10, no raids | not broken against easy |
-
+| viewer-test, viewer-test-40, viewer-test-40b, viewer-final | 76fa362+ (match-viewer branch) | easy, medium, easy, easy; NW | 1 each | 0-0-1, 0-1, 0-1, 0-0-1 | harness only: match recorder and viewer (14, 40, 40 and 8 minute caps, census on); brain unchanged | records of 1.5 / 1.4 / 5.2 MB, see harness/record-format.md; not a brain result |

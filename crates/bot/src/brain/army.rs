@@ -82,6 +82,14 @@ impl Army {
     pub fn waves_sent(&self) -> usize {
         self.waves_sent
     }
+
+    pub fn target(&self) -> Option<Vec3> {
+        self.target
+    }
+
+    pub fn staging_point(&self) -> Option<Vec3> {
+        self.staging.map(|(point, _)| point)
+    }
 }
 
 impl Brain {
@@ -258,6 +266,7 @@ impl Brain {
         if self.enabled("H-ARMY-RECALL") && intruders >= RECALL_INTRUDERS && !self.army.attackers.is_empty() {
             self.fire("H-ARMY-RECALL");
             eprintln!("[ai {}] f={} recall: {intruders} enemies at the base, {} attackers called home", self.ai(), tick.frame, self.army.attackers.len());
+            self.journal.note(tick.frame, "recall", serde_json::json!({ "intruders": intruders }), serde_json::json!({ "attackers_called_home": self.army.attackers.len() }));
             self.army.attackers.clear();
             self.army.staging = None;
             self.army.last_defend_order = 0;
@@ -320,6 +329,7 @@ impl Brain {
                 } else {
                     target
                 };
+                self.journal_wave(tick.frame, self.army.waves_sent, home_group.len(), target, first_stop);
                 let committed = soldiers.iter().filter(|u| self.army.attackers.contains(&u.id));
                 commands.extend(committed.map(|u| Command::Fight { unit: u.id, to: first_stop, queue: false }));
             } else {
@@ -353,6 +363,7 @@ impl Brain {
                 return;
             }
             eprintln!("[ai {}] f={} assault: {gathered} of {} attackers gathered, going in", self.ai(), tick.frame, attackers.len());
+            self.journal.note(tick.frame, "assault", serde_json::json!({ "gathered": gathered, "attackers": attackers.len() }), serde_json::Value::Null);
             self.army.staging = None;
             commands.extend(attackers.iter().map(|u| Command::Fight { unit: u.id, to: target, queue: false }));
             return;
