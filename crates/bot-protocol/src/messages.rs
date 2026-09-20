@@ -177,6 +177,8 @@ pub enum Command {
     Guard { unit: UnitId, target: UnitId },
     /// Reclaim every wreck and rock within `radius` of `centre` for their metal.
     ReclaimArea { unit: UnitId, centre: Vec3, radius: f32, queue: bool },
+    /// Restore `target`'s health (a builder's job; it also finishes a stalled construction).
+    Repair { unit: UnitId, target: UnitId, queue: bool },
 }
 
 /// The shim resolves this to the closest legal build position, since only it can query the map.

@@ -407,6 +407,13 @@ impl Engine {
                 timeOut: NO_TIMEOUT,
                 toGuardUnitId: target.0,
             }),
+            Command::Repair { unit, target, queue } => self.handle(sys::COMMAND_UNIT_REPAIR, &mut sys::SRepairUnitCommand {
+                unitId: unit.0,
+                groupId: NO_GROUP,
+                options: options(queue),
+                timeOut: NO_TIMEOUT,
+                toRepairUnitId: target.0,
+            }),
             Command::ReclaimArea { unit, centre, radius, queue } => {
                 let mut pos = [centre.x, centre.y, centre.z];
                 self.handle(sys::COMMAND_UNIT_RECLAIM_AREA, &mut sys::SReclaimAreaUnitCommand {

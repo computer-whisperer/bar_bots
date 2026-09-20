@@ -42,6 +42,8 @@ pub struct Brain {
     wreck_sites: Vec<(Vec3, i32)>,
     /// Metal spots where an extractor or a constructor of ours died, and until which frame they stay closed.
     hot_spots: Vec<(Vec3, i32)>,
+    /// Units a constructor has been sent to repair, and when, so that one goes to each.
+    repair_claims: HashMap<UnitId, i32>,
     /// When something of ours last died on our side of the map; no wave leaves while that is fresh.
     last_loss_at_home_frame: i32,
     army: army::Army,
@@ -101,6 +103,7 @@ impl Brain {
             routes: None,
             wreck_sites: Vec::new(),
             hot_spots: Vec::new(),
+            repair_claims: HashMap::new(),
             last_loss_at_home_frame: i32::MIN / 2,
             army: army::Army::default(),
             squads: Default::default(),
@@ -211,6 +214,23 @@ impl Brain {
                     "[ai {}] f={} commander hit for {damage:.0} by {who} from {range:.0} away, {:.0} health left",
                     self.ai(), tick.frame, commander.health
                 );
+            }
+            // H-ECO-REPAIR: a badly hurt commander does not wait for a constructor to fall idle; the nearest one drops
+            // what it is doing.
+            let badly_hurt = commander.health < commander.max_health * 0.5;
+            if badly_hurt && self.enabled("H-ECO-REPAIR") && !self.repair_claims.contains_key(&commander.id) {
+                let medic = tick
+                    .snapshot
+                    .own_units
+                    .iter()
+                    .filter(|u| u.def == kit.constructor && !u.being_built && u.pos.dist2d(commander.pos) < 1200.0)
+                    .min_by(|a, b| a.pos.dist2d(commander.pos).total_cmp(&b.pos.dist2d(commander.pos)));
+                if let Some(medic) = medic {
+                    self.fire("H-ECO-REPAIR");
+                    self.repair_claims.insert(commander.id, tick.frame);
+                    self.jobs.insert(medic.id, kit.commander);
+                    commands.push(Command::Repair { unit: medic.id, target: commander.id, queue: false });
+                }
             }
             let hurt = commander.health < commander.max_health * RETREAT_HEALTH;
             if hurt && damaged(commander.id) && commander.pos.dist2d(self.home) > SAFE_RADIUS {

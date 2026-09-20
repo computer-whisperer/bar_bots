@@ -14,6 +14,11 @@ const COMMANDER_LEASH: f32 = 900.0;
 const NANO_PER_INCOME: f32 = 8.0;
 const NANOS_PER_LAB: usize = 3;
 const NANO_REACH: f32 = 260.0;
+/// H-ECO-REPAIR: a constructor within this distance mends the commander below this share of its health, else a
+/// turret, extractor, factory or construction turret below that one.
+const REPAIR_WITHIN: f32 = 1200.0;
+const COMMANDER_REPAIR_BELOW: f32 = 0.85;
+const BUILDING_REPAIR_BELOW: f32 = 0.7;
 /// H-ECO-RECLAIM: with less metal than this banked, a constructor reclaims the wrecks of a recent fight within this
 /// walking distance before anything else; one constructor per site.
 const RECLAIM_WHEN_METAL_BELOW: f32 = 150.0;
@@ -73,6 +78,7 @@ const TICK_FRAMES: i32 = 15;
 
 /// The rules a builder tries once the opening stands and energy is not short.
 enum Step {
+    Repair,
     Reclaim,
     Nano,
     FirstTurrets,
@@ -92,6 +98,8 @@ enum Plan {
     Beside(UnitDefId, Vec3),
     /// Reclaim the wrecks around a place where units died.
     Reclaim(Vec3),
+    /// Restore a damaged unit of ours.
+    Repair(bot_protocol::UnitId),
 }
 
 impl Brain {
@@ -131,6 +139,12 @@ impl Brain {
                     (Plan::Near(def_id, _), Some(station)) => Plan::Near(def_id, station),
                     (plan, _) => plan,
                 };
+                if let Plan::Repair(target) = plan {
+                    self.fire(rule);
+                    self.jobs.insert(unit.id, kit.commander);
+                    commands.push(Command::Repair { unit: unit.id, target, queue: false });
+                    continue;
+                }
                 if let Plan::Reclaim(site) = plan {
                     self.fire(rule);
                     // Busy, but building nothing: the commander's type stands for "no building" in the job counts.
@@ -141,7 +155,7 @@ impl Brain {
                 let planned_def = match plan {
                     Plan::Extractor(_) => kit.extractor,
                     Plan::Near(def_id, _) | Plan::Beside(def_id, _) => def_id,
-                    Plan::Reclaim(_) => unreachable!("handled above"),
+                    Plan::Reclaim(_) | Plan::Repair(_) => unreachable!("handled above"),
                 };
                 let buildable = self.world.def(unit.def).is_some_and(|d| d.build_options.contains(&planned_def));
                 if !buildable {
@@ -162,7 +176,7 @@ impl Brain {
                         (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: self.gap_around(def_id, kit) })
                     }
                     Plan::Beside(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: NANO_REACH, min_dist: 2 }),
-                    Plan::Reclaim(_) => unreachable!("handled above"),
+                    Plan::Reclaim(_) | Plan::Repair(_) => unreachable!("handled above"),
                 };
                 // An order whose builder is idle again within two ticks never started: count it and say where.
                 if let Some((frame, earlier, near)) = self.last_orders.insert(unit.id, (tick.frame, def_id, site.near))
@@ -285,10 +299,10 @@ impl Brain {
         }
         // Once the opening stands, the remaining rules run in an order the strategist can change.
         let order: &[Step] = match focus {
-            Some(Focus::Expand) => &[Step::Reclaim, Step::Expand, Step::OutpostTurret, Step::FirstTurrets, Step::MoreLabs, Step::Convert, Step::MoreTurrets],
-            Some(Focus::Production) => &[Step::Nano, Step::MoreLabs, Step::FirstTurrets, Step::Expand, Step::OutpostTurret, Step::Convert, Step::MoreTurrets],
-            Some(Focus::Defence) => &[Step::Reclaim, Step::MoreTurrets, Step::OutpostTurret, Step::Expand, Step::MoreLabs, Step::Convert],
-            Some(Focus::Energy) | None => &[Step::Reclaim, Step::FirstTurrets, Step::Nano, Step::MoreLabs, Step::OutpostTurret, Step::Expand, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Expand) => &[Step::Repair, Step::Reclaim, Step::Expand, Step::OutpostTurret, Step::FirstTurrets, Step::MoreLabs, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Production) => &[Step::Repair, Step::Nano, Step::MoreLabs, Step::FirstTurrets, Step::Expand, Step::OutpostTurret, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Defence) => &[Step::Repair, Step::Reclaim, Step::MoreTurrets, Step::OutpostTurret, Step::Expand, Step::MoreLabs, Step::Convert],
+            Some(Focus::Energy) | None => &[Step::Repair, Step::Reclaim, Step::FirstTurrets, Step::Nano, Step::MoreLabs, Step::OutpostTurret, Step::Expand, Step::Convert, Step::MoreTurrets],
         };
         if focus.is_some() {
             self.fire("D-ECONOMY-FOCUS");
@@ -297,6 +311,11 @@ impl Brain {
         let floating = if focus == Some(Focus::Production) { FLOATING_METAL / 3.0 } else { FLOATING_METAL };
         for step in order {
             match step {
+                Step::Repair if !is_commander && self.enabled("H-ECO-REPAIR") => {
+                    if let Some(target) = self.claim_repair(builder, snapshot.own_units.as_slice(), kit, tick.frame) {
+                        return (Plan::Repair(target), "H-ECO-REPAIR");
+                    }
+                }
                 Step::Reclaim if !is_commander && snapshot.metal.current < RECLAIM_WHEN_METAL_BELOW && self.enabled("H-ECO-RECLAIM") => {
                     if let Some(site) = self.claim_wreck_site(builder, tick.frame) {
                         return (Plan::Reclaim(site), "H-ECO-RECLAIM");
@@ -373,6 +392,24 @@ impl Brain {
         self.spot_claims.insert(index, frame);
         // The engine stores the spot's metal value in `y`.
         Some(Vec3 { y: 0.0, ..*spot })
+    }
+
+    /// What this constructor should mend: the commander first (the game ends with it), then the nearest damaged
+    /// turret, extractor or factory, each by one constructor at a time.
+    fn claim_repair(&mut self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit, frame: i32) -> Option<bot_protocol::UnitId> {
+        const CLAIM_FRAMES: i32 = 20 * 30;
+        self.repair_claims.retain(|_, since| frame - *since < CLAIM_FRAMES);
+        let hurt = |u: &&OwnUnit, below: f32| !u.being_built && u.max_health > 0.0 && u.health < u.max_health * below;
+        let in_reach = |u: &&OwnUnit| u.pos.dist2d(builder.pos) < REPAIR_WITHIN && !self.repair_claims.contains_key(&u.id);
+        let commander = own.iter().find(|u| u.def == kit.commander && hurt(u, COMMANDER_REPAIR_BELOW) && in_reach(u));
+        let building = || {
+            own.iter()
+                .filter(|u| [kit.turret, kit.extractor, kit.lab, kit.nano].contains(&u.def) && hurt(u, BUILDING_REPAIR_BELOW) && in_reach(u))
+                .min_by(|a, b| a.pos.dist2d(builder.pos).total_cmp(&b.pos.dist2d(builder.pos)))
+        };
+        let target = commander.or_else(building)?.id;
+        self.repair_claims.insert(target, frame);
+        Some(target)
     }
 
     /// The nearest place, on our side of the map, where units died lately and nobody has been sent to reclaim yet.

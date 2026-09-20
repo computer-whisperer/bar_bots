@@ -161,7 +161,8 @@ impl Instance {
                 | Command::Stop { unit }
                 | Command::SetRepeat { unit, .. }
                 | Command::Guard { unit, .. }
-                | Command::ReclaimArea { unit, .. }) = command;
+                | Command::ReclaimArea { unit, .. }
+                | Command::Repair { unit, .. }) = command;
                 self.events.push(Event::CommandRejected { unit, code });
             }
         }

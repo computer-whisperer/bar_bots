@@ -41,6 +41,7 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 | H-ARMY-HOME-GUARD | A wave leaves the 6 soldiers nearest the station at home | `army.rs` `run_army` | K-army-verdicts-v17 | active (untested) |
 | H-ARMY-WAVE-GATE | A wave launches only if its metal value is 1.3x the known defenders within 900 of the target (remembered armed buildings x1.5, soldiers in sight, 1500 for the enemy commander at its base), and not within 30 s of a loss on our side of the map | `army.rs` `known_defenders`, `run_army` | K-army-verdicts-v17 | active (untested) |
 | H-ARMY-RESPONDERS | Raiders at an outpost are met by the nearest soldiers, 3 per raider and at least 4, not the whole home group; the station counts extractors beyond 600 as outposts (was 1200) | `army.rs` `run_army`, `OUTPOST_DISTANCE` | K-army-verdicts-v17 | active (untested) |
+| H-ECO-REPAIR | An idle constructor within 1200 mends the commander below 85 % health, else the nearest turret, extractor, factory or construction turret below 70 %, one constructor per target; below 50 % the commander pulls the nearest constructor off its job | `economy.rs` `claim_repair`, `mod.rs` `protect_commander` | (user question 2026-09-19; BARb repairs, we did not) | active (untested) |
 | H-ARMY-SWEEP | Idle attackers at an empty target sweep metal spots from the enemy side | `army.rs` `run_army` | (unexamined) | active |
 
 Retired:
