@@ -114,6 +114,10 @@ fn tool_list() -> Value {
                   "description": "Factories keep at least this many constructors alive (the bot's own floor is 3)." },
               "min_converters": { "type": ["integer", "null"], "minimum": 0, "maximum": 40,
                   "description": "Constructors build energy-to-metal converters up to this count before expanding further, energy permitting." },
+              "expansion_radius": { "type": ["integer", "null"], "minimum": 500, "maximum": 20000,
+                  "description": "Constructors build extractors only on metal spots within this walking distance of home (see walk_from_home in the map). Use it to stop expansion into places you cannot defend." },
+              "commander_station": { "type": ["object", "null"], "properties": { "x": { "type": "number" }, "z": { "type": "number" } },
+                  "required": ["x", "z"], "description": "The commander walks here and builds only near here (it is a strong builder and fighter, and the game is lost if it dies). Without this it roams within 900 of home." },
               "economy_focus": { "enum": ["expand", "energy", "production", "defence", null],
                   "description": "What constructors prefer once the opening is done." },
               "ttl_seconds": { "type": "integer", "minimum": 10, "maximum": MAX_TTL_SECONDS } } } },
@@ -269,6 +273,10 @@ fn set_directives(arguments: &Value, shared: &Shared) -> Result<String, String> 
             "min_converters" => {
                 directives.min_converters = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
             }
+            "expansion_radius" => {
+                directives.expansion_radius = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
+            }
+            "commander_station" => directives.commander_station = position(value, field)?.map(|value| Timed { value, expires_frame }),
             "attack_target" => directives.attack_target = position(value, field)?.map(|value| Timed { value, expires_frame }),
             "army_station" => directives.army_station = position(value, field)?.map(|value| Timed { value, expires_frame }),
             other => return Err(format!("unknown directive {other}")),

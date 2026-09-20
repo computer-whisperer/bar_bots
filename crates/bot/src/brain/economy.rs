@@ -10,6 +10,8 @@ use super::{Brain, FRAMES_PER_SECOND};
 
 /// The commander never builds farther from home than this.
 const COMMANDER_LEASH: f32 = 900.0;
+/// A stationed commander (D-COMMANDER-STATION) builds within this distance of its station and walks back beyond it.
+const COMMANDER_STATION_REACH: f32 = 500.0;
 const MAX_LABS: usize = 8;
 const MAX_TURRETS: usize = 6;
 const MAX_CONVERTERS: usize = 40;
@@ -73,8 +75,21 @@ impl Brain {
         for unit in own.iter().filter(|u| u.idle && !u.being_built) {
             let Some(def) = self.world.def(unit.def) else { continue };
             let (is_builder, is_mobile) = (def.build_speed > 0.0, def.speed > 0.0);
+            let stationed_at = self.directives.commander_station.map(|d| self.snap_to_reachable(d.value)).filter(|_| unit.def == kit.commander);
+            if let Some(station) = stationed_at
+                && unit.pos.dist2d(station) > COMMANDER_STATION_REACH
+            {
+                self.fire("D-COMMANDER-STATION");
+                commands.push(Command::Move { unit: unit.id, to: station, queue: false });
+                continue;
+            }
             if is_builder && is_mobile {
                 let (plan, rule) = self.plan_for(unit, tick, kit);
+                // A stationed commander builds where it stands, whatever anchor the rule had in mind.
+                let plan = match (plan, stationed_at) {
+                    (Plan::Near(def_id, _), Some(station)) => Plan::Near(def_id, station),
+                    (plan, _) => plan,
+                };
                 let planned_def = match plan {
                     Plan::Extractor(_) => kit.extractor,
                     Plan::Near(def_id, _) => def_id,
@@ -251,8 +266,20 @@ impl Brain {
     /// commander (H-COM-LEASH), on our half of the map for constructors (H-ECO-OWN-HALF).
     fn claim_spot(&mut self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit, frame: i32) -> Option<Vec3> {
         let is_commander = builder.def == kit.commander;
+        let commander_station = self.directives.commander_station.map(|d| d.value);
+        let expansion_radius = self.directives.expansion_radius.map(|d| d.value);
+        if commander_station.is_some() || expansion_radius.is_some() {
+            self.fire(if is_commander { "D-COMMANDER-STATION" } else { "D-EXPANSION-RADIUS" });
+        }
         let reachable = |spot: Vec3| {
-            if is_commander { self.walk_from_home(spot) < COMMANDER_LEASH } else { self.spot_is_ours(spot) }
+            if is_commander {
+                match commander_station {
+                    Some(station) => spot.dist2d(station) < COMMANDER_STATION_REACH,
+                    None => self.walk_from_home(spot) < COMMANDER_LEASH,
+                }
+            } else {
+                self.spot_is_ours(spot) && expansion_radius.is_none_or(|radius| self.walk_from_home(spot) <= radius as f32)
+            }
         };
         let (index, spot) = self
             .world

@@ -20,6 +20,8 @@ pub struct Squads {
     posts: HashMap<String, Post>,
     last_order_frame: HashMap<String, i32>,
     engaged: HashMap<String, bool>,
+    /// What the commander should know about its last post or order for a squad (moved to walkable ground, or refused).
+    remarks: HashMap<String, String>,
 }
 
 impl Squads {
@@ -51,7 +53,18 @@ impl Brain {
                     continue;
                 }
                 if let Some(post) = request.post {
-                    self.squads.posts.insert(name.clone(), post);
+                    match self.walkable(post.at) {
+                        Ok((at, remark)) => {
+                            self.squads.posts.insert(name.clone(), Post { at, ..post });
+                            self.squads.remarks.extend(remark.map(|r| (name.clone(), format!("post {r}"))));
+                        }
+                        Err(problem) => {
+                            request.post = None;
+                            self.squads.remarks.insert(name.clone(), format!("post refused: {problem}"));
+                        }
+                    }
+                    // Taken as given from here on, so a moved post is not re-examined (and re-remarked) every tick.
+                    request.post = request.post.and(self.squads.posts.get(&name).copied());
                 }
                 let anchor = request.near.or(request.post.map(|p| p.at)).unwrap_or(self.home);
                 for (unit_name, wanted) in request.take.iter_mut() {
@@ -68,8 +81,16 @@ impl Brain {
                 request.take.retain(|_, wanted| *wanted > 0);
                 if let Some((kind, to)) = request.order.take() {
                     // A one-off order ends the standing post; the commander posts the squad again when it wants.
-                    self.squads.posts.remove(&name);
-                    one_off.push((name.clone(), kind, to));
+                    match self.walkable(to) {
+                        Ok((to, remark)) => {
+                            self.squads.posts.remove(&name);
+                            self.squads.remarks.extend(remark.map(|r| (name.clone(), format!("order {r}"))));
+                            one_off.push((name.clone(), kind, to));
+                        }
+                        Err(problem) => {
+                            self.squads.remarks.insert(name.clone(), format!("order refused: {problem}"));
+                        }
+                    }
                 }
             }
         }
@@ -115,6 +136,18 @@ impl Brain {
         self.publish_field(tick, kit, soldiers, &shared);
     }
 
+    /// Where a commander's point really is for our bots: itself, the walkable ground nearest it (with a remark saying
+    /// how far that is), or nowhere.
+    fn walkable(&self, at: Vec3) -> Result<(Vec3, Option<String>), String> {
+        if !self.reachable_on_foot(at) {
+            return Err(format!("our bots cannot walk to ({:.0}, {:.0}) or anywhere near it", at.x, at.z));
+        }
+        let snapped = self.snap_to_reachable(at);
+        let moved = snapped.dist2d(at);
+        let remark = (moved > 48.0).then(|| format!("moved {moved:.0} to walkable ground at ({:.0}, {:.0})", snapped.x, snapped.z));
+        Ok((snapped, remark))
+    }
+
     fn publish_field(&self, tick: &Tick, kit: &Kit, soldiers: &[&OwnUnit], shared: &crate::strategist::shared::Shared) {
         let own = &tick.snapshot.own_units;
         let composition = |units: &[&&OwnUnit]| {
@@ -126,11 +159,15 @@ impl Brain {
         };
         let pool: Vec<&&OwnUnit> = soldiers.iter().filter(|u| !self.squads.contains(u.id)).collect();
         let wanted = shared.field_orders.lock().unwrap().squads.clone();
-        let squads = self
-            .squads
-            .members
-            .iter()
-            .map(|(name, members)| {
+        // Every squad asked for, manned or not: an empty one still has things to say (still wanted, post refused).
+        let mut names: Vec<&String> = self.squads.members.keys().chain(wanted.keys()).collect();
+        names.sort();
+        names.dedup();
+        let nobody = Vec::new();
+        let squads = names
+            .into_iter()
+            .map(|name| {
+                let members = self.squads.members.get(name).unwrap_or(&nobody);
                 let units: Vec<&&OwnUnit> = soldiers.iter().filter(|u| members.contains(&u.id)).collect();
                 let (health, max): (f32, f32) = units.iter().fold((0.0, 0.0), |(h, m), u| (h + u.health, m + u.max_health));
                 SquadStatus {
@@ -141,6 +178,7 @@ impl Brain {
                     post: self.squads.posts.get(name).map(|p| (self.place(p.at), p.radius as u32)),
                     still_wanted: wanted.get(name).map(|r| r.take.clone().into_iter().collect()).unwrap_or_default(),
                     engaged: self.squads.engaged.get(name).copied().unwrap_or(false),
+                    remark: self.squads.remarks.get(name).cloned(),
                 }
             })
             .collect();

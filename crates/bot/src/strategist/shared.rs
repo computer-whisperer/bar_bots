@@ -111,6 +111,10 @@ pub struct Directives {
     pub army_station: Option<Timed<Vec3>>,
     pub min_constructors: Option<Timed<usize>>,
     pub min_converters: Option<Timed<usize>>,
+    /// Constructors take no metal spot farther than this from home, on foot.
+    pub expansion_radius: Option<Timed<usize>>,
+    /// Where the commander stands and builds, instead of roaming its leash around home.
+    pub commander_station: Option<Timed<Vec3>>,
 }
 
 impl Directives {
@@ -127,6 +131,8 @@ impl Directives {
         lapse(&mut self.army_station, frame);
         lapse(&mut self.min_constructors, frame);
         lapse(&mut self.min_converters, frame);
+        lapse(&mut self.expansion_radius, frame);
+        lapse(&mut self.commander_station, frame);
     }
 
     pub fn describe(&self, frame: i32) -> Vec<String> {
@@ -152,6 +158,12 @@ impl Directives {
         }
         if let Some(t) = self.min_converters {
             lines.push(format!("min_converters={} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(t) = self.expansion_radius {
+            lines.push(format!("expansion_radius={} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(t) = self.commander_station {
+            lines.push(format!("commander_station=({:.0}, {:.0}) ({})", t.value.x, t.value.z, left(t.expires_frame)));
         }
         lines
     }
@@ -218,6 +230,8 @@ pub struct SquadStatus {
     pub post: Option<(Place, u32)>,
     pub still_wanted: Vec<(String, usize)>,
     pub engaged: bool,
+    /// What became of the last post or order: moved to walkable ground, or refused.
+    pub remark: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

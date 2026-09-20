@@ -26,7 +26,8 @@ fn squad_line(s: &SquadStatus) -> String {
     let post = s.post.as_ref().map_or("no post".to_string(), |(p, r)| format!("post {} ({}, {}) r{r}", p.grid, p.x, p.z));
     let wanted = if s.still_wanted.is_empty() { String::new() } else { format!(", still wants {}", counted(&s.still_wanted)) };
     let engaged = if s.engaged { ", ENGAGED" } else { "" };
-    format!("{} [{}] {}% at {at}, {post}{wanted}{engaged}", s.name, counted(&s.composition), s.health_percent)
+    let remark = s.remark.as_ref().map_or(String::new(), |r| format!(" ({r})"));
+    format!("{} [{}] {}% at {at}, {post}{wanted}{engaged}{remark}", s.name, counted(&s.composition), s.health_percent)
 }
 
 pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[String], full: bool) -> String {

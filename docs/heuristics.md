@@ -30,6 +30,9 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 | H-ARMY-STAGE | A launched wave, with the survivors of earlier ones, gathers 1500 short of the target; the assault starts at 70 % gathered or after 150 s | `army.rs` `run_army` | K-army-waves-die-to-static-defence, K-army-piecemeal-midmap | active; v12-stage 17-5-2 against 13-7-4 before (one batch each) |
 | H-ARMY-RECALL | 6 or more enemies within 1400 of the start: every attacker rejoins the home group and defends | `army.rs` `run_army` | K-army-commander-sniped-after-wave-leaves | active; fired in 4 of 24 games of v13-recall (23-1-0); effect not separable |
 | H-ARMY-RAID | (removed) Squads of 3 raiders hunting enemy extractors | was `raid.rs` | K-army-we-never-raid | retired 2026-09-19: no gain in extractor kills, 6-10 raiders lost in the enemy half by minute 10, a quarter of the early army |
+| D-EXPANSION-RADIUS | Constructors take no metal spot farther than this from home on foot | `economy.rs` `claim_spot` | K-army-defence-is-positioning-and-mix (Sonnet asked for it) | directive only |
+| D-COMMANDER-STATION | The commander walks to a station and builds only within 500 of it | `economy.rs` `run_economy`, `claim_spot` | same | directive only |
+| D-SQUAD-POST / D-SQUAD-ORDER / D-PRODUCTION-MIX / D-TURRET-REQUEST | The field commander's levers: posted squads, one-off orders, unit mix, turret requests; posts and orders are snapped to walkable ground or refused | `squads.rs`, `economy.rs` | DESIGN.md "Field commander" | commander mode only |
 | H-ARMY-SWEEP | Idle attackers at an empty target sweep metal spots from the enemy side | `army.rs` `run_army` | (unexamined) | active |
 
 Retired:

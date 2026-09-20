@@ -129,3 +129,52 @@ impl Field {
         Some(self.centre(index))
     }
 }
+
+/// A coarse picture of the map in text, `size` characters square, for a reader that cannot see it: `~` water,
+/// `#` ground this class cannot stand on (cliffs), `x` ground it could stand on but cannot walk to from the field's
+/// origin, and `.` `o` `O` walkable ground by height (low, middle, high thirds).
+pub fn sketch(terrain: &Terrain, passable: &[bool], field: &Field, size: usize) -> Vec<String> {
+    let (width, height) = (terrain.width as usize, terrain.height as usize);
+    let top = terrain.heights.iter().copied().max().unwrap_or(1).max(1) as f32;
+    let (step_x, step_z) = (width.div_ceil(size), height.div_ceil(size));
+    (0..size)
+        .map(|row| {
+            (0..size)
+                .map(|column| {
+                    let (mut water, mut blocked, mut cut_off, mut walkable, mut height_sum) = (0, 0, 0, 0, 0.0);
+                    for z in (row * step_z)..((row + 1) * step_z).min(height) {
+                        for x in (column * step_x)..((column + 1) * step_x).min(width) {
+                            let index = z * width + x;
+                            if terrain.heights[index] < 0 {
+                                water += 1;
+                            } else if !passable[index] {
+                                blocked += 1;
+                            } else if field.cost[index] == UNREACHABLE {
+                                cut_off += 1;
+                            } else {
+                                walkable += 1;
+                                height_sum += f32::from(terrain.heights[index]);
+                            }
+                        }
+                    }
+                    // A cell is what most of it is, except that any real share of cliff shows: cliffs are thin.
+                    let land = blocked + cut_off + walkable;
+                    if water > land {
+                        '~'
+                    } else if blocked * 3 >= land {
+                        '#'
+                    } else if cut_off > walkable {
+                        'x'
+                    } else {
+                        match height_sum / walkable.max(1) as f32 / top {
+                            t if t < 0.33 => '.',
+                            t if t < 0.66 => 'o',
+                            _ => 'O',
+                        }
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+

@@ -40,6 +40,11 @@ impl Brain {
             spots.iter().filter(|s| from_home.distance(**s).is_none()).map(|s| format!("({:.0}, {:.0})", s.x, s.z)).collect();
         eprintln!("[ai {}] terrain: spots we cannot walk to: {}", self.ai(), cut_off.join(" "));
         self.routes = Some(Routes { from_home, from_enemy, enemy_origin: self.enemy_start, passable });
+        if let Some(sketch) = self.terrain_sketch() {
+            for row in sketch["rows"].as_array().into_iter().flatten() {
+                eprintln!("[ai {}] terrain: {}", self.ai(), row.as_str().unwrap_or_default());
+            }
+        }
     }
 
     /// Call when `enemy_start` may have changed.
@@ -75,6 +80,23 @@ impl Brain {
     /// The point `along` elmos from home on the way to `goal`, on foot.
     pub(super) fn on_the_way_to(&self, goal: Vec3, along: f32) -> Option<Vec3> {
         self.routes.as_ref()?.from_home.towards(goal, along)
+    }
+
+    /// The map in text for the language model, with a legend; `None` without terrain data.
+    pub(super) fn terrain_sketch(&self) -> Option<serde_json::Value> {
+        const SIZE: usize = 32;
+        let routes = self.routes.as_ref()?;
+        let rows = terrain::sketch(&self.world.hello.terrain, &routes.passable, &routes.from_home, SIZE);
+        // Four characters to a grid column, four rows to a grid row, so A1..H8 can be read off the picture.
+        let mut lines = vec!["   A   B   C   D   E   F   G   H".to_string()];
+        lines.extend(rows.iter().enumerate().map(|(i, row)| {
+            let label = if i % 4 == 0 { format!("{} ", i / 4 + 1) } else { "  ".to_string() };
+            format!("{label}{row}")
+        }));
+        Some(serde_json::json!({
+            "legend": "north is up; 4x4 characters per grid cell. ~ water, # cliff or slope our bots cannot cross, x ground we cannot walk to from our start, . o O walkable ground (low, middle, high)",
+            "rows": lines,
+        }))
     }
 
     /// The reachable ground nearest `pos`; `pos` itself when we cannot tell.
