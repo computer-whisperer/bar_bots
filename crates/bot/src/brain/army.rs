@@ -226,7 +226,13 @@ impl Brain {
             }
         }
         for enemy in visible.iter().filter(|e| e.pos.dist2d(place) < radius) {
-            let Some(def) = enemy.def else { continue };
+            let Some(def) = enemy.def else {
+                // Radar only. A blip standing where we remember a building is that building, already counted.
+                if !self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(enemy.pos) < 40.0) {
+                    force.unidentified += 1;
+                }
+                continue;
+            };
             if self.world.def(def).is_some_and(|d| d.speed > 0.0 && d.build_speed == 0.0 && d.weapon_count > 0) {
                 force.add(def);
             }

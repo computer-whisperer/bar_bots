@@ -45,7 +45,12 @@ impl Matchups {
 pub struct Force {
     pub units: HashMap<UnitDefId, usize>,
     pub turret_metal: f32,
+    /// Radar contacts: something mobile is there, of a type we cannot see.
+    pub unidentified: usize,
 }
+
+/// What one unidentified radar contact is taken to be worth (tier-1 soldiers run 43-270, most 110-140).
+const UNIDENTIFIED_METAL: f32 = 110.0;
 
 impl Force {
     pub fn add(&mut self, def: UnitDefId) {
@@ -70,7 +75,9 @@ impl Brain {
                 metal(*def) * *n as f32 * effectiveness.sqrt()
             })
             .sum();
-        soldiers + TURRET_WORTH * force.turret_metal
+        // A radar contact is counted as an average tier-1 soldier at face value: ignoring it made a column of
+        // twenty blips weigh nothing.
+        soldiers + TURRET_WORTH * force.turret_metal + UNIDENTIFIED_METAL * force.unidentified as f32
     }
 
     /// Our power over theirs if `ours` fights `theirs`: above 1 we should win, and by the square law a ratio r leaves

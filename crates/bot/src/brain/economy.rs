@@ -51,6 +51,10 @@ const MAX_CONSTRUCTORS: usize = 10;
 const MIN_CONSTRUCTORS: usize = 3;
 /// Stored metal above which the base is under-spending and wants another lab.
 const FLOATING_METAL: f32 = 500.0;
+/// H-ECO-RADAR: a radar tower sees about 2000 elmos; towers are spaced so their circles overlap a little.
+const RADAR_SPACING: f32 = 1600.0;
+const MAX_RADARS: usize = 5;
+const RADAR_MIN_INCOME: f32 = 6.0;
 /// Energy income beyond which solar collectors are too small to keep up.
 const ADVANCED_SOLAR_INCOME: f32 = 250.0;
 /// Average wind speed from which wind generators replace solar collectors (solar: 20 energy for 155 metal; wind: the
@@ -90,6 +94,7 @@ const TICK_FRAMES: i32 = 15;
 enum Step {
     Repair,
     Reclaim,
+    Radar,
     Nano,
     FirstTurrets,
     MoreTurrets,
@@ -347,10 +352,10 @@ impl Brain {
         }
         // Once the opening stands, the remaining rules run in an order the strategist can change.
         let order: &[Step] = match focus {
-            Some(Focus::Expand) => &[Step::Repair, Step::Reclaim, Step::Expand, Step::OutpostTurret, Step::FirstTurrets, Step::MoreLabs, Step::Convert, Step::MoreTurrets],
-            Some(Focus::Production) => &[Step::Repair, Step::Nano, Step::MoreLabs, Step::FirstTurrets, Step::Expand, Step::OutpostTurret, Step::Convert, Step::MoreTurrets],
-            Some(Focus::Defence) => &[Step::Repair, Step::Reclaim, Step::MoreTurrets, Step::OutpostTurret, Step::Expand, Step::MoreLabs, Step::Convert],
-            Some(Focus::Energy) | None => &[Step::Repair, Step::Reclaim, Step::FirstTurrets, Step::Nano, Step::MoreLabs, Step::OutpostTurret, Step::Expand, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Expand) => &[Step::Repair, Step::Reclaim, Step::Radar, Step::Expand, Step::OutpostTurret, Step::FirstTurrets, Step::MoreLabs, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Production) => &[Step::Repair, Step::Radar, Step::Nano, Step::MoreLabs, Step::FirstTurrets, Step::Expand, Step::OutpostTurret, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Defence) => &[Step::Repair, Step::Reclaim, Step::Radar, Step::MoreTurrets, Step::OutpostTurret, Step::Expand, Step::MoreLabs, Step::Convert],
+            Some(Focus::Energy) | None => &[Step::Repair, Step::Reclaim, Step::Radar, Step::FirstTurrets, Step::Nano, Step::MoreLabs, Step::OutpostTurret, Step::Expand, Step::Convert, Step::MoreTurrets],
         };
         if focus.is_some() {
             self.fire("D-ECONOMY-FOCUS");
@@ -367,6 +372,25 @@ impl Brain {
                 Step::Reclaim if !is_commander && snapshot.metal.current < RECLAIM_WHEN_METAL_BELOW && self.enabled("H-ECO-RECLAIM") => {
                     if let Some(site) = self.claim_wreck_site(builder, tick.frame) {
                         return (Plan::Reclaim(site), "H-ECO-RECLAIM");
+                    }
+                }
+                // H-ECO-RADAR: eyes. Everything that reacts to the enemy (responders, the commander's wakes, hot
+                // spots, the retreat) works from what is in sight, and a soldier sees a few hundred elmos. One radar
+                // at the front of the base once the lab is up, then one wherever our extractors stand farther than
+                // RADAR_SPACING from every radar we have.
+                Step::Radar if can_build(kit.radar) && self.enabled("H-ECO-RADAR") && planned(kit.radar) < MAX_RADARS && snapshot.metal.income >= RADAR_MIN_INCOME => {
+                    let own = snapshot.own_units.as_slice();
+                    let radars: Vec<Vec3> = own.iter().filter(|u| u.def == kit.radar).map(|u| u.pos).collect();
+                    // One under construction at a time, so that two builders do not answer the same gap.
+                    if planned(kit.radar) == own.iter().filter(|u| u.def == kit.radar && !u.being_built).count() {
+                        let uncovered = |p: &Vec3| radars.iter().all(|r| r.dist2d(*p) > RADAR_SPACING);
+                        let site = std::iter::once(front)
+                            .chain(own.iter().filter(|u| u.def == kit.extractor).map(|u| u.pos))
+                            .filter(uncovered)
+                            .min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)));
+                        if let Some(site) = site {
+                            return (Plan::Near(kit.radar, site), "H-ECO-RADAR");
+                        }
                     }
                 }
                 Step::Nano if can_build(kit.nano) && self.enabled("H-ECO-NANO") => {

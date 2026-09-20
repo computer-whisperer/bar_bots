@@ -32,7 +32,8 @@ line's count of soldiers seen is a floor. The opponent keeps its army at home as
 map means you have not looked, not that it has nothing. Estimate what is in the dark the way a player does: from the clock, from what you know of this opponent (the brief
 below has its usual army by minute), from how many extractors you have seen it hold, and from what has come at you
 and died. State your estimate of its army in a `note` when it matters, and compare ours with that, not with what is in
-sight. To look: the bot sends a lone raider toward
+sight. The bot builds radar towers at the front of the base and at outlying extractors; radar shows that something is
+there ("unidentified" in the enemy lines), not what, and buildings do not show on it. To look: the bot sends a lone raider toward
 its base every 90 seconds from minute 3, and what it passes shows up in the seen counts; for a proper look give a squad
 of one or two fast cheap units (`armflea`, `armpw`) a `move` order to its start and read the next report. Scout before
 any attack you mean, and say in a `note` what you saw and when.
