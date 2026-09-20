@@ -2,9 +2,9 @@
 //!
 //! The model is deliberately thin: positions in 2D, walk until the target is inside the longest weapon's range and
 //! then stand and shoot, nearest visible enemy, salvos on the engine's own reload clock, projectiles that take time
-//! to arrive and can land beside a target that has moved, area damage with the engine's linear falloff, and units
-//! that push each other apart so a front can only be so wide. Everything a duel showed us is in here; nothing else
-//! is, and `docs/studies/combat-sim.md` lists what that costs.
+//! to arrive and can land beside a target that has moved, area damage with the engine's own falloff, and ground a
+//! unit cannot step onto because another unit is on it, so a front can only be so wide. Everything a duel asked
+//! for is in here; nothing else is, and `docs/studies/combat-sim.md` lists what that costs.
 
 use crate::field::Flow;
 use crate::rng::Rng;
@@ -20,7 +20,8 @@ const BUCKET: f32 = 64.0;
 /// The simulation's own assumptions, as opposed to the game's numbers. Each one is a knob the validation moved.
 #[derive(Clone, Copy, Debug)]
 pub struct Tuning {
-    /// Multiplies each weapon's `accuracy + sprayangle` cone. 1.0 reads the def as 65536 COB units to a full turn.
+    /// Multiplies each weapon's aim cone after the engine's own conversion (`units::aim_error`). 1.0 is the
+    /// engine's number; it is here so that a future miss can be blamed on the cone rather than assumed away.
     pub spread: f32,
     /// A unit closes to this share of its range before it stops: the engine's own `maxRange * 0.9`
     /// (`MobileCAI.cpp` `ExecuteAttack`).
