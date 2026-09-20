@@ -25,7 +25,7 @@ const WR = (() => {
     const { values, bad } = parseLines(text);
     const match = {
       header: null, samples: [], events: [], decisions: [], commands: [], intents: [], result: null,
-      restarts: [], badLines: bad, census: [], botLog: [],
+      restarts: [], badLines: bad, census: [], truth: [], botLog: [],
     };
     for (const r of values) {
       switch (r.t) {
@@ -150,6 +150,25 @@ const WR = (() => {
     }));
   }
 
+  // truth-<ai>.jsonl (WITHIN_REASON_OBSERVE=1): every enemy unit every two seconds, `[id, name, x, z, health %, being built]`.
+  // Entries carry the same totals as census entries, so the charts and the stats take either.
+  function parseTruth(text, classByName) {
+    const out = [];
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      let row;
+      try {
+        row = JSON.parse(line);
+      } catch (_) {
+        continue; // a killed match may end mid-line
+      }
+      const units = row.enemy.map((u) => ({ id: u[0], name: u[1], class: classByName.get(u[1]) || "other", x: u[2], z: u[3], health: u[4], building: !!u[5] }));
+      const count = (cls) => units.reduce((n, u) => n + (u.class === cls && !u.building ? 1 : 0), 0);
+      out.push({ f: row.f, units, enemyExtractors: count("extractor"), enemyArmy: count("army") });
+    }
+    return out.sort((a, b) => a.f - b.f);
+  }
+
   // bot.log lines that carry a frame: [{f, text}].
   function parseBotLog(text) {
     const lines = [];
@@ -243,7 +262,7 @@ const WR = (() => {
     return String.fromCharCode(65 + cell(x, match.header.map.width, columns)) + (cell(z, match.header.map.height, rows) + 1);
   }
 
-  return { FPS, FLAG, parseRecord, parseStrategist, parseCensus, parseBotLog, squadPosts, indexAt, range, stateAt, rulesInMinute, lanes, clock, gridName };
+  return { FPS, FLAG, parseRecord, parseStrategist, parseCensus, parseTruth, parseBotLog, squadPosts, indexAt, range, stateAt, rulesInMinute, lanes, clock, gridName };
 })();
 
 if (typeof module !== "undefined") module.exports = WR;

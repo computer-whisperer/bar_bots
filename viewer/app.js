@@ -17,7 +17,7 @@
 
   const view = {
     match: null, lanes: null, posts: [], frame: 0, playing: false, speed: 10, lastTime: 0,
-    layers: { terrain: true, nobots: true, notanks: false, grid: true, spots: true, census: true, orders: true, intent: true, deaths: true },
+    layers: { terrain: true, nobots: true, notanks: false, grid: true, spots: true, truth: true, census: true, orders: true, intent: true, deaths: true },
     terrain: null,
     background: null, mapBox: null, hoverFrame: null, decisionItems: [], currentDecision: -2,
     show: { heuristic: true, llm: true, event: false },
@@ -55,6 +55,7 @@
     texts.strategist = (await Promise.all([...logs].map((name) => fetchText(base + name)))).filter(Boolean);
     texts.engineLog = await fetchText(base + (siblings.engine_log || "engine.log"));
     texts.botLog = await fetchText(base + (siblings.bot_log || "bot.log"));
+    texts.truth = await fetchText(base + `truth-${header.ai_id}.jsonl`);
     open(texts, Number(params.get("t") || 0) * WR.FPS);
     const bg = params.get("bg") || `maps/${encodeURIComponent(view.match.header.map.name)}.png`;
     loadBackground(bg);
@@ -158,6 +159,9 @@
     for (const text of texts.strategist || []) match.decisions.push(...WR.parseStrategist(text, source));
     match.decisions.sort((a, b) => a.f - b.f);
     if (texts.engineLog) match.census = WR.parseCensus(texts.engineLog, match.classByName);
+    if (texts.truth) match.truth = WR.parseTruth(texts.truth, match.classByName);
+    // The opponent's curve: ground truth every two seconds when the match has it, else the once-a-minute census.
+    match.theirs = match.truth.length ? match.truth : match.census;
     if (texts.botLog) match.botLog = WR.parseBotLog(texts.botLog);
     view.match = match;
     view.lanes = WR.lanes(match);
@@ -189,7 +193,7 @@
     const notes = [`${samples.length} samples`];
     if (badLines) notes.push(`${badLines} unreadable line(s) skipped`);
     if (restarts.length) notes.push(`bot restarted at ${restarts.map(WR.clock).join(", ")}`);
-    notes.push(census.length ? `${census.length} census minutes` : "no census (play with WITHIN_REASON_OBSERVE=1 for the opponent's truth)");
+    notes.push(view.match.truth.length ? "opponent ground truth" : census.length ? `${census.length} census minutes` : "no census (play with WITHIN_REASON_OBSERVE=1 for the opponent's truth)");
     status(notes.join(" · "));
   }
 
@@ -325,7 +329,14 @@
       }
     }
 
-    const census = view.layers.census ? match.census[WR.indexAt(match.census, view.frame)] : null;
+    // Ground truth: every enemy unit where it really was, faint; what our units could see is drawn solid on top.
+    const truth = view.layers.truth ? match.truth[WR.indexAt(match.truth, view.frame)] : null;
+    if (truth) {
+      ctx.globalAlpha = 0.5;
+      for (const u of truth.units) glyph(ctx, u.class, px(u.x), pz(u.z), COLOR.theirs, u.building ? 0.7 : 1);
+      ctx.globalAlpha = 1;
+    }
+    const census = view.layers.census && !truth ? match.census[WR.indexAt(match.census, view.frame)] : null;
     if (census) {
       ctx.globalAlpha = 0.4;
       ctx.font = "10px system-ui";
@@ -459,7 +470,14 @@
       lines.push(`${ours ? "ours" : "enemy"}: ${defName(u.def)} #${u.id}`, ours ? `health ${u.health}%` : `health ${u.health}`);
       if (flags.length) lines.push(flags.join(", "));
     }
-    const census = view.layers.census ? view.match.census[WR.indexAt(view.match.census, view.frame)] : null;
+    const truthNow = view.layers.truth ? view.match.truth[WR.indexAt(view.match.truth, view.frame)] : null;
+    if (truthNow) {
+      const near = truthNow.units.filter((u) => Math.hypot(u.x - x, u.z - z) < reach);
+      const names = new Map();
+      for (const u of near) names.set(u.name, (names.get(u.name) || 0) + 1);
+      if (near.length) lines.push(`theirs (truth): ${[...names].map(([n, k]) => `${n} x${k}`).join(", ")}${near.length === 1 ? `, health ${near[0].health}%` : ""}`);
+    }
+    const census = view.layers.census && !truthNow ? view.match.census[WR.indexAt(view.match.census, view.frame)] : null;
     const groups = census ? census.enemy.filter((g) => Math.hypot(g.x - x, g.z - z) < reach * 1.5) : [];
     if (groups.length) lines.push(`census ${WR.clock(census.f)} (mean positions): ${groups.map((g) => `${g.name} x${g.count}`).join(", ")}`);
     tip.textContent = lines.join("\n");
@@ -523,14 +541,14 @@
     ctx.fillStyle = COLOR.theirs;
     ctx.beginPath(); ctx.arc(g.x0 + 140, y + 6, 4, 0, 7); ctx.fill();
     ctx.fillStyle = COLOR["ink-2"];
-    ctx.fillText(match.census.length ? "theirs (census, once a minute)" : "theirs: no census in this match", g.x0 + 150, y + 6);
+    ctx.fillText(match.truth.length ? "theirs (ground truth)" : match.census.length ? "theirs (census, once a minute)" : "theirs: no census in this match", g.x0 + 150, y + 6);
     y += 14;
 
     view.chartRows = [];
     for (const chart of CHARTS) {
       const top = y + 4;
       const bottom = y + CHART_H - 2;
-      const theirs = chart.theirs ? match.census.map((c) => c[chart.theirs]) : [];
+      const theirs = chart.theirs ? match.theirs.map((c) => c[chart.theirs]) : [];
       const max = Math.max(1, ...match.series.map((s) => s[chart.ours]), ...theirs);
       const vy = (v) => bottom - ((bottom - top) * v) / max;
       ctx.strokeStyle = COLOR.line;
@@ -554,7 +572,13 @@
         else ctx.lineTo(g.fx(s.f), vy(s[chart.ours]));
       }
       ctx.stroke();
-      if (chart.theirs) {
+      if (chart.theirs && match.truth.length) {
+        ctx.strokeStyle = COLOR.theirs;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        match.truth.forEach((c, i) => (i === 0 ? ctx.moveTo(g.fx(c.f), vy(c[chart.theirs])) : ctx.lineTo(g.fx(c.f), vy(c[chart.theirs]))));
+        ctx.stroke();
+      } else if (chart.theirs) {
         for (const c of match.census) {
           ctx.fillStyle = COLOR.surface;
           ctx.beginPath(); ctx.arc(g.fx(c.f), vy(c[chart.theirs]), 5, 0, 7); ctx.fill();
@@ -603,14 +627,14 @@
     view.hoverFrame = frame;
     const match = view.match;
     const s = match.series[WR.indexAt(match.series, frame)];
-    const c = match.census[WR.indexAt(match.census, frame)];
+    const c = match.theirs[WR.indexAt(match.theirs, frame)];
     const lines = [WR.clock(frame)];
     if (s) {
       lines.push(`metal +${s.metalIncome.toFixed(1)}   energy +${s.energyIncome.toFixed(0)}`);
       lines.push(`extractors ${s.extractors}${c ? ` / theirs ${c.enemyExtractors}` : ""}`);
       lines.push(`army ${s.army}${c ? ` / theirs ${c.enemyArmy}` : ""}`);
     }
-    if (c) lines.push(`(census of ${WR.clock(c.f)})`);
+    if (c && !match.truth.length) lines.push(`(census of ${WR.clock(c.f)})`);
     const near = (items) => WR.range(items, frame - 5 * WR.FPS, frame + 5 * WR.FPS);
     const lost = near(view.lanes.losses).concat(near(view.lanes.buildingLosses), near(view.lanes.extractorLosses));
     if (lost.length) lines.push(`lost: ${summarise(lost.map((e) => defName(e.d)))}`);
@@ -640,7 +664,7 @@
     const match = view.match;
     const s = match.samples[WR.indexAt(match.samples, view.frame)];
     const series = match.series[WR.indexAt(match.series, view.frame)];
-    const census = match.census[WR.indexAt(match.census, view.frame)];
+    const census = match.theirs[WR.indexAt(match.theirs, view.frame)];
     const now = $("now");
     now.textContent = "";
     if (!s) return;

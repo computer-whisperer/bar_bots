@@ -87,3 +87,10 @@ value, 1 - the ground normal's y, times 255). `move_classes` lists the distinct 
 shallowest floated in; `units`: how many unit types use it), so a reader can work out where each kind cannot go. The
 viewer renders relief with water and the "bots cannot go" / "vehicles cannot go" layers from it.
 
+## Opponent ground truth
+
+`truth-<ai_id>.jsonl`, written by the shim (not the bot) when the match runs with `WITHIN_REASON_OBSERVE=1`: one line
+every two seconds, `{"f": frame, "enemy": [[id, name, x, z, health %, being built 0/1], ...]}`, every enemy unit
+wherever it is. The viewer draws it as the faint "opponent (truth)" layer under what our units could see, and uses it
+for the opponent's curves; `run/analyze_match.py` derives the opponent's deaths from units leaving the list.
+
