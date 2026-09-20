@@ -162,7 +162,7 @@ fn tool_list() -> Value {
           "inputSchema": { "type": "object", "additionalProperties": false, "required": ["calls"], "properties": {
               "calls": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["tool"], "properties": {
                   "tool": { "type": "string", "enum": ["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"] },
-                  "arguments": { "type": "object" } } } } } } },
+                  "arguments": { "type": "object", "description": "That tool's arguments, e.g. {\"text\": \"...\"} for note." } } } } } } },
         { "name": "wait",
           "description": "Ends your turn: the game resumes the moment this is called, so call it last and write nothing after it. Sets when you are next woken; the settings hold until you change them. The game is paused during your turn and runs fast between turns, so a long quiet wait costs nothing and a raid still wakes you at once. You are always woken for a base attack, the commander under fire, or a wiped-out wave.",
           "inputSchema": { "type": "object", "additionalProperties": false, "properties": {
@@ -191,12 +191,21 @@ fn orders(arguments: &Value, shared: &Shared) -> Result<String, String> {
     let empty = json!({});
     let mut lines = Vec::new();
     for call in others.into_iter().chain(waits) {
+        // As the model writes them: sometimes with the server's prefix on the name, and often with a small tool's
+        // arguments beside `tool` instead of under `arguments` (40 of 46 notes in commander game 11, all recorded empty,
+        // so the sessions that took over mid-game inherited blank notes).
         let tool = call["tool"].as_str().unwrap_or_default();
+        let tool = tool.rsplit("__").next().unwrap_or(tool);
         if !["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"].contains(&tool) {
             lines.push(format!("{tool}: not a tool that can be batched"));
             continue;
         }
-        let arguments = call.get("arguments").filter(|a| a.is_object()).unwrap_or(&empty);
+        let mut beside = call.clone();
+        if let Some(fields) = beside.as_object_mut() {
+            fields.remove("tool");
+            fields.remove("arguments");
+        }
+        let arguments = call.get("arguments").filter(|a| a.is_object()).unwrap_or(if beside.as_object().is_some_and(|f| !f.is_empty()) { &beside } else { &empty });
         match call_tool(tool, arguments, shared) {
             Ok(text) => lines.push(format!("{tool}: {text}")),
             Err(problem) => lines.push(format!("{tool}: REFUSED: {problem}")),
@@ -211,7 +220,7 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared) -> Result<String, S
         "map" => Ok(shared.map.lock().unwrap().to_string()),
         "note" => {
             let time = shared.briefing.lock().unwrap().game_time.clone();
-            let text = arguments["text"].as_str().unwrap_or_default();
+            let text = arguments["text"].as_str().filter(|t| !t.trim().is_empty()).ok_or("a note needs its words under \"text\"")?;
             shared.notes.lock().unwrap().push(format!("[{time}] {text}"));
             Ok("noted".into())
         }
