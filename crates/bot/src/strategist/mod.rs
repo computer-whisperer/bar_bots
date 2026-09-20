@@ -199,20 +199,9 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
                 if triggers.is_empty() { "Routine check.".to_string() } else { triggers.join(" ") }
             }
         };
-        if turns_this_session >= mode.turns_per_session() {
-            session.end();
-            session = match launch.spawn() {
-                Ok(next) => next,
-                Err(e) => {
-                    eprintln!("[ai {ai_id}] could not restart the session: {e}; heuristics carry on alone");
-                    shared.close_gate();
-                    return;
-                }
-            };
-            turns_this_session = 0;
-        }
         // The last turn ended at its `wait`; the session may still be writing its closing words, and takes no new
-        // prompt until it has reported that response finished.
+        // prompt until it has reported that response finished. Before the restart below, not after: the new session
+        // owes nothing, and waiting on it held the game until the arena gave up (commander game 10b, turn 40).
         if owed_result {
             owed_result = false;
             let arrived = loop {
@@ -226,6 +215,18 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
                 shared.end_turn();
                 break;
             }
+        }
+        if turns_this_session >= mode.turns_per_session() {
+            session.end();
+            session = match launch.spawn() {
+                Ok(next) => next,
+                Err(e) => {
+                    eprintln!("[ai {ai_id}] could not restart the session: {e}; heuristics carry on alone");
+                    shared.close_gate();
+                    return;
+                }
+            };
+            turns_this_session = 0;
         }
         let (frame, game_time) = {
             let briefing = shared.briefing.lock().unwrap();
