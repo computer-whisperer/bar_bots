@@ -79,3 +79,10 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   empty spot by H-ARMY-KILL. Now the party scouts the enemy box's metal spots nearest first until a base is found
   (`raid.rs` `unscouted_box_spots`), and the kill needs a building of theirs standing there. rush-8-scout-{place,
   noplace} running (`target-scout`).
+- 2026-09-20, rush-8 (scouting) timeline, placed arm: the first Pawn leaves at 1:05-2:15 (median 1:43; Matt's at
+  1:23) and the first building of theirs is seen at 5.1-6.2 min in every game (Matt's Pawn hurt an extractor at 2:26),
+  with an LLT already beside it. The party crawled at a third of a Pawn's speed: H-ARMY-MARCH held the leaders for the
+  body of the party, and the body was the joiners trickling out of the lab 2000 elmos behind. Now the party's body is
+  the members within 1500 of the front, and it alone is held for, priced and stands at the target (`target-march`).
+  Left for later: the first Pawn a minute late (the executor's 3.5 s between builds), and BARb's Fleas taking 3-7
+  extractors a minute at home from minute 4 (H-ARMY-CONTACT's floor of two).

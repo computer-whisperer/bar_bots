@@ -39,6 +39,11 @@ const BASE_RADIUS: f32 = 1400.0;
 /// it in six seconds); a second player's twelve Pawns killed BARb's.
 const COMMANDER_PARTY_METAL: f32 = 450.0;
 const COMMANDER_REACH: f32 = 700.0;
+/// The party's body: members within this of the one nearest the target. Raiders still on their way from home are
+/// members too, but the march holds the leaders for the body only, and the body is what stands at the target, sees
+/// and is priced (rush-8: the front crawled at a third of a Pawn's speed for four minutes waiting for joiners
+/// trickling out of the lab, and its centre lay 2000 elmos behind the Pawn walking into the commander's D-gun).
+const BODY_BAND: f32 = 1500.0;
 
 #[derive(Default)]
 pub struct Raid {
@@ -170,7 +175,12 @@ impl Brain {
         }
 
         let party: Vec<&OwnUnit> = soldiers.iter().filter(|u| self.raid.contains(u.id)).copied().collect();
-        let Some(centre) = centre(&party) else { return };
+        let front = self.raid.target.map(|t| party.iter().map(|u| u.pos.dist2d(t)).fold(f32::INFINITY, f32::min));
+        let body: Vec<&OwnUnit> = match (front, self.raid.target) {
+            (Some(front), Some(t)) => party.iter().copied().filter(|u| u.pos.dist2d(t) < front + BODY_BAND).collect(),
+            _ => party.clone(),
+        };
+        let Some(centre) = centre(&body) else { return };
         // The target is gone when we no longer remember an extractor there (seen destroyed, or found missing), or when
         // the party stands on it and sees nothing. A box spot the party reaches is scouted, whatever it found.
         let arrived = self.raid.target.is_some_and(|t| centre.dist2d(t) < TARGET_RADIUS);
@@ -190,11 +200,11 @@ impl Brain {
         let commander_at = in_sight.iter().find(|e| is_commander(e)).map(|e| e.pos);
         let commander_near = commander_at.is_some_and(|at| at.dist2d(centre) < COMMANDER_REACH);
         let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES;
-        let party_metal: f32 = party.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
+        let party_metal: f32 = body.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
         let too_small_for_commander = commander_near && party_metal < COMMANDER_PARTY_METAL;
         let outmatched = if reprice {
                 self.raid.priced_at = tick.frame;
-                let verdict = self.assault_verdict(&party, target.unwrap_or(centre), CONTACT_RADIUS, tick);
+                let verdict = self.assault_verdict(&body, target.unwrap_or(centre), CONTACT_RADIUS, tick);
                 verdict.gain < GO_GAIN
             } else {
                 false
@@ -231,7 +241,7 @@ impl Brain {
                     self.raid.last_order_frame = tick.frame;
                     commands.extend(party.iter().filter(|u| !held.contains(&u.id)).map(|u| Command::Fight { unit: u.id, to: target, queue: false }));
                 }
-                commands.extend(self.march(&mut held, &party, target, tick.snapshot.enemies.as_slice()));
+                commands.extend(self.march(&mut held, &body, target, tick.snapshot.enemies.as_slice()));
                 self.raid.held = held;
             }
             _ => {
