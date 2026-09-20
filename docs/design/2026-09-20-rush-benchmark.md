@@ -121,3 +121,9 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   but how much comes behind it and what happens at home: production (18 Pawns by minute 10 against 26 by minute 5)
   and the home answer to Fleas. The user's scouting system is in and stays (the map is known now; it is a
   precondition for anything better), but the next lever is production posture, a decision for the user.
+- 2026-09-20, the commander pair on the same layout: Opus 1-7, Sonnet 0-2 (stopped). Both switched the pressure
+  off early and played a defensive economy, built less army than the heuristic by minute 15 (4935 and 4576 metal
+  against 6428), lost most of it in small guard squads, and held fewer extractors (3.6 and 2.8 against 5.2) when
+  BARb's block came at 15-22 minutes. The harness carried the new lines and levers well (the transcripts reason
+  from them); what the commanders lack is the same thing the heuristic lacks, army behind the opening, and they
+  add a second: holding ground with small posted squads that BARb's raiders wear down.
