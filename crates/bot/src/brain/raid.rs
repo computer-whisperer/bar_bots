@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use bot_protocol::{Command, OwnUnit, Tick, UnitId, Vec3};
 
 use super::army::CONTACT_RADIUS;
-use super::scout::{BASE_VICINITY, LIKELY_BASE, LIKELY_BOX, TURRET_BERTH};
+use super::scout::{LIKELY_BASE, LIKELY_BOX, TURRET_BERTH};
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
 
@@ -40,6 +40,12 @@ const WAIT_OFF: f32 = 1000.0;
 const PERIMETER: f32 = 900.0;
 const PERIMETER_POINTS: usize = 8;
 const PROBE_MEMORY: i32 = 120 * FRAMES_PER_SECOND;
+/// An alternative target (a structure, a spot, a ring point) holds this long unless reached: the party's mind was
+/// changing every few seconds as the "still there" test failed for a spot or a ring point (rush-24).
+const ALTERNATIVE_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
+/// "Round the base" for the party's alternatives: the base cluster, not the next one over (1800 kept a cluster
+/// 1580 away in; the user counts that as another cluster, the scouts' business).
+const PARTY_VICINITY: f32 = 1200.0;
 /// H-ARMY-KILL: the party at the opponent's base with no enemy soldier in sight this close offers the kill.
 const KILL_RADIUS: f32 = 1000.0;
 /// An extractor this close to the enemy's base is the base's business, not a raid's.
@@ -91,6 +97,8 @@ pub struct Raid {
     turrets_known: usize,
     /// Perimeter points the party has stood at, with when (`perimeter_probe`).
     probed: Vec<(Vec3, i32)>,
+    /// Until when the current alternative target holds (`ALTERNATIVE_FRAMES`).
+    hold_until: i32,
     /// The wait point in force while waiting: chosen once, moved only when the threat comes within reach of it.
     wait_at: Option<Vec3>,
     /// The last pricing's verdict, held until the next: between pricings the party was "not outmatched" and went
@@ -125,7 +133,8 @@ impl Brain {
     fn unscouted_box_spots(&self, from: Vec3, frame: i32) -> Vec<Vec3> {
         // Round the presumed base; the rest of the box only when nothing round the base is left to look at (the
         // far clusters are the scouts' business: rush-20, the whole party thrashing between two clusters).
-        let mut spots = self.spots_to_look_at(from, frame, 0.0, LIKELY_BASE);
+        let base = self.enemy_base(from);
+        let mut spots: Vec<Vec3> = self.spots_to_look_at(from, frame, 0.0, LIKELY_BASE).into_iter().filter(|s| s.dist2d(base) < PARTY_VICINITY).collect();
         if spots.is_empty() {
             spots = self.spots_to_look_at(from, frame, 0.0, LIKELY_BOX);
         }
@@ -189,7 +198,7 @@ impl Brain {
         // for unguarded structures), the extractors and the rest alike; then spots round the base nobody has looked at.
         let base = self.enemy_base(centre);
         let mut candidates: Vec<Vec3> = self.enemy_buildings.values()
-            .filter(|(def, pos, _)| self.world.def(*def).is_some_and(|d| d.weapon_count == 0) && pos.dist2d(base) < BASE_VICINITY)
+            .filter(|(def, pos, _)| self.world.def(*def).is_some_and(|d| d.weapon_count == 0) && pos.dist2d(base) < PARTY_VICINITY)
             .map(|(_, pos, _)| *pos)
             .chain(self.unscouted_box_spots(centre, tick.frame))
             .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && !self.commander_ground(*t) && self.reachable_on_foot(*t))
@@ -282,7 +291,8 @@ impl Brain {
             self.raid.probed.push((t, tick.frame));
         }
         let unscouted = self.raid.target.is_some_and(|t| self.is_unscouted(t, tick.frame));
-        let still_there = self.raid.target.is_some_and(|t| self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(t) < 100.0) || (!arrived && (unscouted || t.dist2d(self.enemy_base(t)) < BASE_RADIUS)));
+        let held = !arrived && tick.frame < self.raid.hold_until;
+        let still_there = self.raid.target.is_some_and(|t| held || self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(t) < 100.0) || (!arrived && (unscouted || t.dist2d(self.enemy_base(t)) < BASE_RADIUS)));
         let target = if still_there { self.raid.target } else { self.pressure_target(centre, tick) };
         // Priced every few seconds against what is in sight of the party and what is known at the target, and every
         // tick while something armed is in sight: four seconds is a fight's length.
@@ -374,6 +384,7 @@ impl Brain {
                     }
                     self.raid.mode = Mode::Elsewhere;
                     self.raid.target = Some(next);
+                    self.raid.hold_until = tick.frame + ALTERNATIVE_FRAMES;
                     self.raid.last_order_frame = tick.frame;
                     self.raid.waiting = false;
                     self.raid.outmatched = false;
