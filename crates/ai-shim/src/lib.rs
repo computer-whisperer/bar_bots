@@ -60,6 +60,11 @@ impl Instance {
     fn update(&mut self, frame: i32) {
         if frame % HEARTBEAT_INTERVAL == 0 {
             self.log(format_args!("heartbeat f={frame}"));
+            // For the arena's referee, which may call a settled game (`WITHIN_REASON_BALANCE`).
+            if std::env::var_os("WITHIN_REASON_BALANCE").is_some() {
+                let ((army, extractors), (their_army, their_extractors)) = self.engine.balance();
+                self.log(format_args!("balance f={frame} ours={army:.0}/{extractors} theirs={their_army:.0}/{their_extractors}"));
+            }
         }
         if frame % TRUTH_INTERVAL == 0 && let Some(truth) = &mut self.truth {
             use std::io::Write;

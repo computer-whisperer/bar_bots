@@ -69,3 +69,14 @@ that one query. It is for analysis only; the bot never sees it.
 Without a truth file the opponent is only what our units saw, and the report says so. The verdict itself is left to
 the reader: the tool gives numbers and scenes, not conclusions.
 
+## Calling settled games
+
+The shim logs `balance f=N ours=ARMY/EXTRACTORS theirs=ARMY/EXTRACTORS` every 30 game seconds (soldiers' metal value and
+finished extractors, the opponent's read through the cheat callbacks; the bot never sees it). The arena's referee ends
+a game as a **called loss** once they have had 3x our army and 3x our extractors for 2 minutes (not before minute 6),
+and as a **called win** once we have had 5x their army and 3x their extractors for 5 minutes (not before minute 12):
+BARb comes back from early deficits, we do not. Replayed over v17-truth-medium's 24 games the loss rule called 10 of
+14 losses 1-16 minutes early and nothing else; the win rule would have called one 40-minute timeout at about minute 29
+(67,000 metal of army against 5,900: a game the bot could not finish, which is its own finding). `results.jsonl` marks
+such games `"called": true` and the batch summary counts them; `--play-out` disables calling.
+

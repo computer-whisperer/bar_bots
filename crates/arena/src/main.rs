@@ -3,7 +3,7 @@
 //! the start script, engine log, bot log and replay.
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
-//!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners]
+//!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out]
 //!              [--side armada|cortex] [--corner nw|se]   (default: alternate)
 //!              [--bot PATH]   (bot binary from another build, for A/B runs)
 //!              [--disable H-ID,H-ID]   (ablation: switch heuristics off by registry ID)
@@ -50,6 +50,8 @@ struct Options {
     label: String,
     mirror: bool,
     swap_corners: bool,
+    /// End a game once it is settled (see [`Settled`]); `--play-out` turns it off.
+    call_settled: bool,
     strategist: bool,
     commander: bool,
     /// Play every match as this faction instead of alternating.
@@ -89,6 +91,8 @@ struct MatchResult {
     our_corner: &'static str,
     game_minutes: f32,
     wall_seconds: f32,
+    /// The referee ended the game because it was settled (`Win` or `Loss` then says for whom), not the engine.
+    called: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -122,7 +126,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -138,7 +142,7 @@ fn main() -> io::Result<()> {
                     let Some(index) = queue.lock().unwrap().pop() else { break };
                     let result = run_match(&repo, &batch_dir, &options, index).unwrap_or_else(|e| {
                         eprintln!("match {index}: {e}");
-                        MatchResult { index, arm: "", outcome: Outcome::Aborted, our_side: "?", our_corner: "?", game_minutes: 0.0, wall_seconds: 0.0 }
+                        MatchResult { index, arm: "", outcome: Outcome::Aborted, our_side: "?", our_corner: "?", game_minutes: 0.0, wall_seconds: 0.0, called: false }
                     });
                     println!(
                         "match {:>2}: {:<7} {} {} {:>5.1} game-min in {:>4.0}s",
@@ -163,8 +167,10 @@ fn main() -> io::Result<()> {
     }
     let count = |outcome| results.iter().filter(|r| r.outcome == outcome).count();
     println!(
-        "== {} wins, {} losses, {} timeouts, {} aborted ==",
-        count(Outcome::Win), count(Outcome::Loss), count(Outcome::Timeout), count(Outcome::Aborted)
+        "== {} wins, {} losses, {} timeouts, {} aborted ({} of the wins and {} of the losses called by the referee) ==",
+        count(Outcome::Win), count(Outcome::Loss), count(Outcome::Timeout), count(Outcome::Aborted),
+        results.iter().filter(|r| r.called && r.outcome == Outcome::Win).count(),
+        results.iter().filter(|r| r.called && r.outcome == Outcome::Loss).count(),
     );
     if let Some(extra) = &options.ab_disable {
         for arm in ["A", "B"] {
@@ -248,6 +254,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .envs(options.commander.then_some(("WITHIN_REASON_LOCKSTEP", "1")))
         .env("WITHIN_REASON_TRACE_BUILDS", "1")
         .env("WITHIN_REASON_TRUTH_DIR", &dir)
+        .envs(options.call_settled.then_some(("WITHIN_REASON_BALANCE", "1")))
         .env("WITHIN_REASON_SOCKET", &socket)
         .stdout(log.try_clone()?)
         .stderr(log)
@@ -259,7 +266,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     let _ = bot.kill();
     let _ = bot.wait();
     let _ = fs::remove_file(&socket);
-    let outcome = result?;
+    let (outcome, called) = result?;
     let game_minutes = last_frame(&dir.join("engine.log")) as f32 / (30.0 * 60.0);
     let result = MatchResult {
         index,
@@ -269,6 +276,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         our_corner: if setup.we_are_first != setup.swap_corners { "NW" } else { "SE" },
         game_minutes,
         wall_seconds: started.elapsed().as_secs_f32(),
+        called,
     };
     if let Err(e) = record::finish(&dir, &result, &options.profile) {
         eprintln!("match {index}: could not close the match record: {e}");
@@ -284,8 +292,9 @@ fn referee(
     options: &Options,
     setup: &MatchSetup,
     engine_log: &Path,
-) -> io::Result<Outcome> {
+) -> io::Result<(Outcome, bool)> {
     let mut playing = false;
+    let mut settled = Settled::default();
     // The game clock stands still during the commander's turns, and the log only shows it once a game minute.
     let stall_allowance = if options.commander { 10 * STALL_ALLOWANCE } else { STALL_ALLOWANCE };
     let mut deadline = Instant::now() + LOAD_ALLOWANCE;
@@ -293,20 +302,23 @@ fn referee(
     let mut last_seen_frame = 0;
     loop {
         if engine.try_wait()?.is_some() {
-            return Ok(Outcome::Aborted);
+            return Ok((Outcome::Aborted, false));
         }
         if let Some(status) = bot.try_wait()? {
             // Without its bot our team stands idle; the result would be meaningless.
             return Err(io::Error::other(format!("bot process exited ({status}); see bot.log")));
         }
         if Instant::now() > deadline {
-            return Ok(if playing { Outcome::Timeout } else { Outcome::Aborted });
+            return Ok((if playing { Outcome::Timeout } else { Outcome::Aborted }, false));
         }
         if playing {
             // Game time comes from the shim's heartbeat lines; the deadline only catches a stalled clock.
             let frame = last_frame(engine_log);
             if frame >= frame_limit {
-                return Ok(Outcome::Timeout);
+                return Ok((Outcome::Timeout, false));
+            }
+            if options.call_settled && let Some(outcome) = settled.judge(engine_log) {
+                return Ok((outcome, true));
             }
             if frame > last_seen_frame {
                 last_seen_frame = frame;
@@ -323,11 +335,77 @@ fn referee(
             }
             Some(Event::GameOver { winning_ally_teams }) => {
                 let won = winning_ally_teams.contains(&setup.our_ally_team());
-                return Ok(if won { Outcome::Win } else { Outcome::Loss });
+                return Ok((if won { Outcome::Win } else { Outcome::Loss }, false));
             }
             Some(Event::Other) | None => {}
         }
     }
+}
+
+/// Calls a game whose outcome is no longer in doubt, from the shim's `balance` lines (both sides' soldiers' metal
+/// and extractors, every 30 game seconds). A game is settled when one side has led on army AND extractors by the
+/// ratios of its [`Lead`] for long enough. Results carry `called: true`, so called games can be told from played-out
+/// ones; `--play-out` turns the referee's calls off.
+#[derive(Default)]
+struct Settled {
+    /// Frame since which the side has been that far ahead without a break; `true` is us.
+    ahead_since: Option<(bool, u32)>,
+    last_frame: u32,
+}
+
+/// What "hopelessly ahead" means for one side: `army` and `extractors` are ratios over the other side, held for
+/// `for_frames`, not before `from_frame`.
+struct Lead {
+    army: f32,
+    extractors: f32,
+    for_frames: u32,
+    from_frame: u32,
+}
+
+/// Their lead over us. Replayed over the 24 recorded games of v17-truth-medium it called 10 of the 14 losses, 1 to 16
+/// minutes before the end, and nothing that was not a loss.
+const THEIR_LEAD: Lead = Lead { army: 3.0, extractors: 3.0, for_frames: 120 * 30, from_frame: 6 * 60 * 30 };
+/// Our lead over them has to be bigger and last longer: BARb comes back. In that batch a game we led 14 extractors to 2
+/// at minute 9 was level again at minute 24 and ended a 40-minute timeout.
+const OUR_LEAD: Lead = Lead { army: 5.0, extractors: 3.0, for_frames: 300 * 30, from_frame: 12 * 60 * 30 };
+
+impl Settled {
+    fn judge(&mut self, engine_log: &Path) -> Option<Outcome> {
+        let (frame, ours, theirs) = last_balance(engine_log)?;
+        if frame <= self.last_frame {
+            return None;
+        }
+        self.last_frame = frame;
+        // An army under 300 metal and a pair of extractors count as that, so ratios against nothing stay finite.
+        let ahead = |lead: &Lead, a: (f32, f32), b: (f32, f32)| a.0 >= lead.army * b.0.max(300.0) && a.1 >= lead.extractors * b.1.max(2.0);
+        let leader = if ahead(&OUR_LEAD, ours, theirs) { Some(true) } else if ahead(&THEIR_LEAD, theirs, ours) { Some(false) } else { None };
+        self.ahead_since = match (leader, self.ahead_since) {
+            (Some(side), Some((since_side, since))) if side == since_side => Some((side, since)),
+            (Some(side), _) => Some((side, frame)),
+            (None, _) => None,
+        };
+        let (side, since) = self.ahead_since?;
+        let lead = if side { &OUR_LEAD } else { &THEIR_LEAD };
+        (frame >= lead.from_frame && frame - since >= lead.for_frames).then_some(if side { Outcome::Win } else { Outcome::Loss })
+    }
+}
+
+/// The newest `balance f=N ours=ARMY/EXTRACTORS theirs=ARMY/EXTRACTORS` line of the engine log.
+fn last_balance(engine_log: &Path) -> Option<(u32, (f32, f32), (f32, f32))> {
+    const TAIL: u64 = 64 * 1024;
+    let mut file = File::open(engine_log).ok()?;
+    let len = file.metadata().ok()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(TAIL))).ok()?;
+    let mut tail = Vec::new();
+    file.read_to_end(&mut tail).ok()?;
+    let tail = String::from_utf8_lossy(&tail);
+    let line = tail.lines().rev().find(|l| l.contains("balance f="))?;
+    let field = |key: &str| line.split_whitespace().find_map(|word| word.strip_prefix(key));
+    let pair = |text: &str| {
+        let (army, extractors) = text.split_once('/')?;
+        Some((army.parse::<f32>().ok()?, extractors.parse::<f32>().ok()?))
+    };
+    Some((field("f=")?.parse().ok()?, pair(field("ours=")?)?, pair(field("theirs=")?)?))
 }
 
 /// The full name a rapid tag stands for ("byar:test" -> "Beyond All Reason test-NNNNN-hash"), from the rapid
@@ -467,6 +545,7 @@ fn parse_args() -> Options {
         label: "batch".into(),
         mirror: false,
         swap_corners: false,
+        call_settled: true,
         strategist: false,
         commander: false,
         side: None,
@@ -482,6 +561,10 @@ fn parse_args() -> Options {
         match flag.as_str() {
             "--mirror" => {
                 options.mirror = true;
+                continue;
+            }
+            "--play-out" => {
+                options.call_settled = false;
                 continue;
             }
             "--swap-corners" => {
@@ -533,7 +616,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--base-port N]");
     std::process::exit(2)
 }
 

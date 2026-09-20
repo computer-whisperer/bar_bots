@@ -233,6 +233,40 @@ impl Engine {
         census
     }
 
+    /// Soldiers' metal value and finished extractors for both sides, `(ours, theirs)`: what the arena's referee judges
+    /// a settled game by. Like the census, read with cheat access for the length of the call and never sent to the bot.
+    pub fn balance(&mut self) -> ((f32, u32), (f32, u32)) {
+        let max = self.id_buf.len() as c_int;
+        let own = call!(self, getTeamUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        let ours = self.strength(own);
+        call!(self, Cheats_setEnabled(true));
+        let enemy = call!(self, getEnemyUnits(self.id_buf.as_mut_ptr(), max)).max(0) as usize;
+        let theirs = self.strength(enemy);
+        call!(self, Cheats_setEnabled(false));
+        (ours, theirs)
+    }
+
+    /// (metal value of finished soldiers, finished extractors) among the first `count` ids in the id buffer.
+    fn strength(&self, count: usize) -> (f32, u32) {
+        let (mut army, mut extractors) = (0.0, 0);
+        for &id in &self.id_buf[..count] {
+            let def = call!(self, Unit_getDef(id));
+            if def < 0 || call!(self, Unit_isBeingBuilt(id)) {
+                continue;
+            }
+            if call!(self, UnitDef_getExtractsResource(def, self.metal)) > 0.0 {
+                extractors += 1;
+            }
+            let soldier = call!(self, UnitDef_getSpeed(def)) > 0.0
+                && call!(self, UnitDef_getWeaponMounts(def)) > 0
+                && call!(self, UnitDef_getBuildSpeed(def)) == 0.0;
+            if soldier {
+                army += call!(self, UnitDef_getCost(def, self.metal));
+            }
+        }
+        (army, extractors)
+    }
+
     /// Every enemy unit as `[id, "name", x, z, health percent, being built]`: ground truth for post-game analysis,
     /// never the brain's input. Cheat access is on for the length of this call only.
     pub fn enemy_truth(&mut self) -> String {
