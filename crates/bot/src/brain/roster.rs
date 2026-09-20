@@ -30,6 +30,8 @@ pub struct Roster {
     /// The unit the line is made of, and a second one to go with it (K-units-duel-*).
     line: &'static str,
     second: &'static str,
+    /// Raises wrecks and takes them apart (`reclaim.rs`).
+    resurrector: &'static str,
 }
 
 pub const ROSTERS: [Roster; 2] = [
@@ -37,13 +39,13 @@ pub const ROSTERS: [Roster; 2] = [
         commander: "armcom", extractor: "armmex", solar: "armsolar", wind: "armwin", advanced_solar: "armadvsol",
         converter: "armmakr", lab: "armlab", turret: "armllt", nano: "armnanotc", radar: "armrad", constructor: "armck",
         advanced_lab: "armalab", advanced_constructor: "armack", advanced_extractor: "armmoho", advanced_line: "armzeus", advanced_second: "armfido",
-        raider: "armpw", skirmisher: "armrock", artillery: "armham", line: "armham", second: "armwar",
+        raider: "armpw", skirmisher: "armrock", artillery: "armham", line: "armham", second: "armwar", resurrector: "armrectr",
     },
     Roster {
         commander: "corcom", extractor: "cormex", solar: "corsolar", wind: "corwin", advanced_solar: "coradvsol",
         converter: "cormakr", lab: "corlab", turret: "corllt", nano: "cornanotc", radar: "corrad", constructor: "corck",
         advanced_lab: "coralab", advanced_constructor: "corack", advanced_extractor: "cormoho", advanced_line: "corcan", advanced_second: "corcan",
-        raider: "corak", skirmisher: "corstorm", artillery: "corthud", line: "corthud", second: "corstorm",
+        raider: "corak", skirmisher: "corstorm", artillery: "corthud", line: "corthud", second: "corstorm", resurrector: "cornecro",
     },
 ];
 
@@ -72,6 +74,7 @@ pub struct Kit {
     pub artillery: UnitDefId,
     pub line: UnitDefId,
     pub second: UnitDefId,
+    pub resurrector: UnitDefId,
 }
 
 impl Kit {
@@ -107,6 +110,7 @@ impl Roster {
             artillery: id(self.artillery)?,
             line: id(self.line)?,
             second: id(self.second)?,
+            resurrector: id(self.resurrector)?,
         })
     }
 }

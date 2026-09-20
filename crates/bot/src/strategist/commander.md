@@ -93,6 +93,13 @@ which go to the next contested spot worth taking, or to threatened outposts the 
 take free spots on held ground by themselves, so moving soldiers onto contested ground is how you open it: post a
 squad there and the spots around it become held. The `map` tool draws the ground (+ held, ? contested, - theirs).
 
+**Wrecks.** Dead units leave metal on the ground, often thousands after a battle. The bot builds resurrection bots for it
+(one per 600 metal of wrecks on held ground, at most 6): they take wrecks apart for metal, and raise wrecked soldiers
+worth having when energy is plentiful (a raised unit costs no metal, arrives nearly dead and is repaired by the bot that
+raised it). They work only fields that are safe: on held ground with no enemy in sight. The `wrecks` line lists the
+fields; a rich field marked not safe is a reason to move soldiers onto it, and winning a battle on ground you then
+hold pays twice. `resurrect: false` in `set_directives` makes them reclaim everything (when metal matters more).
+
 **Passages.** The map you are given lists `passages`: the narrow places (cliffs or water on both sides) that the walking
 routes between our start and the opponent's go through, with their width. The terrain picture shows them as gaps in the
 `#`. Whoever holds a passage decides who crosses: a squad and a turret or two in its mouth cover every extractor behind

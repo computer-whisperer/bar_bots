@@ -13,6 +13,7 @@ mod economy;
 pub mod journal;
 mod march;
 mod raid;
+mod reclaim;
 mod squads;
 mod territory;
 mod tier2;
@@ -55,8 +56,8 @@ pub struct Brain {
     spot_claims: HashMap<usize, i32>,
     /// Walking distances over the terrain, once our faction (and so our movement class) is known.
     routes: Option<routes::Routes>,
-    /// Where our units died lately, for H-ECO-RECLAIM: place and frame (enemy wrecks lie in the same places). Deaths close together are one site.
-    wreck_sites: Vec<(Vec3, i32)>,
+    /// Wrecks seen, the fields they lie in and who works them (`reclaim.rs`).
+    reclaim: reclaim::Reclaim,
     /// Whose ground is whose (`territory.rs`).
     territory: territory::Territory,
     /// Units a constructor has been sent to repair, and when, so that one goes to each.
@@ -142,7 +143,7 @@ impl Brain {
             jobs: HashMap::new(),
             spot_claims: HashMap::new(),
             routes: None,
-            wreck_sites: Vec::new(),
+            reclaim: Default::default(),
             territory: Default::default(),
             repair_claims: HashMap::new(),
             upgrade_claims: HashMap::new(),
@@ -192,6 +193,7 @@ impl Brain {
         self.track_enemy_buildings(tick);
         self.track_enemy_bases(tick);
         self.update_territory(tick, &kit);
+        self.track_wrecks(tick);
         self.track_losses(tick, &kit);
         let mut commands = Vec::new();
         self.protect_commander(tick, &kit, &mut commands);

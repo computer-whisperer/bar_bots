@@ -90,9 +90,6 @@ impl Brain {
             if self.spot_is_ours(pos) {
                 self.last_loss_at_home_frame = tick.frame;
             }
-            if !self.wreck_sites.iter().any(|(site, _)| site.dist2d(pos) < 300.0) {
-                self.wreck_sites.push((pos, tick.frame));
-            }
             let killer = attacker.and_then(|id| self.enemy_defs.get(&id)).map_or("unseen", |d| self.name(*d));
             let place = if pos.dist2d(self.home) < super::army::BASE_RADIUS { "at home" } else if pos.dist2d(self.home) < pos.dist2d(self.enemy_base(pos)) { "in our half" } else { "in their half" };
             let line = format!("lost {} to {killer} {place}", self.name(def));

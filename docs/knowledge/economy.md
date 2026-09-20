@@ -108,3 +108,10 @@ as nearness without asking `reachable_on_foot` will send builders to islets and 
 log: `wanted=(3224,520) placed=(3224,520)`; the map lists that spot with `walk_from_home: null`); the analyst counts six
 turret orders for it and one constructor walking 321 of its first 422 seconds round the shore. The engine returns a long
 path, not `move_failed`, so `note_unreachable_sites` never learns.
+
+### K-eco-battlefields-hold-thousands
+**Claim.** From about minute 10 the wrecks we can see hold 1200-4200 metal at a time (25-55 wrecks in 2-6 fields), against
+a metal income of 15-30 a second: minutes of income. Most of it lies where the fighting is, on ground we do not hold; in
+the games looked at 0-1000 of it was safe to work at any moment.
+**Status.** observed (2026-09-20), rec-1 (4 games), the per-minute `wrecks:` lines of bot.log.
+**Used by.** H-REC-CREW.

@@ -131,6 +131,9 @@ impl Brain {
         if tick.frame < FIRST_ORDER_FRAME {
             return;
         }
+        for (bot, raised) in std::mem::take(&mut self.reclaim.to_mend) {
+            commands.push(Command::Repair { unit: bot, target: raised, queue: false });
+        }
         for unit in own.iter().filter(|u| u.idle && !u.being_built) {
             if self.last_orders.get(&unit.id).is_some_and(|(frame, _, _)| tick.frame - frame < ORDER_GRACE_FRAMES) {
                 continue;
@@ -143,6 +146,10 @@ impl Brain {
             {
                 self.fire("D-COMMANDER-STATION");
                 commands.push(Command::Move { unit: unit.id, to: station, queue: false });
+                continue;
+            }
+            if kit.is_resurrector(unit.def) {
+                self.work_wrecks(unit, tick, commands);
                 continue;
             }
             if unit.def == kit.advanced_constructor {
@@ -238,6 +245,14 @@ impl Brain {
                     self.jobs.insert(unit.id, kit.commander);
                     commands.push(Command::Guard { unit: unit.id, target: lab.id });
                 }
+            } else if unit.def == kit.lab
+                && own.iter().filter(|u| kit.is_resurrector(u.def)).count() < self.wanted_crew()
+                && own.iter().filter(|u| u.def == kit.constructor).count() >= self.wanted_constructors(own, kit)
+            {
+                // H-REC-CREW: ahead of the mix, one at a time; an idle lab asks again when it is out. Never ahead of a
+                // wanted constructor: in rec-3-ab the crew arm ran 1.6 extractors and 5 soldiers behind at minute 10.
+                self.fire("H-REC-CREW");
+                commands.push(Command::Build { unit: unit.id, def: kit.resurrector, site: None, queue: false });
             } else if is_builder && let Some(def_id) = self.weighted_production(unit, own, kit) {
                 self.fire("D-PRODUCTION-MIX");
                 commands.push(Command::Build { unit: unit.id, def: def_id, site: None, queue: false });
@@ -428,7 +443,7 @@ impl Brain {
                     }
                 }
                 Step::Reclaim if !is_commander && snapshot.metal.current < RECLAIM_WHEN_METAL_BELOW && self.enabled("H-ECO-RECLAIM") => {
-                    if let Some(site) = self.claim_wreck_site(builder, tick.frame) {
+                    if let Some(site) = self.claim_wreck_field(builder, RECLAIM_WITHIN, tick.frame) {
                         return (Plan::Reclaim(site), "H-ECO-RECLAIM");
                     }
                 }
@@ -568,20 +583,6 @@ impl Brain {
         let target = commander.or_else(building)?.id;
         self.repair_claims.insert(target, frame);
         Some(target)
-    }
-
-    /// The nearest place, on our side of the map, where units died lately and nobody has been sent to reclaim yet.
-    fn claim_wreck_site(&mut self, builder: &OwnUnit, frame: i32) -> Option<Vec3> {
-        const FRESH_FRAMES: i32 = 4 * 60 * 30;
-        self.wreck_sites.retain(|(_, since)| frame - since < FRESH_FRAMES);
-        let index = self
-            .wreck_sites
-            .iter()
-            .enumerate()
-            .filter(|(_, (site, _))| site.dist2d(builder.pos) < RECLAIM_WITHIN && self.spot_is_ours(*site))
-            .min_by(|(_, (a, _)), (_, (b, _))| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
-            .map(|(index, _)| index)?;
-        Some(self.wreck_sites.swap_remove(index).0)
     }
 
     fn spot_taken(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {

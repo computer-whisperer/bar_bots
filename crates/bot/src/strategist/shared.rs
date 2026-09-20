@@ -119,6 +119,8 @@ pub struct Directives {
     pub commander_station: Option<Timed<Vec3>>,
     /// Tier 2: `true` starts the advanced lab now whatever the economy, `false` holds it back.
     pub tier2: Option<Timed<bool>>,
+    /// `false`: resurrection bots take every wreck apart and raise nothing.
+    pub resurrect: Option<Timed<bool>>,
 }
 
 impl Directives {
@@ -138,6 +140,7 @@ impl Directives {
         lapse(&mut self.expansion_radius, frame);
         lapse(&mut self.commander_station, frame);
         lapse(&mut self.tier2, frame);
+        lapse(&mut self.resurrect, frame);
     }
 
     pub fn describe(&self, frame: i32) -> Vec<String> {
@@ -166,6 +169,9 @@ impl Directives {
         }
         if let Some(t) = self.expansion_radius {
             lines.push(format!("expansion_radius={} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(r) = self.resurrect {
+            lines.push(format!("resurrect={} ({})", r.value, left(r.expires_frame)));
         }
         if let Some(t) = self.tier2 {
             lines.push(format!("tier2={} ({})", if t.value { "go" } else { "hold" }, left(t.expires_frame)));
@@ -237,6 +243,9 @@ pub struct Field {
     pub spot_plan: String,
     pub score: Score,
     pub ground: GroundReport,
+    /// Wreck fields known: place, metal, whether it is safe to work (held ground, no enemy in sight near it).
+    pub wreck_fields: Vec<(Place, u32, bool)>,
+    pub resurrection_bots: usize,
 }
 
 /// Whose ground is whose, as the bot's territory grid has it (`brain/territory.rs`): held (we can answer there sooner

@@ -111,3 +111,25 @@ spot finder, at + (40, 72) in 41 of 42. Both are accepted, so the valid area spa
 **Used by.** Nothing yet. Candidate: send each spot's valid region in `Hello` and build at the valid position nearest
 the builder (saves 1-2 s of walking per extractor; may put the first extractor inside the commander's build range).
 
+### K-rules-wrecks-are-visible
+**Claim.** The AI interface lists the features in sight (`getFeatures`), each with its type's metal
+(`FeatureDef_getContainedResource`), the share left (`Feature_getReclaimLeft`) and the unit it can be raised into
+(`Feature_getResurrectDef`); single features can be reclaimed (`COMMAND_UNIT_RECLAIM_FEATURE`) and raised.
+**Status.** supported (2026-09-20), rec-1/rec-2: 25-55 wrecks of 25 metal or more known at a time from minute 10,
+1200-4200 metal in 2-6 fields.
+**Used by.** H-REC-FIELDS, H-ECO-RECLAIM.
+
+### K-rules-resurrect-needs-the-unit-limit
+**Claim.** Through the AI interface a resurrect order must carry the feature's id PLUS the engine's unit limit
+(`Unit_getMax`). The engine's command takes a feature as id + limit; the interface adds the limit for
+`COMMAND_UNIT_RECLAIM_FEATURE` and leaves it out for `COMMAND_UNIT_RESURRECT` (AISCommands.cpp; `BuilderCAI::ExecuteResurrect`
+subtracts it), so a bare id names a unit and nothing happens, without an error.
+**Status.** supported (2026-09-20): rec-1, 57 resurrect orders with the bare id, no unit raised; rec-2, with the limit
+added in the shim, 17 raised in 4 games. An engine fault (2026.07.04); not reported upstream.
+**Used by.** shim `engine.rs` `issue`.
+
+### K-rules-raised-units-arrive-broken
+**Claim.** A resurrected unit arrives with about a twentieth of its health (48-56 of 755-1042, 102 of 1890); raising is
+free of metal but is not a unit until it has been repaired.
+**Status.** supported (2026-09-20), rec-2, 17 units.
+**Used by.** H-REC-RESURRECT.

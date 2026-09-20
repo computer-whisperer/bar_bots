@@ -132,6 +132,12 @@ impl Shared {
             merged.turret_requests_pending += f.turret_requests_pending;
             merged.ground.extractors_exposed.extend(f.ground.extractors_exposed.iter().cloned());
             merged.ground.posts.extend(f.ground.posts.iter().cloned());
+            merged.resurrection_bots += f.resurrection_bots;
+            for field in &f.wreck_fields {
+                if !merged.wreck_fields.iter().any(|have| have.0.grid == field.0.grid && have.1 == field.1) {
+                    merged.wreck_fields.push(field.clone());
+                }
+            }
             let (s, o) = (&mut merged.score, &f.score);
             s.extractors += o.extractors;
             s.extractor_peak += o.extractor_peak;

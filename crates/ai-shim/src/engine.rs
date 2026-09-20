@@ -526,7 +526,11 @@ impl Engine {
                 groupId: NO_GROUP,
                 options: options(queue),
                 timeOut: NO_TIMEOUT,
-                toResurrectFeatureId: feature.0,
+                // The engine's own command wants a feature as its id plus the unit limit. The AI interface adds that for
+                // reclaiming a feature and forgets it for resurrecting one (AISCommands.cpp, COMMAND_UNIT_RESURRECT against
+                // COMMAND_UNIT_RECLAIM_FEATURE; BuilderCAI::ExecuteResurrect subtracts it): a bare id is taken for a unit
+                // and nothing is raised (rec-1: 57 orders, no unit).
+                toResurrectFeatureId: call!(self, Unit_getMax()) + feature.0,
             }),
             Command::Repair { unit, target, queue } => self.handle(sys::COMMAND_UNIT_REPAIR, &mut sys::SRepairUnitCommand {
                 unitId: unit.0,

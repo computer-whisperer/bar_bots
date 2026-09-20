@@ -184,4 +184,16 @@ Territory before reclaim because the crew needs to know where it is safe to walk
   unit travel is straight-line (the standing claims use walking distance); turret placement still goes by the old
   unguarded-outpost rule, not by the grid; constructors' paths are not steered round ground that is theirs. Not yet
   checked: constructor deaths with nothing of ours within 600 (the design's third measure).
-- Not built: part 3; part 4's comparison.
+- 2026-09-20, part 3: wrecks in the snapshot (every 3 s), `ReclaimFeature` and `Resurrect` commands, `reclaim.rs`
+  (fields, the crew, resurrect-or-reclaim, the raiser repairs what it raised), the commander's `wrecks:` line and
+  `resurrect` directive; `wreck_sites` (deaths as a stand-in for wrecks) deleted. The experiments answered: resurrect
+  through the interface needs the unit limit added to the feature id (an engine fault, worked round in the shim, not
+  reported upstream); a raised unit arrives at about 5 % health; 1200-4200 metal lies in sight from minute 10, most
+  of it on ground we do not hold. Not as designed: the crew waits at the station when idle (it does not follow the
+  army's rear); "reclaim first when metal is short" is a banked-metal test. NOT shown to pay (rec-3-ab).
+- Also 2026-09-20, from the first Sonnet team game: the viewer draws allies; the arena always records ground truth;
+  `passages` (narrow places between the bases) in the commander's map.
+- Open: start positions. BAR places AIs that send no position itself (`GuessStartSpot`, the map's start points inside
+  the box: it put our two seats at A1 and G1 on Great Divide); the AI interface lets an AI send its own
+  (`COMMAND_SEND_START_POS`), which is the lever for choosing starts as a human team does. Not built.
+- Not built: part 4's comparison (the flag exists).

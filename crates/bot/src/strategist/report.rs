@@ -68,6 +68,10 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         g.free_spots.0, g.free_spots.1, g.free_spots.2, listed(&g.extractors_exposed), listed(&g.posts),
         if g.raided.is_empty() { "nowhere".to_string() } else { g.raided.iter().map(|(p, metal)| format!("{} ({metal})", p.grid)).collect::<Vec<_>>().join(", ") }
     ));
+    if !field.wreck_fields.is_empty() || field.resurrection_bots > 0 {
+        let fields: Vec<String> = field.wreck_fields.iter().take(5).map(|(at, metal, safe)| format!("{} {metal} metal{}", at.grid, if *safe { "" } else { " (not safe)" })).collect();
+        lines.push(format!("wrecks: {} | resurrection bots {}", if fields.is_empty() { "none known".to_string() } else { fields.join(", ") }, field.resurrection_bots));
+    }
     if briefing.seats.len() > 1 {
         let seats: Vec<String> = briefing
             .seats

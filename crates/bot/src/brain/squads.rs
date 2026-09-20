@@ -358,9 +358,13 @@ impl Brain {
         if shared.lead().is_none_or(|lead| lead == self.world.hello.team) {
             *shared.ground_sketch.lock().unwrap() = self.territory.sketch();
         }
+        let mut wreck_fields: Vec<(crate::strategist::shared::Place, u32, bool)> = self.reclaim.fields.iter().map(|f| (self.place(f.at), f.metal as u32, f.safe)).collect();
+        wreck_fields.sort_by_key(|f| std::cmp::Reverse(f.1));
         shared.publish_field(self.world.hello.team, Field {
             score,
             ground,
+            wreck_fields,
+            resurrection_bots: own.iter().filter(|u| kit.is_resurrector(u.def)).count(),
             unassigned: composition(&pool),
             unassigned_centre: centre_of(&pool).map(|c| self.place(c)),
             squads,
