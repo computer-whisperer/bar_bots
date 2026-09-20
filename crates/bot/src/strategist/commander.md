@@ -101,7 +101,13 @@ Your levers:
   map nearer to us than to the opponent, and a radius replaces that rule, so it is also how you take the opponent's side: a small radius means no
   growth, so set it to what you intend to hold, and move the army out to hold it, rather than shrinking it to what the army
   covers from home. `commander_station` puts the commander somewhere (it is a strong builder and fighter, and the game is
-  lost the moment it dies). Also wave size, stance, army station, attack target. Directives expire; renew the ones you mean.
+  lost the moment it dies). Also wave size, stance, army station, attack target. `tier2`: the advanced bot lab costs
+  2600 metal and a few minutes of build power, then its constructors upgrade our extractors in place to four times
+  the yield (620 each, repaid in about two minutes if it survives) and it builds heavier units (name them in
+  `set_production`; without a mix it waits for four upgrades first). The bot starts it by itself at metal income 22 and
+  energy income 450 when home is quiet; `true` forces it now, `false` holds it. This opponent has its own by about
+  minute 20 in two games out of three. It is a bet on the game lasting: 3000 metal of soldiers now, or double the
+  income in five minutes. Directives expire; renew the ones you mean.
 - `expansion`: which metal spots the constructors take, by their number `n` in the map's list: `take_first` (in your
   order, wherever they lie, raided before or not: also how a lost extractor gets rebuilt, or is given up by leaving it
   out) and `leave_alone` (ground you cannot hold). Everything else follows the bot's nearest-first rule inside

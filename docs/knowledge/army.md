@@ -191,3 +191,13 @@ after another and fought alone. v26: waves recalled because the six fastest atta
 **Evidence.** Commander game 7/01, 10:02-11:56: one 43-metal Grunt walked all 38 members of `mainforce` from (1485,3376)
 to (3528,3027), about 1800 elmos, for 226 metal killed. The post code re-aimed every member at the single nearest
 enemy inside the radius every 2 seconds. Now: the biggest group, met by the nearest members good odds take.
+
+### K-army-small-waves-restage-the-army
+**Claim.** Re-staging every committed attacker whenever a wave leaves holds the army at the staging point for as long
+as small waves keep leaving, which under an `attack` stance (waves of three) is for good.
+**Status.** observed once (2026-09-20), commander game 9 south-east (won anyway, by the commander taking the soldiers
+into a squad).
+**Evidence.** bot.log: wave 1 of 65 at f=28410, then waves 2-27 of 3-4 units about every 15-30 s; attackers 76 -> 101
+around (3059, 2995)-(3133, 3108) from f=32400 to f=37800, target 1300 away. The commander's note at 20:44: "stalled
+exactly at D4 for many minutes despite attack_target".
+**Used by.** H-ARMY-REINFORCE.

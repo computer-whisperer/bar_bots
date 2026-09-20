@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitDefId, Vec3};
 
 use super::roster::Kit;
+use super::tier2::{ADVANCED_CONSTRUCTORS, Advance, LAB_ASSISTANTS, UPGRADES_BEFORE_ARMY};
 use crate::strategist::shared::Focus;
 use super::{Brain, FRAMES_PER_SECOND};
 
@@ -115,7 +116,7 @@ enum Plan {
     Beside(UnitDefId, Vec3),
     /// Reclaim the wrecks around a place where units died.
     Reclaim(Vec3),
-    /// Restore a damaged unit of ours.
+    /// Restore a damaged unit of ours, or help finish one being built.
     Repair(bot_protocol::UnitId),
 }
 
@@ -128,6 +129,8 @@ impl Brain {
         let just_ordered = |id: &bot_protocol::UnitId| self.last_orders.get(id).is_some_and(|(frame, _, _)| tick.frame - frame < ORDER_GRACE_FRAMES);
         self.jobs.retain(|id, _| own.iter().any(|u| u.id == *id && (!u.idle || just_ordered(id))));
         self.spot_claims.retain(|_, claimed| tick.frame - *claimed < SPOT_CLAIM_FRAMES);
+        let jobs = &self.jobs;
+        self.upgrade_claims.retain(|id, _| jobs.contains_key(id));
         self.note_unreachable_sites(tick);
 
         // The engine drops orders given in the first second of the game; the lost extractor order then held its
@@ -149,6 +152,25 @@ impl Brain {
                 commands.push(Command::Move { unit: unit.id, to: station, queue: false });
                 continue;
             }
+            if unit.def == kit.advanced_constructor {
+                // H-T2-MOHO: upgrades and nothing else; with none to do it helps the advanced lab build.
+                match self.upgrade_for(unit, tick, kit) {
+                    Some(Advance::Upgrade(spot)) => {
+                        self.fire("H-T2-MOHO");
+                        self.jobs.insert(unit.id, kit.advanced_extractor);
+                        self.last_orders.insert(unit.id, (tick.frame, kit.advanced_extractor, spot));
+                        let site = BuildSite { near: spot, search_radius: 0.0, min_dist: 0 };
+                        commands.push(Command::Build { unit: unit.id, def: kit.advanced_extractor, site: Some(site), queue: false });
+                    }
+                    _ => {
+                        if let Some(lab) = own.iter().find(|u| u.def == kit.advanced_lab && !u.being_built) {
+                            self.jobs.insert(unit.id, kit.commander);
+                            commands.push(Command::Guard { unit: unit.id, target: lab.id });
+                        }
+                    }
+                }
+                continue;
+            }
             if is_builder && is_mobile {
                 let (plan, rule) = self.plan_for(unit, tick, kit);
                 // A stationed commander builds where it stands, whatever anchor the rule had in mind.
@@ -158,7 +180,13 @@ impl Brain {
                 };
                 if let Plan::Repair(target) = plan {
                     self.fire(rule);
-                    self.jobs.insert(unit.id, kit.commander);
+                    // Helping the advanced lab up counts as a job on it, so that helpers can be counted.
+                    let job = match rule {
+                        "H-T2-ASSIST" => kit.advanced_lab,
+                        "H-T2-ASSIST-UPGRADE" => kit.advanced_extractor,
+                        _ => kit.commander,
+                    };
+                    self.jobs.insert(unit.id, job);
                     commands.push(Command::Repair { unit: unit.id, target, queue: false });
                     continue;
                 }
@@ -220,6 +248,19 @@ impl Brain {
             } else if is_builder && let Some(def_id) = self.weighted_production(unit, own, kit) {
                 self.fire("D-PRODUCTION-MIX");
                 commands.push(Command::Build { unit: unit.id, def: def_id, site: None, queue: false });
+            } else if unit.def == kit.advanced_lab {
+                self.fire("H-T2-PRODUCTION");
+                let constructors = own.iter().filter(|u| u.def == kit.advanced_constructor).count();
+                let upgraded = own.iter().filter(|u| u.def == kit.advanced_extractor && !u.being_built).count();
+                let left_to_upgrade = own.iter().any(|u| u.def == kit.extractor);
+                let batch = if constructors < ADVANCED_CONSTRUCTORS {
+                    vec![kit.advanced_constructor]
+                } else if upgraded < UPGRADES_BEFORE_ARMY && left_to_upgrade && self.production_weights.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![kit.advanced_line, kit.advanced_line, kit.advanced_second]
+                };
+                commands.extend(batch.into_iter().map(|def_id| Command::Build { unit: unit.id, def: def_id, site: None, queue: false }));
             } else if is_builder {
                 self.fire("H-PROD-BATCH");
                 commands.extend(self.production_batch(own, kit).map(|def_id| Command::Build {
@@ -297,7 +338,8 @@ impl Brain {
         let spot_near_home = self.world.hello.metal_spots.iter().enumerate().any(|(i, s)| {
             self.walk_from_home(*s) < OPENING_REACH && !self.spot_claims.contains_key(&i) && !self.spot_taken(*s, snapshot.own_units.as_slice(), kit)
         });
-        if planned(kit.extractor) < 2
+        let planned_extractors = planned(kit.extractor) + planned(kit.advanced_extractor);
+        if planned_extractors < 2
             && (lab_started || spot_near_home)
             && let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame)
         {
@@ -320,7 +362,7 @@ impl Brain {
         // opponent holds four by minute 3. Constructors go for spots first (the commander keeps the energy up), and
         // so does the commander while energy is not short.
         if self.enabled("H-ECO-EARLY-EXPAND")
-            && planned(kit.extractor) < EARLY_EXTRACTORS
+            && planned_extractors < EARLY_EXTRACTORS
             && !stalled
             && (!is_commander || !energy_short)
             && let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame)
@@ -341,6 +383,17 @@ impl Brain {
             }
             if planned(kit.lab) < MAX_LABS && planned(kit.lab) <= labs.len() {
                 return (Plan::Near(kit.lab, yard), "H-ECO-SPEND");
+            }
+        }
+        if !energy_short {
+            match self.advance_for(builder, tick, kit, planned(kit.advanced_lab)) {
+                Some(Advance::StartLab) => return (Plan::Near(kit.advanced_lab, yard), "H-T2-GATE"),
+                // The lab itself and its starter's job count too.
+                Some(Advance::Help(target)) if snapshot.own_units.iter().any(|u| u.id == target && u.def == kit.advanced_extractor) => {
+                    return (Plan::Repair(target), "H-T2-ASSIST-UPGRADE");
+                }
+                Some(Advance::Help(lab)) if planned(kit.advanced_lab) < 2 + LAB_ASSISTANTS => return (Plan::Repair(lab), "H-T2-ASSIST"),
+                _ => {}
             }
         }
         let focus = self.directives.economy_focus.map(|f| f.value);
@@ -387,7 +440,7 @@ impl Brain {
                     if planned(kit.radar) == own.iter().filter(|u| u.def == kit.radar && !u.being_built).count() {
                         let uncovered = |p: &Vec3| radars.iter().all(|r| r.dist2d(*p) > RADAR_SPACING);
                         let site = std::iter::once(front)
-                            .chain(own.iter().filter(|u| u.def == kit.extractor).map(|u| u.pos))
+                            .chain(own.iter().filter(|u| kit.is_extractor(u.def)).map(|u| u.pos))
                             .filter(uncovered)
                             .min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)));
                         if let Some(site) = site {
@@ -469,7 +522,7 @@ impl Brain {
                         // home at once; we held those eight for one minute a game and the opponent for seventy
                         // (K-eco-raided-ground-is-raided-again). Raided ground still closes through the hot-spot rule.
                         let frontier = self.enabled("H-ECO-FRONTIER")
-                            && own.iter().any(|u| (u.def == kit.extractor || u.def == kit.turret) && !u.being_built && u.pos.dist2d(spot) < FRONTIER_STEP);
+                            && own.iter().any(|u| (kit.is_extractor(u.def) || u.def == kit.turret) && !u.being_built && u.pos.dist2d(spot) < FRONTIER_STEP);
                         self.spot_is_ours(spot) && (!self.enabled("H-ECO-REACH") || self.walk_from_home(spot) <= reach || frontier)
                     }
                 }
@@ -495,7 +548,7 @@ impl Brain {
             .enumerate()
             .filter(|(i, s)| !self.spot_claims.contains_key(i) && reachable(**s) && !self.is_unreachable(**s) && !self.spot_avoid.contains(i))
             .filter(|(_, s)| !self.is_hot(**s, frame) || self.is_covered(**s, own, kit))
-            .filter(|(_, s)| !own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
+            .filter(|(_, s)| !own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
             .min_by(|(_, a), (_, b)| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))?;
         self.spot_claims.insert(index, frame);
         // The engine stores the spot's metal value in `y`.
@@ -512,7 +565,7 @@ impl Brain {
         let commander = own.iter().find(|u| u.def == kit.commander && hurt(u, COMMANDER_REPAIR_BELOW) && in_reach(u));
         let building = || {
             own.iter()
-                .filter(|u| [kit.turret, kit.extractor, kit.lab, kit.nano].contains(&u.def) && hurt(u, BUILDING_REPAIR_BELOW) && in_reach(u))
+                .filter(|u| [kit.turret, kit.extractor, kit.advanced_extractor, kit.lab, kit.advanced_lab, kit.nano].contains(&u.def) && hurt(u, BUILDING_REPAIR_BELOW) && in_reach(u))
                 .min_by(|a, b| a.pos.dist2d(builder.pos).total_cmp(&b.pos.dist2d(builder.pos)))
         };
         let target = commander.or_else(building)?.id;
@@ -535,11 +588,11 @@ impl Brain {
     }
 
     fn spot_taken(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
-        own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
+        own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
     }
 
     /// Whether we lost an extractor or a constructor at this metal spot lately.
-    fn is_hot(&self, spot: Vec3, frame: i32) -> bool {
+    pub(super) fn is_hot(&self, spot: Vec3, frame: i32) -> bool {
         self.hot_spots.iter().any(|(hot, until)| *until > frame && hot.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
     }
 
@@ -576,7 +629,7 @@ impl Brain {
         // Hot spots count as outposts to be: the turret goes up first, and the spot reopens once it stands.
         let hot = self.hot_spots.iter().map(|(spot, _)| *spot).filter(|spot| self.spot_is_ours(*spot));
         own.iter()
-            .filter(|u| u.def == kit.extractor)
+            .filter(|u| kit.is_extractor(u.def))
             .map(|u| u.pos)
             .chain(hot)
             .filter(|pos| pos.dist2d(self.home) > OUTPOST_DISTANCE && !guarded(*pos))
@@ -610,7 +663,7 @@ impl Brain {
     }
 
     fn wanted_constructors(&self, own: &[OwnUnit], kit: &Kit) -> usize {
-        let extractors = own.iter().filter(|u| u.def == kit.extractor).count();
+        let extractors = own.iter().filter(|u| kit.is_extractor(u.def)).count();
         // H-PROD-CONSTRUCTOR-FLOOR
         let own_floor = if self.enabled("H-PROD-CONSTRUCTOR-FLOOR") { MIN_CONSTRUCTORS } else { 0 };
         let floor = self.directives.min_constructors.map_or(own_floor, |d| d.value);
@@ -621,7 +674,7 @@ impl Brain {
             .hello
             .metal_spots
             .iter()
-            .filter(|s| self.spot_is_ours(**s) && !own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
+            .filter(|s| self.spot_is_ours(**s) && !own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
             .count();
         (2 + extractors / 3 + free_spots / 3).min(MAX_CONSTRUCTORS).max(floor)
     }

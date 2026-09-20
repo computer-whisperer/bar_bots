@@ -34,7 +34,7 @@ pub struct WakeState {
 
 impl Brain {
     pub(super) fn track_growth(&mut self, tick: &Tick, kit: &Kit) {
-        let extractors = tick.snapshot.own_units.iter().filter(|u| u.def == kit.extractor && !u.being_built).count();
+        let extractors = tick.snapshot.own_units.iter().filter(|u| kit.is_extractor(u.def) && !u.being_built).count();
         if extractors > self.wake.extractor_peak {
             self.wake.extractor_peak = extractors;
             self.wake.growth_frame = tick.frame;

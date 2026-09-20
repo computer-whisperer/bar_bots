@@ -154,7 +154,8 @@ class Match:
                 if e["k"] == "enemy_destroyed" and e.get("d") is not None and e["d"] >= 0:
                     name = self.defs[e["d"]]["name"]
                     out.append((e["f"], "theirs", name, e["x"], e["z"], self.metal(name), None))
-        return sorted(out)
+        # The last field (the killer's name) may be None, which does not sort against a name.
+        return sorted(out, key=lambda d: (d[:6], d[6] or ""))
 
 
 def summarise(units, match, built_only=True):

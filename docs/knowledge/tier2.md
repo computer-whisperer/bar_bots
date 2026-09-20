@@ -100,3 +100,23 @@ https://www.crdhq.com/articles/when-to-transition-to-t2-and-when-to-resign. `uni
 `ArmBots/T2/armfido.lua`, `armsnipe.lua`, `ArmBuildings/LandDefenceOffence/armhlt.lua`, `armguard.lua`, `corpun.lua`.
 **Would be wrong if.** BARb medium's base fell to T1 waves once our economy matched its own (then T2 army is unnecessary).
 **Used by.** (candidate: after upgrades, advanced lab batch = Sheldon/Hound-class skirmishers behind a T1 screen)
+
+### K-t2-barb-goes-tier-2
+**Claim.** BARb medium starts a tier-2 factory in about two games in three, never before minute 15, median just before
+minute 20; a game of ours that is not over by then is tier 1 against tier 2.
+**Status.** measured (2026-09-20), ground truth from 96 heuristic games (v23-v26), Quicksilver only.
+**Evidence.** 60 of 96 games; first advanced factory at 15.5 / 19.7 / 37.4 minutes (earliest / median / latest), mostly
+advanced bot labs. Of games lasting 20+ minutes (67) it had one by minute 20 in 27; of 25+ (52), 39; of 30+ (44), 37.
+NW losses 24 of 38 (median loss minute 22); SE timeouts 16 of 18; SE wins 12 of 29. Commander game 8c's attack met
+corsumo and corcan at minute 32.
+**Would be wrong if.** Other maps or profiles showed a different clock.
+**Used by.** H-T2-GATE (why at all), the commander's brief.
+
+### K-t2-upgrades-starve-without-help
+**Claim.** With nothing banked, every consumer gets a share of the metal income, and an extractor upgrade built by one
+advanced constructor beside two working labs takes minutes instead of its nominal 70 s.
+**Status.** observed once (2026-09-20), t2-first-look match 00.
+**Evidence.** Lab ordered minute 10, finished 13 (commander and constructors helping); first armmoho created minute 16,
+finished minute 22, with metal at 0 banked, +35-40 income, fully spent, two labs and nine constructors drawing on it.
+**Would be wrong if.** With two helpers and the advanced lab idle the first upgrades still took over two minutes.
+**Used by.** H-T2-ASSIST (upgrade helpers), H-T2-PRODUCTION (no soldiers from the advanced lab before four upgrades).

@@ -116,6 +116,8 @@ fn tool_list() -> Value {
                   "description": "Constructors build energy-to-metal converters up to this count before expanding further, energy permitting." },
               "expansion_radius": { "type": ["integer", "null"], "minimum": 500, "maximum": 20000,
                   "description": "Constructors build extractors only on metal spots within this walking distance of home (see walk_from_home in the map). Use it to stop expansion into places you cannot defend." },
+              "tier2": { "type": ["boolean", "null"],
+                  "description": "The advanced bot lab (2600 metal, then advanced constructors that upgrade our extractors to four times the yield, and tier-2 units). Unset, the bot starts it when metal income reaches 22 and energy income 450 with nothing dying at home. true starts it now; false holds it back." },
               "commander_station": { "type": ["object", "null"], "properties": { "x": { "type": "number" }, "z": { "type": "number" } },
                   "required": ["x", "z"], "description": "The commander walks here and builds only near here (it is a strong builder and fighter, and the game is lost if it dies). Without this it roams within 900 of home." },
               "economy_focus": { "enum": ["expand", "energy", "production", "defence", null],
@@ -289,6 +291,7 @@ fn set_directives(arguments: &Value, shared: &Shared) -> Result<String, String> 
             "expansion_radius" => {
                 directives.expansion_radius = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
             }
+            "tier2" => directives.tier2 = parse::<bool>(value)?.map(|value| Timed { value, expires_frame }),
             "commander_station" => directives.commander_station = position(value, field)?.map(|value| Timed { value, expires_frame }),
             "attack_target" => directives.attack_target = position(value, field)?.map(|value| Timed { value, expires_frame }),
             "army_station" => directives.army_station = position(value, field)?.map(|value| Timed { value, expires_frame }),

@@ -12,6 +12,7 @@ pub mod journal;
 mod march;
 mod raid;
 mod squads;
+mod tier2;
 mod wake;
 mod roster;
 mod routes;
@@ -47,6 +48,8 @@ pub struct Brain {
     hot_spots: Vec<(Vec3, i32)>,
     /// Units a constructor has been sent to repair, and when, so that one goes to each.
     repair_claims: HashMap<UnitId, i32>,
+    /// H-T2-MOHO: the extractor each advanced constructor is upgrading.
+    upgrade_claims: HashMap<UnitId, Vec3>,
     /// When something of ours last died on our side of the map; no wave leaves while that is fresh.
     last_loss_at_home_frame: i32,
     matchups: combat::Matchups,
@@ -123,6 +126,7 @@ impl Brain {
             wreck_sites: Vec::new(),
             hot_spots: Vec::new(),
             repair_claims: HashMap::new(),
+            upgrade_claims: HashMap::new(),
             last_loss_at_home_frame: i32::MIN / 2,
             matchups: Default::default(),
             army: army::Army::default(),
@@ -291,7 +295,7 @@ impl Brain {
                 "[ai {}] f={} ({:.0} min) metal {:.0} (+{:.1}/-{:.1}) energy {:.0}/{:.0} (+{:.0}/-{:.0}) | mex {} labs {} cons {} army {} | enemies visible {}",
                 self.ai(), tick.frame, tick.frame as f32 / 1800.0, s.metal.current, s.metal.income, s.metal.usage,
                 s.energy.current, s.energy.storage, s.energy.income, s.energy.usage,
-                count(kit.extractor), count(kit.lab), count(kit.constructor),
+                count(kit.extractor) + count(kit.advanced_extractor), count(kit.lab) + count(kit.advanced_lab), count(kit.constructor) + count(kit.advanced_constructor),
                 s.own_units.iter().filter(|u| self.is_army(u, kit)).count(), s.enemies.len()
             );
             if !self.stuck_cells.is_empty() {

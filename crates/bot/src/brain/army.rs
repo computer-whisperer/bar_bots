@@ -145,7 +145,7 @@ impl Brain {
             .snapshot
             .own_units
             .iter()
-            .filter(|u| u.def == kit.extractor && u.pos.dist2d(self.home) > OUTPOST_DISTANCE)
+            .filter(|u| kit.is_extractor(u.def) && u.pos.dist2d(self.home) > OUTPOST_DISTANCE)
             .min_by(|a, b| a.pos.dist2d(self.enemy_start).total_cmp(&b.pos.dist2d(self.enemy_start)));
         // Candidates in order of preference. The outpost station sits on the home side of the extractor, on ground
         // our constructor walked to build it; a point ahead of it towards the enemy was often unreachable, and
@@ -400,7 +400,7 @@ impl Brain {
         // extractor, and no wave leaves meanwhile.
         let at_base = nearest_to(self.home).filter(|e: &&EnemyUnit| e.pos.dist2d(self.home) < BASE_RADIUS);
         let raider = || {
-            let extractors = snapshot.own_units.iter().filter(|u| u.def == kit.extractor);
+            let extractors = snapshot.own_units.iter().filter(|u| kit.is_extractor(u.def));
             extractors
                 .filter_map(|x| nearest_to(x.pos).filter(|e| e.pos.dist2d(x.pos) < RAID_RADIUS))
                 .min_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)))
@@ -485,6 +485,20 @@ impl Brain {
                     self.ai(), tick.frame, self.army.waves_sent, home_group.len(), target.x, target.z
                 );
                 self.event(tick.frame, format!("wave {} launched: {} units towards {grid}", self.army.waves_sent, home_group.len()));
+                // H-ARMY-REINFORCE: a few more soldiers joining a body already out there go to it, and the body carries on.
+                // Every wave used to call everyone committed back to a fresh staging point; under an `attack` stance
+                // waves of three leave every half minute, and 100 attackers stood at the staging point for three
+                // minutes while the commander wondered why (commander game 9, south-east, 32400-37800).
+                let body: Vec<&OwnUnit> = soldiers.iter().filter(|u| self.army.attackers.contains(&u.id)).copied().collect();
+                if self.enabled("H-ARMY-REINFORCE") && body.len() >= 2 * home_group.len() {
+                    self.fire("H-ARMY-REINFORCE");
+                    let n = body.len() as f32;
+                    let centre = body.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / n, y: 0.0, z: sum.z + u.pos.z / n });
+                    self.army.attackers.extend(home_group.iter().map(|u| u.id));
+                    commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: centre, queue: false }));
+                    commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: target, queue: true }));
+                    return;
+                }
                 self.army.attackers.extend(home_group.iter().map(|u| u.id));
                 // H-ARMY-STAGE: sent straight at the target, a wave arrives fastest-first and dies one by one.
                 // Everyone committed, survivors of earlier waves included, gathers short of the target first.

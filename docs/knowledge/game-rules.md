@@ -27,7 +27,10 @@ at (2032,1188) NW or (5576,5360) SE on Quicksilver.
 ### K-rules-mex-upgrade-in-place
 **Claim.** An advanced extractor ordered at the exact position of an existing extractor is allowed, and the old one is
 reclaimed when the new one finishes. Advanced extractors yield 4x (extractsmetal 0.004 vs 0.001).
-**Status.** conjectured (2026-09-19) — reading only, never tried through the AI interface
+**Status.** supported (2026-09-20) through the AI interface: t2-first-look, both factions, a build order for the advanced
+extractor at the tier-1 extractor's exact position is accepted (`Map_isPossibleToBuildAt` says yes) and the new one
+is created in place (record: `cmd armmoho [5648, 5360]`, `created armmoho 5648 5360`). BARb does the same and falls
+back to a site within 32 elmos, then to reclaiming the old one (`CircuitAI` `MexUpTask.cpp`)
 **Evidence.** `luarules/gadgets/unit_mex_upgrade_reclaimer.lua`, `cmd_mex_denier.lua:53`; unit files armmex/armmoho.
 **Would be wrong if.** The engine rejects the build order because the square is occupied (the AI interface path may differ
 from the player UI path).

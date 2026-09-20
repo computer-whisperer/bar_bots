@@ -12,7 +12,7 @@ use bot_protocol::{Command, EnemyUnit, OwnUnit, UnitId, Vec3};
 /// Smaller groups are not worth slowing down.
 const MIN_GROUP: usize = 4;
 /// The body is measured at this share of the group, counted from the front: the rearmost few hold nobody up.
-const BODY_SHARE: f32 = 0.7;
+const BODY_SHARE: f32 = 0.6;
 /// A unit this much nearer the destination than the body stops; it goes on when the body is within half of it.
 const LEAD: f32 = 350.0;
 /// With the body this close to the destination the march is over.

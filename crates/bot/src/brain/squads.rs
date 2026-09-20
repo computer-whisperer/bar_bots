@@ -223,7 +223,7 @@ impl Brain {
         let turrets: Vec<Vec3> = own.iter().filter(|u| u.def == kit.turret).map(|u| u.pos).collect();
         let extractors = own
             .iter()
-            .filter(|u| u.def == kit.extractor)
+            .filter(|u| kit.is_extractor(u.def))
             .map(|x| ExtractorStatus {
                 at: self.place(x.pos),
                 spot: self.world.hello.metal_spots.iter().position(|s| s.dist2d(x.pos) < 100.0),
@@ -248,7 +248,7 @@ impl Brain {
             .filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0))
             .map(|(_, pos, _)| *pos)
             .collect();
-        let our_extractors: Vec<Vec3> = own.iter().filter(|u| u.def == kit.extractor).map(|u| u.pos).collect();
+        let our_extractors: Vec<Vec3> = own.iter().filter(|u| kit.is_extractor(u.def)).map(|u| u.pos).collect();
         let held = |spot: Vec3, by: &[Vec3]| by.iter().any(|p| p.dist2d(spot) < 100.0);
         let free: Vec<Vec3> = self
             .world
@@ -266,7 +266,7 @@ impl Brain {
             (sum(&|t| t.1), sum(&|t| t.2))
         };
         let score = Score {
-            extractors: own.iter().filter(|u| u.def == kit.extractor && !u.being_built).count(),
+            extractors: own.iter().filter(|u| kit.is_extractor(u.def) && !u.being_built).count(),
             extractor_peak: self.wake.extractor_peak,
             seconds_since_growth: (tick.frame - self.wake.growth_frame) / FRAMES_PER_SECOND,
             free_spots: free.len(),

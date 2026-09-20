@@ -76,11 +76,11 @@ impl Brain {
             }
             let Event::UnitDestroyed { unit, attacker } = event else { continue };
             let Some((def, pos)) = self.known_units.remove(unit) else { continue };
-            if def == kit.extractor || def == kit.constructor {
+            if kit.is_extractor(def) || def == kit.constructor {
                 self.note_hot_spot(pos, tick.frame);
             }
             self.trade_log.push((tick.frame, self.world.def(def).map_or(0.0, |d| d.metal_cost), 0.0));
-            if def == kit.extractor
+            if kit.is_extractor(def)
                 && let Some(index) = self.world.hello.metal_spots.iter().position(|s| s.dist2d(pos) < 100.0)
             {
                 *self.spot_losses.entry(index).or_default() += 1;
@@ -103,7 +103,7 @@ impl Brain {
             }
             let (name, grid) = (self.name(def).to_string(), self.world.grid(pos));
             self.event(tick.frame, format!("lost {name} at {grid}"));
-            if def == kit.extractor {
+            if kit.is_extractor(def) {
                 self.extractor_losses.push_back(tick.frame);
             }
         }
@@ -194,7 +194,7 @@ impl Brain {
             metal: snapshot.metal,
             energy: snapshot.energy,
             counts: Counts {
-                extractors: count(kit.extractor),
+                extractors: count(kit.extractor) + count(kit.advanced_extractor),
                 generators: count(kit.solar) + count(kit.wind) + count(kit.advanced_solar),
                 converters: count(kit.converter),
                 labs: count(kit.lab),

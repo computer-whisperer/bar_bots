@@ -115,6 +115,8 @@ pub struct Directives {
     pub expansion_radius: Option<Timed<usize>>,
     /// Where the commander stands and builds, instead of roaming its leash around home.
     pub commander_station: Option<Timed<Vec3>>,
+    /// Tier 2: `true` starts the advanced lab now whatever the economy, `false` holds it back.
+    pub tier2: Option<Timed<bool>>,
 }
 
 impl Directives {
@@ -133,6 +135,7 @@ impl Directives {
         lapse(&mut self.min_converters, frame);
         lapse(&mut self.expansion_radius, frame);
         lapse(&mut self.commander_station, frame);
+        lapse(&mut self.tier2, frame);
     }
 
     pub fn describe(&self, frame: i32) -> Vec<String> {
@@ -161,6 +164,9 @@ impl Directives {
         }
         if let Some(t) = self.expansion_radius {
             lines.push(format!("expansion_radius={} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(t) = self.tier2 {
+            lines.push(format!("tier2={} ({})", if t.value { "go" } else { "hold" }, left(t.expires_frame)));
         }
         if let Some(t) = self.commander_station {
             lines.push(format!("commander_station=({:.0}, {:.0}) ({})", t.value.x, t.value.z, left(t.expires_frame)));
