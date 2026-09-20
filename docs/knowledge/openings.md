@@ -127,13 +127,19 @@ minute 8 than today's (raids eating the difference), or did not win more.
 **Claim.** For army value at minute 8 or later, the lab's first 5-6 units (up to 9-10 when allowed) should be
 constructors, with the first fighter shortly before minute 4; for army value at minute 5 or earlier, none. The
 break-even horizon of a constructor lies between 5 and 8 minutes.
-**Status.** conjectured (2026-09-19). Conflicts with K-army-fighters-before-constructors, which is arena evidence against
-BARb's raids; the simulator has no raids, so this entry says what the early fighters cost, not that they are wrong.
+**Status.** supported for two constructors first (2026-09-19, v21-early-expand-ab10); more than two untested. The
+simulator has no raids, so its 5-6 is an upper bound, not a recommendation.
 **Evidence.** `../studies/data/optima.md`: `army` at 3 and 5 minutes build 0 constructors, `army` at 8 and 10 and every
 `mix` from 5 minutes on build 6 (the cap); side run with 12 allowed used 10, +5 % (inside search noise).
+Arena, 10-minute A/B against medium, 4 games per arm and corner, means ours/theirs. With the fighter-first batch
+and constructors building generators before extractors, v20 sat on 2.0 extractors until minute 4 with one constructor,
+all metal spent as it came (north-west 0-12). Two constructors first, constructors to spots before anything else, and a
+1500 commander leash for five minutes: north-west extractors at minute 4 4.0/4.5 against 2.8/5.0, army value at
+minute 10 2992/2696 against 1798/3361; south-east extractors at minute 4 5.2/2.5 against 2.5/2.8. Army value at minute 4
+was level between the arms: the early fighters bought nothing.
 **Would be wrong if.** In the arena, batches opening constructor-heavy (say ck x4 before the second fighter) had no more
 extractors at minute 5, or lost them all to raids before minute 8.
-**Used by.** (candidate: H-PROD-BATCH)
+**Used by.** H-PROD-BUILDERS-FIRST, H-ECO-EARLY-EXPAND.
 
 ### K-open-sim-turrets-before-second-lab
 **Claim.** One lab plus 3-4 construction turrets builds as much army by minute 10 as any plan containing a second lab,

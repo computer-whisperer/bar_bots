@@ -10,6 +10,11 @@ use super::{Brain, FRAMES_PER_SECOND};
 
 /// The commander never builds farther from home than this.
 const COMMANDER_LEASH: f32 = 900.0;
+/// H-ECO-EARLY-EXPAND: until this frame the commander's leash is the longer one (no raider that can hurt it is out
+/// yet), and until we hold this many extractors constructors take a spot before anything else.
+const EARLY_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
+const EARLY_COMMANDER_LEASH: f32 = 1500.0;
+const EARLY_EXTRACTORS: usize = 5;
 /// H-ECO-NANO: a construction turret per this much metal income, up to this many per factory, placed within reach of it.
 const NANO_PER_INCOME: f32 = 8.0;
 const NANOS_PER_LAB: usize = 3;
@@ -304,6 +309,17 @@ impl Brain {
         if !is_commander && can_build(kit.turret) && !self.turret_requests.is_empty() {
             return (Plan::Near(kit.turret, self.turret_requests.remove(0)), "D-TURRET-REQUEST");
         }
+        // H-ECO-EARLY-EXPAND: at two extractors all metal is spent as it arrives and nothing else we build helps; the
+        // opponent holds four by minute 3. Constructors go for spots first (the commander keeps the energy up), and
+        // so does the commander while energy is not short.
+        if self.enabled("H-ECO-EARLY-EXPAND")
+            && planned(kit.extractor) < EARLY_EXTRACTORS
+            && !stalled
+            && (!is_commander || !energy_short)
+            && let Some(spot) = self.claim_spot(builder, snapshot.own_units.as_slice(), kit, tick.frame)
+        {
+            return (Plan::Extractor(spot), "H-ECO-EARLY-EXPAND");
+        }
         let focus = self.directives.economy_focus.map(|f| f.value);
         if energy_short || (focus == Some(Focus::Energy) && energy.current < energy.storage * 0.9) {
             return (Plan::Near(generator, base), if energy_short { "H-ECO-ENERGY-BY-STORAGE" } else { "D-FOCUS-ENERGY" });
@@ -390,7 +406,10 @@ impl Brain {
             if is_commander {
                 match commander_station {
                     Some(station) => spot.dist2d(station) < COMMANDER_STATION_REACH,
-                    None => self.walk_from_home(spot) < COMMANDER_LEASH,
+                    None => {
+                        let early = frame < EARLY_FRAMES && self.enabled("H-ECO-EARLY-EXPAND");
+                        self.walk_from_home(spot) < if early { EARLY_COMMANDER_LEASH } else { COMMANDER_LEASH }
+                    }
                 }
             } else {
                 // H-ECO-REACH: no farther from home than the army can answer for. The far line of spots (2000-2400
@@ -546,6 +565,14 @@ impl Brain {
         // Fighters first: early raids arrive before an all-constructor opening pays off.
         // H-PROD-MIX: at equal metal the line unit (Mace, Thug) wins most tier-1 fights and the old staples (Pawn,
         // Rocketeer; Grunt) lose them (docs/data/duels-2026-09-19). One fast raider a batch stays, for responders.
+        // H-PROD-BUILDERS-FIRST: the first two units out of the lab are constructors, and a wanted constructor leads
+        // its batch. With the constructor third in the batch the first one came at 1:50 and the second after 3:30,
+        // and we sat on two extractors until minute 4.
+        if self.enabled("H-PROD-BUILDERS-FIRST") && support == kit.constructor {
+            let line = if self.enabled("H-PROD-MIX") { kit.line } else { kit.raider };
+            let second = if count(kit.constructor) == 0 { kit.constructor } else { line };
+            return [kit.constructor, second, line, kit.raider, line].into_iter();
+        }
         if self.enabled("H-PROD-MIX") {
             let support = if support == kit.artillery { kit.line } else { support };
             return [kit.line, kit.raider, support, kit.line, kit.second].into_iter();

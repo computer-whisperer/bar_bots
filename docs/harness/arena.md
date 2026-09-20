@@ -57,6 +57,9 @@ With `WITHIN_REASON_OBSERVE=1` the shim also writes `truth-<ai>.jsonl` into the 
 (`[id, name, x, z, health %, being built]`) every two seconds, read through the engine's cheat callbacks switched on for
 that one query. It is for analysis only; the bot never sees it.
 
+`run/batch_curves.py <batch dir> [minute ...]` prints a batch's mean curves (extractors, builders, army value, turrets,
+ours/theirs) by A/B arm and start corner: the first thing to read after a batch, before the win count.
+
 `run/analyze_match.py <match dir>` turns a recorded match into what a reader needs to say why it was lost:
 - curves for both sides per minute (extractors, builders, army and turret value, factories, our bank and income);
 - candidate causes with their numbers (army lead and when it opened, extractor peak and collapse, idle metal and energy

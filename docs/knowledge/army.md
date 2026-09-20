@@ -11,7 +11,9 @@ broken launch condition; group membership has to be tracked explicitly.
 
 ### K-army-fighters-before-constructors
 **Claim.** The first factory units should be fighters; an opening of several constructors loses the early game to raids.
-**Status.** supported (2026-09-19), confounded with K-rules-factory-shift-means-five (both changed in v4)
+**Status.** narrowed (2026-09-19): true of five constructors and no fighters, false of two. Against medium, two
+constructors before the first fighter cost nothing in army by minute 4 and led by minute 8 (v21-early-expand-ab10, see
+K-open-sim-constructors-first). Confounded at the time with K-rules-factory-shift-means-five (both changed in v4).
 **Evidence.** v3-easy/04 (5 constructors, 0 army at minute 4, lost) vs v4-easy wins spread over both corners and factions.
 **Would be wrong if.** Constructor-first with correct single-unit orders did as well over 24+ matches.
 **Used by.** H-PROD-BATCH.
