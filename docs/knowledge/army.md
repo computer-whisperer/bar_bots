@@ -299,20 +299,24 @@ priced out positive; the policy tested is the naive one.
 **Used by.** (nothing — it is a reason not to extend the protocol)
 
 ### K-army-a-real-wave-is-not-a-blob
-**Claim.** Our waves already fight spread out, so a formation policy has nothing to fix. Measured over the 858
-engagements of the `micro-spread` batch with at least 300 metal of ours present, our soldiers stood at a mean 315
-elmos from their own centre (median 290; 241-258 in the enemy's half). The duel harness, which spawns an army in
-ranks 56 apart and sends it at one point, fights at 46-140 of the same measure, and the spread orders that beat it
-by a fifth of the metal traded only reach 61-184. **The blob the duel tables price is an artefact of the harness.**
-By the time a wave is in contact it has walked a thousand elmos, been marched, regrouped and lost its fastest, and
-it is scattered whether we ask for it or not.
+**Claim.** Our waves already fight spread out, so a formation policy has nothing to fix. Measured over the 930
+engagements of the `micro2-spread` batch with at least 300 metal of ours present, our soldiers stood at a mean 358
+elmos from their own centre with H-MICRO-SPREAD firing 155 times a game and 356 without it — a rule that shapes
+every attack order moves the number by two elmos. In the enemy's half, where the army is most concentrated, it
+reaches 303 against 270. The duel harness, which spawns an army in ranks 56 apart and sends it at one point,
+fights at a mean 81 of the same measure, and the spread orders that beat it by a fifth of the metal traded only
+reach 131. **The blob the duel tables price is an artefact of the harness.** By the time a wave is in contact it
+has walked a thousand elmos, been marched, regrouped, detached and lost its fastest, and it is three times more
+scattered than the formation the policy exists to break up.
 **Status.** supported (2026-09-20). Both numbers are the same statistic (RMS distance from the group's own centre):
 `present_before.our_fighters_spread` in `run/analyze_match.py --json`, and `spread_x` in the duel harness's
 `duels.csv`.
-**Evidence.** Batch `micro-spread` (48 games, `WITHIN_REASON_OBSERVE=1`) against batches `micro-block-off` /
-`micro-block-on` (336 duels). `docs/studies/micro-combat.md`.
+**Evidence.** Batch `micro2-spread` (48 games) against batches `micro2-off` / `micro2-on` (336 duels).
+`docs/studies/micro-combat.md`. An earlier, weaker version of this measurement (315 against 325) was taken on a
+batch whose raw data has since been lost; this one replaces it and says the same thing with the rule firing
+seventeen times as often.
 **Would be wrong if.** The arena measure were inflated by the way engagements are cut out (fighters within 1100 of
-the centre are counted, so the statistic is bounded well above what was seen — but 290 is far from that bound), or
+the centre are counted, so the statistic is bounded well above what was seen — but 327 is far from that bound), or
 if waves that arrive together after H-ARMY-MARCH and H-ARMY-STAGE improve showed a lower number.
 **Used by.** H-MICRO-SPREAD (explains why its engine gain does not reach the arena); a caution for any future
 formation or spacing rule priced on the duel tables.

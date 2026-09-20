@@ -2,9 +2,9 @@
 
 Six candidate policies for what a soldier does once the shooting starts, priced in `crates/combatsim`, then checked
 in the engine with the duel runner and in the arena. One survived the first two stages: **fight as a loose block,
-not as a blob** (H-MICRO-SPREAD), worth about a fifth of the metal traded over 336 engine duels. **In the arena it
-did nothing at all**, and the measurement of why is the most useful thing here: our waves already fight at 200-320
-elmos of dispersion, more than the duel harness's spread arm reaches, so there is no blob left to unpack. Kiting,
+not as a blob** (H-MICRO-SPREAD), worth about a fifth of the metal traded over 336 engine duels. **In the arena it does nothing
+measurable**, and the measurement of why is the most useful thing here: our waves already fight at 330-360 elmos
+of dispersion against the duel harness's blob of 81, so there is no blob left to unpack. Kiting,
 focus fire, not chasing and pulling damaged units out all failed earlier, three of them for reasons worth writing
 down.
 
@@ -213,54 +213,56 @@ Details and why:
   business, and `army.rs` is being rewritten elsewhere.
 - Squad orders and the home group's defence orders are untouched: only committed attackers.
 
-## Arena A/B: no effect, and the reason is worth more than the rule
+## Arena A/B: still nothing, now with the rule really firing
 
-`arena --matches 48 --parallel 4 --speed 50 --profile medium --ab-disable H-MICRO-SPREAD --label micro-spread`,
-with `WITHIN_REASON_OBSERVE=1` so both sides' deaths are known. Arm A is the rule on, arm B the same binary with it
-off; 24 games each, interleaved in blocks of four on the same seeds.
+The first arena batch (`micro-spread`, 48 games) measured an implementation that formed a block only for the units
+it happened to be ordering in one tick — a few idle attackers at a time, usually below the six-unit minimum — so
+it acted about 9 times a game. After the correction it acts **155 times a game**. This batch is the one that
+tests the policy. (The first batch's raw data was lost with the worktree it lived in; its numbers survive only in
+this study's history, and nothing about it can be re-examined.)
+
+`arena --matches 48 --parallel 4 --speed 50 --profile medium --ab-disable H-MICRO-SPREAD --label micro2-spread`
+(the arena records the opponent's ground truth by itself now). Arm A is the rule on, arm B the same binary with
+it off; 24 games each, interleaved in blocks of four on the same seeds.
 
 | | games | W-L-T | army metal killed / lost | NW | SE |
 |---|---|---|---|---|---|
-| arm A, rule on | 24 | 11-10-3 | **0.97** | 0.77 | 1.30 |
-| arm B, rule off | 24 | 11-13-0 | **0.96** | 0.76 | 1.28 |
+| arm A, rule on | 24 | 14-10-0 | **0.98** | 0.86 | 1.04 |
+| arm B, rule off | 24 | 12-11-1 | **0.95** | 0.85 | 1.00 |
 
-Nothing. Not "a small gain we cannot resolve" — the mechanism measure is flat to two decimals in both corners, and
-the win counts are inside the noise this harness is known to have (two arms of identical code have scored 8-3-1
-against 4-4-4). The ablation itself is clean: H-MICRO-SPREAD fired 0 times in all 24 arm-B games.
+Everything leans the right way and nothing is resolvable: three points of trade ratio and two wins, on a harness
+where two arms of identical code have scored 8-3-1 against 4-4-4. The ablation is clean — H-MICRO-SPREAD fired 0
+times in all 24 arm-B games, and in 17 of 24 arm-A games (155 orders a game over the arm, 220 where it fired; the
+seven that never fired it are games where no wave launched).
 
-It also broke nothing, which was the risk: sending 40 units to 40 separate points could have filed move failures
-into the rule that gives an attack target up as unreachable. Move failures per game 91 with against 90 without,
-targets given up as unreachable 0.00 against 0.04.
-
-Two measurements say why the rule did not show, and the second is the interesting one.
-
-**Exposure.** The rule acted in 15 of the 24 arm-A games — 9 orders a game over the arm, 14 over the games it
-fired in at all, against a median game of 19 minutes: firings were
-0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 3, 3, 5, 6, 7, 7, 8, 12, 13, 23, 24, 43, 51. The nine games where it never fired
-are the nine where no wave ever launched — the wave gate held the army at home for the whole game, and those nine
-went 0-9. So the rule only reaches the games we were winning anyway.
-
-**Our army is not a blob in the first place.** `analyze_match.py` reports, for every engagement, how far our
-soldiers stood from their own centre (root mean square — the same definition as the duel harness's `spread_x`).
-Over the 858 engagements of this batch with at least 300 metal of ours present:
+**The mechanism measurement is the result.** `analyze_match.py` reports, for every engagement, how far our
+soldiers stood from their own centre — root mean square, the same statistic as the duel harness's `spread_x`.
+Over the 930 engagements of this batch with at least 300 metal of ours present:
 
 | | engagements | mean spread | median |
 |---|---|---|---|
-| arm A (rule on) | 420 | 315 | 290 |
-| arm B (rule off) | 438 | 325 | 294 |
-| arm A, in their half or at their base | 140 | 258 | 214 |
-| arm B, in their half or at their base | 117 | 241 | 186 |
+| arm A (rule on) | 489 | 358 | 327 |
+| arm B (rule off) | 441 | 356 | 343 |
+| arm A, in their half or at their base | 189 | 303 | 262 |
+| arm B, in their half or at their base | 141 | 270 | 221 |
 
-**A real wave already fights at 200-320 elmos of dispersion, which is more than the duel harness's *spread* arm
-reaches (61-184) and two to six times its blob (46-140).** The formation the policy fixes is an artefact of
-spawning 24 units in ranks 56 apart and sending them all at one point. By the time one of our waves is in contact
-it has walked a thousand elmos through terrain, been marched and regrouped, lost its fastest, and is scattered
-anyway. There is no blob left to unpack, which is why ordering one not to be a blob changes nothing measurable.
+With the rule firing 17 times more often than in the first batch, our army's fighting dispersion moved from 356
+to 358 elmos. **A real wave already fights at 330-360, and the duel harness's blob is 81.** Even the harness's
+*spread* arm only reaches 131. There is nothing to unpack: by the time one of our waves is in contact it has
+walked a thousand elmos through terrain, been marched, regrouped, detached and lost its fastest, and it is
+scattered three times as loosely as the formation the policy was designed to break up. The only place the rule
+shows at all is in the enemy's half, where the army is most concentrated: 303 against 270 mean, 262 against 221
+median.
 
-So the honest reading of the whole study is: **the policy is real and the problem is not ours.** It is kept —
-it costs nothing, it is right in every stand-up fight the engine will run, and the day our waves do arrive
-together (H-ARMY-MARCH and H-ARMY-STAGE both push that way) it will start to matter. But the duel harness
-overstates what any formation policy can buy in a real game, for the same reason it overstates area damage.
+**And it is not free.** Sending forty units to forty separate points costs walkability: soldier and builder move
+failures 225 a game with the rule against 155 without, and attack targets given up as unreachable 0.21 a game
+against 0.12. (Stations given up are 19.9 against 20.4 — that is a background rate this rule does not touch.) In
+the first batch, where the rule barely fired, this cost was invisible (91 against 90).
+
+So the honest verdict is unchanged and better supported than before: **the policy is real, the problem is not
+ours.** It is kept — the trade ratio and the win count both lean its way, the ablation is clean, and it is right
+in every stand-up fight the engine will run — but it buys nothing measurable here and it does cost move failures,
+so it is a candidate to switch off if walkability ever becomes the binding problem.
 
 ## What was not done
 
@@ -271,6 +273,10 @@ overstates what any formation policy can buy in a real game, for the same reason
   rules, so a choke should change every one of them. Every cell here is flat open ground.
 - **Uneven metal was only tested in the simulator.** The duel harness sizes both sides to one budget; the engine
   A/B is entirely at equal metal.
+- **The first pass's raw data is gone.** Batches `micro-spread-off/on`, `micro-block-off/on` and the 48-game
+  `micro-spread` were deleted with the worktree they lived in before they could be archived. Their numbers survive
+  in this study's history; nothing about them can be re-examined, which is why the duel A/B and the arena A/B were
+  both re-run from scratch rather than patched up.
 - **Mixed forces were only tested in the simulator** (`armham:2+armrock:1` and `corthud:2+corstorm:1`), where
   spreading gains +0.10 and +0.13, between the same simulator's Pawn (+0.32) and its Rocketeer (+0.12). The duel harness pairs
   one type against one type, which is precisely the case the engine gain splits on, so the number our real
@@ -283,7 +289,7 @@ overstates what any formation policy can buy in a real game, for the same reason
 
 1. **Stop pricing formation rules on the duel tables.** Any future spacing, concave or frontage rule should be
    measured against `our_fighters_spread` in real games first (K-army-a-real-wave-is-not-a-blob). The duel harness
-   answers "which unit beats which", not "which formation a wave arrives in".
+   answers "which unit beats which", not "which formation a wave arrives in". The gap is a factor of four.
 2. **The wave gate, not the fighting, is what loses these games.** Nine of 24 arm-A games never launched a wave at
    all and went 0-9. No micro policy can reach a game the army spends at home.
 3. **Repair soldiers, then re-price withdrawal.** It is the best metal-efficiency policy measured (1.41 to 2.41)
