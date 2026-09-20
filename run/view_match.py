@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Open a recorded match in the web viewer (viewer/, format in docs/harness/record-format.md).
 
-usage: run/view_match.py run/matches/<batch>/<NN> [--port N] [--no-browser]
+usage: run/view_match.py run/matches/<batch>/<NN> [--port N] [--bind ADDRESS] [--no-browser]
 
-Serves viewer/ at / and the match directory at /match/ on 127.0.0.1 only, read-only, until interrupted.
+Serves viewer/ at / and the match directory at /match/, read-only, until interrupted. It listens on `::` by default:
+every interface, IPv6 and IPv4, so the viewer can be opened from another machine on the network. That exposes the
+match directory (logs, records, transcripts) to that network; `--bind 127.0.0.1` keeps it to this machine.
 A batch directory is accepted too and means its match 00.
 """
-import argparse, http.server, json, os, sys, webbrowser
+import argparse, http.server, json, os, socket, sys, webbrowser
 
 VIEWER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "viewer")
 
@@ -43,10 +45,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+class Server(http.server.ThreadingHTTPServer):
+    """Listens on an IPv6 address when given one, and then on IPv4 too (dual stack) where the system allows."""
+
+    def __init__(self, address, handler):
+        self.address_family = socket.AF_INET6 if ":" in address[0] else socket.AF_INET
+        super().__init__(address, handler)
+
+    def server_bind(self):
+        if self.address_family == socket.AF_INET6:
+            try:
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            except OSError:
+                pass  # IPv6 only, then
+        super().server_bind()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("match_dir")
     parser.add_argument("--port", type=int, default=8137, help="first port to try (default 8137)")
+    parser.add_argument("--bind", default="::", help="address to listen on (default ::, every interface; 127.0.0.1 for this machine only)")
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
     match_dir = os.path.abspath(args.match_dir)
@@ -57,14 +76,18 @@ def main():
     Handler.match_dir = match_dir
     for port in range(args.port, args.port + 20):
         try:
-            server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            server = Server((args.bind, port), Handler)
             break
         except OSError:
             continue
     else:
         sys.exit(f"no free port in {args.port}-{args.port + 19}")
-    url = f"http://127.0.0.1:{port}/"
+    everywhere = args.bind in ("::", "0.0.0.0")
+    local = "127.0.0.1" if everywhere else args.bind
+    url = f"http://[{local}]:{port}/" if ":" in local else f"http://{local}:{port}/"
     print(f"{match_dir}\n{url}   (ctrl-c to stop)")
+    if everywhere:
+        print(f"listening on every interface: from another machine, http://{socket.gethostname()}:{port}/")
     if not args.no_browser:
         webbrowser.open(url)
     try:
