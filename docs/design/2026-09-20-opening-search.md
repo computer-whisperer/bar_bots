@@ -102,4 +102,7 @@ time lost to walking, by minute, across settings of the knobs in arena batches; 
   priority, and each build held back only by the resources it costs. Builders' walks predicted within 2 s (median) at
   every length. Found on the way: today's opening energy-stalls at 4:30-5:00 in 8 of 8 games with 600-740 metal
   unspent. Beyond minute 6 a replay by order drifts (the played bot reacts to its stall, the replay cannot).
-  Steps 2-4: not started.
+- 2026-09-20, step 2: the plan executor (`crates/bot/src/brain/opening.rs`, H-OPEN-PLAN) plays today's opening
+  written down as a plan and comes out as the rules do or a little ahead (open-exec-1-ab). Labs get their whole queue
+  at once; mobile builders still take one step at a time when idle (the 3.5 s between builds is still there: queued
+  orders for them are the next measurement). Steps 3-4: not started.

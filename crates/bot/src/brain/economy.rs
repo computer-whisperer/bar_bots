@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitDefId, Vec3};
 
+use super::opening::Planned;
 use super::roster::Kit;
 use super::territory::Ground;
 use super::tier2::{ADVANCED_CONSTRUCTORS, Advance, LAB_ASSISTANTS, UPGRADES_BEFORE_ARMY};
@@ -172,7 +173,11 @@ impl Brain {
                 continue;
             }
             if is_builder && is_mobile {
-                let (plan, rule) = self.plan_for(unit, tick, kit);
+                let (plan, rule) = match self.opening_step(unit, tick, kit) {
+                    Some(Planned::Extractor(spot)) => (Plan::Extractor(spot), "H-OPEN-PLAN"),
+                    Some(Planned::Building(def_id)) => (self.place_planned(def_id, unit, own, kit), "H-OPEN-PLAN"),
+                    None => self.plan_for(unit, tick, kit),
+                };
                 // A stationed commander builds where it stands, whatever anchor the rule had in mind.
                 let plan = match (plan, stationed_at) {
                     (Plan::Near(def_id, _), Some(station)) => Plan::Near(def_id, station),
@@ -246,6 +251,13 @@ impl Brain {
                     commands.push(Command::Guard { unit: unit.id, target: lab.id });
                 }
             } else if unit.def == kit.lab
+                && self.production_weights.is_empty()
+                && let Some(batch) = self.opening_factory_batch(unit, tick, kit)
+            {
+                // A production mix from the commander outranks the plan's factory queue.
+                self.fire("H-OPEN-PLAN");
+                commands.extend(batch.into_iter().map(|def_id| Command::Build { unit: unit.id, def: def_id, site: None, queue: true }));
+            } else if unit.def == kit.lab
                 && own.iter().filter(|u| kit.is_resurrector(u.def)).count() < self.wanted_crew()
                 && own.iter().filter(|u| u.def == kit.constructor).count() >= self.wanted_constructors(own, kit)
             {
@@ -281,6 +293,19 @@ impl Brain {
         }
     }
 
+    /// Where a building the opening plan asks for goes: the places the rules would put it (H-ECO-BASE-LAYOUT), and
+    /// generators beside the builder until the first lab is started (H-ECO-OPENING: no walking between the first buildings).
+    fn place_planned(&self, def: UnitDefId, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Plan {
+        let lab = own.iter().filter(|u| u.def == kit.lab).min_by(|a, b| a.pos.dist2d(builder.pos).total_cmp(&b.pos.dist2d(builder.pos)));
+        match def {
+            d if d == kit.lab => Plan::Near(d, self.forward_of_home(LAB_YARD)),
+            d if d == kit.turret => Plan::Near(d, self.forward_of_home(TURRET_LINE)),
+            d if d == kit.nano && lab.is_some() => Plan::Beside(d, lab.unwrap().pos),
+            d if (d == kit.wind || d == kit.solar) && lab.is_none() => Plan::Beside(d, builder.pos),
+            d => Plan::Near(d, self.forward_of_home(-BACK_FIELD)),
+        }
+    }
+
     /// A builder whose move failed could not reach its site. Remember that, or it is sent there again at once,
     /// fails again, and spends the game walking into a cliff. Spots and base sites are avoided for a while.
     fn note_unreachable_sites(&mut self, tick: &Tick) {
@@ -300,7 +325,7 @@ impl Brain {
         if def == kit.lab { LAB_GAP } else { BUILDING_GAP }
     }
 
-    fn is_unreachable(&self, point: Vec3) -> bool {
+    pub(super) fn is_unreachable(&self, point: Vec3) -> bool {
         self.unreachable.iter().any(|(bad, _)| bad.dist2d(point) < UNREACHABLE_RADIUS)
     }
 
@@ -508,7 +533,7 @@ impl Brain {
 
     /// Reserves the nearest free metal spot this builder may go to: inside the leash for the
     /// commander (H-COM-LEASH), on held ground for constructors (H-MAP-TERRITORY).
-    fn claim_spot(&mut self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit, frame: i32) -> Option<Vec3> {
+    pub(super) fn claim_spot(&mut self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit, frame: i32) -> Option<Vec3> {
         let is_commander = builder.def == kit.commander;
         let commander_station = self.directives.commander_station.map(|d| d.value);
         let expansion_radius = self.directives.expansion_radius.map(|d| d.value);
@@ -585,7 +610,7 @@ impl Brain {
         Some(target)
     }
 
-    fn spot_taken(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
+    pub(super) fn spot_taken(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
         own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < SPOT_OCCUPIED_RADIUS) || self.allied_extractor_on(spot)
     }
 

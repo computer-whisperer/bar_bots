@@ -81,6 +81,7 @@ name = "bot"
 version = "0.1.0"
 dependencies = [
  "bot-protocol",
+ "buildorder",
  "serde",
  "serde_json",
  "terrain",
