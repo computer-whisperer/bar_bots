@@ -3,6 +3,8 @@
 
     tools/tier2_study.py army  run/matches/<batch>/<NN> ...      > docs/studies/data/tier2-barb-army.csv
     tools/tier2_study.py fights [--seeds 24] [--jobs 8] [--out docs/studies/data]
+    tools/tier2_study.py energy [--seeds 24] [--jobs 8]          > docs/studies/data/tier2-energy.csv
+    tools/tier2_study.py sustain [--bar upstream/Beyond-All-Reason]
 
 `army` reads the per-match truth logs (`docs/harness/record-format.md`: one line every two seconds, every enemy
 unit that really exists) and tabulates BARb's mean composition at minutes 15, 20, 25 and 30, per faction it
@@ -12,6 +14,10 @@ the other faction's units and those are kept as they are. Units still under cons
 `fights` builds those armies at a metal budget, builds our candidate mixes at the same budget, and asks
 `target/release/combatsim` who wins, one process per seed so the spread across seeds is real and reportable.
 Both sides are laid out front to back, shortest weapon first, which is what the CLI's group order means.
+
+`energy` reruns the mixes worth watching while sweeping our own energy income, because every beam and
+lightning weapon in the tier-2 line charges energy a shot. `sustain` is arithmetic, not simulation: what a
+recommended mix costs a second and how much factory build power it takes to keep up with it.
 """
 import collections, csv, glob, json, os, pathlib, re, statistics, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -71,7 +77,7 @@ def army(dirs, out):
             for unit in record["enemy"]:
                 if len(unit) < 6 or unit[5] == 0:  # finished, not still being built
                     rows[(faction, minute)][unit[1]] += 1
-    writer = csv.writer(out)
+    writer = csv.writer(out, lineterminator="\n")
     writer.writerow(["faction", "minute", "matches", "group", "unit", "mean_count", "metal_each", "tech"])
     for (faction, minute), counts in sorted(rows.items()):
         n = matches[(faction, minute)]
@@ -269,7 +275,7 @@ def fights(seeds, jobs, out_dir, army_csv):
 
     path = out_dir + "/tier2-fights.csv"
     with open(path, "w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["our_faction", "barb_faction", "budget", "spacing", "scenario", "mix", "margin", "sd",
                          "sem", "wins_of"])
         for cell in cells:
@@ -280,7 +286,7 @@ def fights(seeds, jobs, out_dir, army_csv):
     # every margin they were four fifths of the bytes.
     forces = out_dir + "/tier2-forces.csv"
     with open(forces, "w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["side", "faction", "budget", "key", "metal", "tower_metal", "force"])
         seen = set()
         for cell in cells:
@@ -362,7 +368,7 @@ def energy_sweep(seeds, jobs, out_dir, army_csv):
         cell["margins"].append(margin)
     path = out_dir + "/tier2-energy.csv"
     with open(path, "w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["our_faction", "barb_faction", "scenario", "mix", "our_income", "margin", "sem"])
         for cell in cells:
             mean, sem = pooled([cell])
@@ -398,15 +404,10 @@ def sustain(times):
                       + per_minute)
 
 
+# Exactly the mixes `fights` ran, so the costs below belong to the margins above and not to a nearby mix.
 RECOMMENDED = {
-    "Armada": {
-        "t1+zeus+fido": {"armham": 0.20, "armwar": 0.13, "armzeus": 0.34, "armfido": 0.33},
-        "t1 line only": T1_ARM,
-    },
-    "Cortex": {
-        "t1+can": {"corthud": 0.28, "corstorm": 0.22, "corcan": 0.50},
-        "t1 line only": T1_COR,
-    },
+    "Armada": {"t1+zeus+fido": MIXES["Armada"]["t1+zeus+fido"], "t1 line only": T1_ARM},
+    "Cortex": {"t1+can": MIXES["Cortex"]["t1+can"], "t1 line only": T1_COR},
 }
 
 
