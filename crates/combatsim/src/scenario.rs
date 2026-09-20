@@ -104,10 +104,63 @@ impl Default for Energy {
     }
 }
 
+/// Which enemy a unit shoots at, when it has a choice.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Focus {
+    /// The engine's own answer, near enough: whatever is nearest.
+    #[default]
+    Nearest,
+    /// The one with the fewest hit points left, among those this unit can already reach.
+    Weakest,
+    /// The one with the most damage a second per hit point left: kill what hurts most per second spent.
+    Threat,
+}
+
+impl Focus {
+    pub fn parse(name: &str) -> Option<Focus> {
+        match name {
+            "nearest" => Some(Focus::Nearest),
+            "weakest" => Some(Focus::Weakest),
+            "threat" => Some(Focus::Threat),
+            _ => None,
+        }
+    }
+}
+
+/// What a side's soldiers do beyond walking at the enemy and shooting the nearest thing: one field per policy,
+/// each off at its default, so `Micro::default()` is plain attack-move and a policy can be priced on its own.
+///
+/// These are *policies*, not orders. Whether the bot can express one with `Move`/`Fight`/`Stop` at its 0.5 s tick
+/// is a separate question, answered in `docs/studies/micro-combat.md`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Micro {
+    /// Keep at least this many elmos from the nearest friend while advancing (0 is off). An army that arrives
+    /// loose is a different army as far as area damage is concerned (K-units-duel-spacing-decides-area-damage).
+    pub spread: f32,
+    /// A unit under this share of its health turns round and walks away from the enemy (0 is off). It keeps
+    /// shooting whatever comes into range on the way, as a unit under a move order does.
+    pub withdraw_below: f32,
+    /// Units that out-range their target back off when it closes, instead of letting it walk into their face.
+    pub kite: bool,
+    /// Whether a unit that out-ranges its target but cannot outrun it kites anyway.
+    pub kite_when_slower: bool,
+    pub focus: Focus,
+    /// Do not walk after a target that is faster than us and out of reach: stand and let it come.
+    pub no_chase: bool,
+}
+
+impl Micro {
+    pub fn is_default(&self) -> bool {
+        self.spread == 0.0 && self.withdraw_below == 0.0 && !self.kite && self.focus == Focus::Nearest && !self.no_chase
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Scenario {
     pub sides: [Vec<Group>; 2],
     pub energy: [Energy; 2],
+    /// Per-side unit micro; both sides plain attack-move by default.
+    pub micro: [Micro; 2],
     pub terrain: Option<Field>,
     /// Game seconds after which an undecided fight is scored as it stands; the duel harness uses 240.
     pub time_limit: f32,

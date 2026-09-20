@@ -7,7 +7,7 @@ records who is left. It exists to fill the matchup table the brain and the LLM c
 ```
 duel (--units a,b,c | --ours a,b --theirs c,d | --pairs a:b,c:d)
      [--reps 4] [--budget 1200 | --count N] [--parallel 2] [--sites 3] [--duels-per-match 45] [--time-limit 240]
-     [--sweep-waves 3] [--spacing 56] [--speed 50] [--map NAME] [--label TEXT] [--base-port 9500]
+     [--sweep-waves 3] [--spacing 56] [--spread 0] [--speed 50] [--map NAME] [--label TEXT] [--base-port 9500]
 duel --report DIR [duels.csv ...]      rebuild the tables in DIR (from its own duels.csv, or merge the files named)
 ```
 `--units` runs every pair from the list, each unit against itself included; `--ours/--theirs` the cross product;
@@ -38,11 +38,20 @@ against column unit, mean margin x 100), `batch.json`, and one directory per eng
   (26 Pawns against 10 Thugs). `--count N` gives N against N instead. Energy cost and build time are ignored.
 - **Order of play.** Repetition `r` of a pairing puts the first unit at the west end when `r` is even and gives it
   team 0 when `r / 2` is even, so four repetitions cover every combination. The plan is shuffled with a fixed seed.
+- **Micro.** `--spread N` changes the orders the **first** unit of each pairing is given: instead of one attack-move
+  at the enemy's centre, each of its units is sent to its own point in a block around the enemy, N elmos between
+  neighbours, files across the approach and ranks behind (`director.rs` `loose_block`, a copy of the bot's
+  `brain::micro::loose_block` — change both together). The second army always gets the plain blob order. Run a batch
+  with and without it and compare with `run/duel_ab.py <without> <with>`; this is how H-MICRO-SPREAD was measured
+  (`docs/studies/micro-combat.md`).
 - **Scoring.** Decided when one army has nobody left (`wiped`), after `--time-limit` game seconds (`timeout`), or after
   60 s without damage to anyone (`stalemate`: anti-air against anti-air). `value_left` is the surviving share of an
   army's metal, each survivor weighted by its health. **Margin** = own `value_left` minus the enemy's: +1 is a flawless
   win, -1 a wipe without scratching them. `damage_taken` sums the engine's damage events (hit points, overkill
-  included). `contact_seconds` is the time to the first damage.
+  included). `contact_seconds` is the time to the first damage. `spread_x` / `spread_y` are how far each army's
+  units stood from their own centre (root mean square, elmos) at the frame the first damage was seen: a spawned
+  tier-1 bot army at spacing 56 fights at a mean of 49 (Centurion) to 93 (Grunt) of these, four times that within
+  one type, so an army's fighting formation is an outcome and not the spacing it was spawned at (the probe `docs/studies/combat-sim.md` asks for first).
 - **Clearing.** Survivors self-destruct. BAR's "Self-Destruct Resign" gadget (`luarules/gadgets/game_selfd_resign.lua`)
   cancels a team's first two attempts to destroy 95% of its units at once, which a large surviving army beside one
   commander is, so an order not carried out after 8 s is given again (never sooner: a second order while the 5 s
@@ -59,6 +68,7 @@ against column unit, mean margin x 100), `batch.json`, and one directory per eng
 | Site and speed | `speed200`: 3 pairings x 30 at speed 200 on two sites | margins per site -0.46 / -0.43, -0.35 / -0.37, -0.21 / -0.22; same as speed 50 (-0.43, -0.36) |
 
 | Formation spacing | `sp56`..`sp160`, `t1-matrix-wide` | decides area-damage matchups: Pawn against Mace -0.45 / -0.02 / +0.09 / +0.19 at 56 / 100 / 120 / 160. Run both `--spacing 56` and `--spacing 100` before believing a row |
+| Order-level spread | `micro-block-off` / `micro-block-on` (2026-09-20) | 28 tier-1 pairings x 6 duels an arm, `--spread 110` for the first army: metal killed per metal lost 1.11 -> 1.31, mean margin +0.131, and `spread_x` at contact 46-140 -> 61-184 while theirs did not move. All of the gain is the raiders' (`docs/studies/micro-combat.md`) |
 | Large armies at wide spacing | `scouts-wide` | 48 of 48 spawned, 57-Tick armies included. Units are claimed within the formation's own extent + 150; a fixed 600 radius missed rear ranks, and the first wide matrix had 112 `spawn_failed` of 1092 (deleted, not used) |
 
 Known flaw: the site rectangle leaves 170 elmos behind the front rank, so rear ranks of big or widely spaced armies
@@ -69,6 +79,6 @@ An engine start is ~30 s. The full 23-unit table (2184 duels) took 568 s of wall
 with nine other engines busy on the machine: ~4 duels a second (a duel is ~25 game seconds plus ~10 of clearing). One engine uses ~3 GB and about two cores.
 
 ## What a duel is not
-No micro (no kiting, no retreat, no focus fire beyond the engine's own targeting), no terrain, no mixed armies, no
+No micro beyond `--spread` (no kiting, no retreat, no focus fire beyond the engine's own targeting), no terrain, no mixed armies, no
 support (radar, repair, turrets behind the line), one army size. Both sides charge: a unit that would normally hold at
 its range and be approached is tested as an attacker too. See the caveats in K-units-duel-caveats.

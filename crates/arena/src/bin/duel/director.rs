@@ -44,6 +44,10 @@ pub struct Batch {
     pub sweep_waves: u32,
     /// Elmos between neighbours in a spawned formation; tight ranks flatter area damage.
     pub spacing: f32,
+    /// H-MICRO-SPREAD as the bot would issue it, for the **first** army of each pairing only: instead of one
+    /// attack-move order at the enemy's centre, each unit gets its own point on a line across the approach, this
+    /// many elmos apart. Nought is the plain blob order the tables were made with.
+    pub spread: f32,
     pub on_result: Box<dyn Fn(&DuelResult) + Send + Sync>,
 }
 
@@ -68,6 +72,10 @@ pub struct DuelResult {
     pub value_left: [f32; 2],
     /// Hit points of damage each army took.
     pub damage_taken: [f32; 2],
+    /// How spread out each army was when the first shot landed: root-mean-square distance of its units from its
+    /// own centre, in elmos. The probe `docs/studies/combat-sim.md` asks for first: an army's fighting formation
+    /// is an outcome, not the spacing it was spawned at.
+    pub spread_at_contact: [f32; 2],
 }
 
 struct Army {
@@ -86,6 +94,10 @@ struct Army {
     /// Where each unit was last seen; a unit that dies leaves its wreck there.
     seen_at: HashMap<UnitId, Vec3>,
     centroid: Vec3,
+    /// Root-mean-square distance of the living units from `centroid`, this tick.
+    dispersion: f32,
+    /// `dispersion` at the tick the duel's first damage was seen.
+    spread_at_contact: Option<f32>,
     damage_taken: f32,
     /// Frame of the last tick this army's team reported on.
     reported: i32,
@@ -200,7 +212,8 @@ impl Director {
             let Some(duel) = &mut field.duel else { continue };
             let bomb = SWEEP_BOMBS.iter().find_map(|name| self.defs.get(*name)).map(|def| def.id);
             let sweep = bomb.map(|bomb| (bomb, self.batch.sweep_waves));
-            if let Some(result) = advance(duel, team, tick, self.batch.time_limit, sweep, self.batch.spacing, &mut commands) {
+            let shape = Shape { spacing: self.batch.spacing, spread: self.batch.spread };
+            if let Some(result) = advance(duel, team, tick, self.batch.time_limit, sweep, shape, &mut commands) {
                 let result = DuelResult { match_index: self.match_index, site: index, ..result };
                 (self.batch.on_result)(&result);
                 self.batch.results.lock().unwrap().push(result);
@@ -271,6 +284,8 @@ impl Director {
             alive: HashMap::new(),
             seen_at: HashMap::new(),
             centroid: field.site.end(west),
+            dispersion: 0.0,
+            spread_at_contact: None,
             damage_taken: 0.0,
             reported: -1,
         };
@@ -283,6 +298,47 @@ impl Director {
     }
 }
 
+/// How the armies stand: the spacing they are spawned at, and the order-level spread the first of them advances
+/// with (`Batch::spread`).
+#[derive(Clone, Copy)]
+struct Shape {
+    spacing: f32,
+    spread: f32,
+}
+
+/// How much wider than deep the loose block is; the same number as the bot's `WIDTH_BIAS`.
+const WIDTH_BIAS: f32 = 2.0;
+
+/// Where each of `units` is sent when the army advances spread out: a block around the enemy, `spread` elmos
+/// between neighbours, files across the approach and ranks behind it. Units keep their left-to-right order, so
+/// nobody crosses anybody's path.
+///
+/// A second copy of the bot's `brain::micro::loose_block`, deliberately: the duel harness has to issue the orders
+/// the bot issues for the check to mean anything, and the two crates share no geometry. Change both together.
+fn loose_block(units: &mut [(UnitId, Vec3)], from: Vec3, to: Vec3, spread: f32) -> Vec<(UnitId, Vec3)> {
+    let n = units.len().max(1);
+    let (dx, dz) = (to.x - from.x, to.z - from.z);
+    let len = dx.hypot(dz).max(1.0);
+    let (ahead, across) = ((dx / len, dz / len), (-dz / len, dx / len));
+    let sideways = |p: &Vec3| p.x * across.0 + p.z * across.1;
+    units.sort_by(|a, b| sideways(&a.1).total_cmp(&sideways(&b.1)));
+    let files = ((n as f32 * WIDTH_BIAS).sqrt().ceil() as usize).clamp(1, n);
+    let ranks = n.div_ceil(files);
+    (units.iter().enumerate())
+        .map(|(place, (id, _))| {
+            let (file, rank) = (place / ranks, place % ranks);
+            let side = (file as f32 - (files as f32 - 1.0) / 2.0) * spread;
+            let back = (rank as f32 - (ranks as f32 - 1.0) / 2.0) * spread;
+            let at = Vec3 {
+                x: to.x + across.0 * side - ahead.0 * back,
+                y: to.y,
+                z: to.z + across.1 * side - ahead.1 * back,
+            };
+            (*id, at)
+        })
+        .collect()
+}
+
 /// One team's tick for one duel. Returns the result on the tick that decides it.
 /// `sweep` names the bomb unit and how many rounds of it clear the wrecks afterwards.
 fn advance(
@@ -291,7 +347,7 @@ fn advance(
     tick: &Tick,
     time_limit: i32,
     sweep: Option<(UnitDefId, u32)>,
-    spacing: f32,
+    shape: Shape,
     commands: &mut Vec<Command>,
 ) -> Option<DuelResult> {
     let frame = tick.frame;
@@ -302,7 +358,7 @@ fn advance(
     // What this team's snapshot says about its army.
     if matches!(duel.phase, Phase::Spawning { .. }) {
         // Spawned units are recognised by type and place; the previous duel's are all gone by now.
-        let places = sites::formation(army.front, army.faces_east, army.count, spacing);
+        let places = sites::formation(army.front, army.faces_east, army.count, shape.spacing);
         let reach = places.iter().map(|p| p.dist2d(army.front)).fold(0.0, f32::max) + CLAIM_MARGIN;
         let arrivals = tick.snapshot.own_units.iter().filter(|u| u.def == army.def && u.pos.dist2d(army.front) < reach);
         for unit in arrivals {
@@ -326,6 +382,12 @@ fn advance(
     if !army.alive.is_empty() {
         let n = army.alive.len() as f32;
         army.centroid = Vec3 { x: sum.0 / n, y: army.front.y, z: sum.1 / n };
+        let centroid = army.centroid;
+        let spread: f32 = (tick.snapshot.own_units.iter())
+            .filter(|u| army.units.contains(&u.id))
+            .map(|u| u.pos.dist2d(centroid).powi(2))
+            .sum();
+        army.dispersion = (spread / n).sqrt();
     }
     army.reported = frame;
     let mut hurt = false;
@@ -345,7 +407,7 @@ fn advance(
             }
             if !army.spawn_ordered {
                 army.spawn_ordered = true;
-                let places = sites::formation(army.front, army.faces_east, army.count, spacing);
+                let places = sites::formation(army.front, army.faces_east, army.count, shape.spacing);
                 commands.extend(places.into_iter().map(|at| Command::GiveUnit { def: army.def, at }));
             }
             let since = *since;
@@ -361,13 +423,29 @@ fn advance(
                 first_damage.get_or_insert(frame);
                 *last_damage = frame;
             }
+            if first_damage.is_some() && army.spread_at_contact.is_none() {
+                army.spread_at_contact = Some(army.dispersion);
+            }
             if frame < *advance_at {
                 return None;
             }
             if army.mobile {
                 // Attack-move at where the enemy is now; idle units (arrived, or never ordered) are sent again.
-                let idle = tick.snapshot.own_units.iter().filter(|u| u.idle && army.units.contains(&u.id));
-                commands.extend(idle.map(|u| Command::Fight { unit: u.id, to: enemy_centroid, queue: false }));
+                let idle: Vec<UnitId> =
+                    tick.snapshot.own_units.iter().filter(|u| u.idle && army.units.contains(&u.id)).map(|u| u.id).collect();
+                if shape.spread > 0.0 && side == 0 {
+                    // Spread is a property of the whole army, so the line is laid out over everyone alive and the
+                    // idle ones are sent to their own place in it.
+                    let mut alive: Vec<(UnitId, Vec3)> =
+                        (tick.snapshot.own_units.iter().filter(|u| army.units.contains(&u.id)))
+                            .map(|u| (u.id, u.pos))
+                            .collect();
+                    let places = loose_block(&mut alive, army.centroid, enemy_centroid, shape.spread);
+                    let wanted = places.into_iter().filter(|(id, _)| idle.contains(id));
+                    commands.extend(wanted.map(|(unit, to)| Command::Fight { unit, to, queue: false }));
+                } else {
+                    commands.extend(idle.into_iter().map(|unit| Command::Fight { unit, to: enemy_centroid, queue: false }));
+                }
             }
             let (advance_at, first_damage, last_damage) = (*advance_at, *first_damage, *last_damage);
             // Judge once both teams have reported this frame.
@@ -476,6 +554,7 @@ fn conclude(duel: &mut Duel, started: i32, frame: i32, first_damage: Option<i32>
         survivors,
         value_left: [x.value_left(), y.value_left()],
         damage_taken: [x.damage_taken, y.damage_taken],
+        spread_at_contact: [x.spread_at_contact.unwrap_or(0.0), y.spread_at_contact.unwrap_or(0.0)],
     };
     duel.phase = Phase::Clearing { since: frame, sweep: Sweep::Survivors };
     result

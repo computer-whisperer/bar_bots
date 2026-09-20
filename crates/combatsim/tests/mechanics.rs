@@ -3,10 +3,10 @@
 
 use combatsim::duels::{self, DECISIVE};
 use combatsim::field::Field;
-use combatsim::scenario::{End, Energy};
+use combatsim::scenario::{End, Energy, Focus};
 use combatsim::sim::{Rules, Tuning};
 use combatsim::units::{Units, aim_error};
-use combatsim::{Group, Scenario, Vec2, odds, simulate};
+use combatsim::{Group, Micro, Scenario, Vec2, odds, simulate};
 
 fn rules() -> Rules {
     Rules::default()
@@ -210,6 +210,48 @@ fn terrain_can_cut_a_fight_off_entirely() {
     let outcome = simulate(&rules, &scenario, 0);
     assert_eq!(outcome.reason, End::Stalemate);
     assert_eq!(outcome.margin, 0.0);
+}
+
+#[test]
+fn spreading_out_pays_against_area_damage_and_not_against_a_raider() {
+    // The whole micro study rests on this shape (`docs/studies/micro-combat.md`): a Mace's shell reaches 36
+    // elmos and a blob hands it two or three Pawns, while a Grunt's laser hits one unit however they stand.
+    // The engine agrees on the first half and disagrees on the second — see the study.
+    let rules = rules();
+    let loosened = |b: (&str, u32)| {
+        let mut scenario = duel(&rules, ("armpw", 22), b);
+        let blob = odds(&rules, &scenario, 6).mean_margin;
+        scenario.micro[0] = Micro { spread: 100.0, ..Micro::default() };
+        odds(&rules, &scenario, 6).mean_margin - blob
+    };
+    assert!(loosened(("armham", 9)) > 0.3, "spreading out should beat a plasma line: {}", loosened(("armham", 9)));
+    assert!(loosened(("corak", 28)).abs() < 0.2, "and do little against a raider: {}", loosened(("corak", 28)));
+}
+
+#[test]
+fn a_unit_that_walks_out_of_a_losing_fight_keeps_its_metal_and_loses_the_fight_anyway() {
+    // Withdrawal is a trade, not a gain: fewer units die, and the ones that leave stop shooting. Both halves
+    // are pinned because the study's recommendation turns on the second one.
+    let rules = rules();
+    let mut scenario = duel(&rules, ("armpw", 22), ("armham", 9));
+    let stand = simulate(&rules, &scenario, 3);
+    scenario.micro[0] = Micro { withdraw_below: 0.35, ..Micro::default() };
+    let leave = simulate(&rules, &scenario, 3);
+    assert!(leave.metal_lost[0] < stand.metal_lost[0] * 0.8, "{} against {}", leave.metal_lost[0], stand.metal_lost[0]);
+    assert!(leave.margin <= stand.margin, "and the fight is no better won: {} against {}", leave.margin, stand.margin);
+}
+
+#[test]
+fn finishing_the_weakest_target_wastes_shots_on_the_dead() {
+    // Nothing in the model stops a salvo already in the air, so a side that all shoots the same dying unit
+    // overkills it. This is why `focus=weakest` prices out negative, and why it needs an attack-unit command
+    // the bot does not have before it would even be worth trying.
+    let rules = rules();
+    let mut scenario = duel(&rules, ("armrock", 10), ("corak", 28));
+    let nearest = odds(&rules, &scenario, 6).mean_margin;
+    scenario.micro[0] = Micro { focus: Focus::Weakest, ..Micro::default() };
+    let weakest = odds(&rules, &scenario, 6).mean_margin;
+    assert!(weakest < nearest - 0.2, "slow rockets all aimed at one dying Grunt should do worse: {weakest} against {nearest}");
 }
 
 /// The headline number the study reports. Raise it when the model improves; never lower it quietly.

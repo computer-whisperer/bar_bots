@@ -19,6 +19,7 @@ combatsim --a armrock:10 --b corllt:6 --hold-b              # rockets against a 
 combatsim --a armpw:24 --b armham:10 --terrain run/matches/<dir>/00/terrain-0.bin:448:448 \
           --from 1200,3600 --at 2300,3600
 combatsim validate [--spacing tight|wide|both] [--reps 4] [--no-collide]
+combatsim micro [--reps 8] [--policies "none;spread=100;withdraw=0.35"] [--detail]
 combatsim speed
 ```
 
@@ -80,11 +81,21 @@ tables could have tested it). No wrecks, and so no wrecks blocking rockets — t
 duels anyway. No veterancy, although the engine gives up to 2.5× health and 1.25× rate of fire at full experience
 and a duel earns a little of it. No death explosions: the weapondefs the unit files name for them
 (`smallexplosiongeneric` and friends) are not defined anywhere in the game data, so they appear to do nothing. No
-turret slew or turn-in-place, no acceleration, no unit-unit collision damage, no repair, no radar, no retreat or
-kiting or any other micro, no line-of-sight blocking by terrain (units shoot across a cliff they cannot walk
+turret slew or turn-in-place, no acceleration, no unit-unit collision damage, no repair, no radar, no
+line-of-sight blocking by terrain (units shoot across a cliff they cannot walk
 over). Shots are resolved as a point impact at a computed time rather than as travelling projectiles, so nothing
 is intercepted in flight and a shell does not collide with the front rank on its way to the rear one. Air is
 excluded by construction: anti-air weapons are dropped when the tables are built.
+
+## Unit micro (added 2026-09-20)
+
+`Scenario::micro`, one policy set per side, every field off by default so the baseline is the plain attack-move the
+duel tables were made with: `spread` (a push away from friends closer than N elmos while advancing), `withdraw_below`
+(a hurt unit turns round and walks away, still firing), `kite` (a unit that out-reaches and out-runs its target backs
+off when the target closes), `focus` (shoot the weakest, or the most damage a second per hit point left, among those
+in range) and `no_chase`. `combatsim micro` prices them over 135 tier-1 cells. The study is
+`docs/studies/micro-combat.md`; the short version is that spreading out is worth +0.155 of margin here and +0.131 in
+the engine, and that nothing else priced positive.
 
 ## Validation
 
@@ -143,6 +154,15 @@ not arrive in the formation they were spawned in**, and the simulator's do. The 
 too strong in the tight table. The honest summary is that the simulator's formation density is an input where the
 engine's is an outcome.
 
+**Spreading out against a tower line.** Measured 2026-09-20 with the duel runner's new `--spread` (28 tier-1
+pairings, 6 duels an arm): the two largest engine gains from spreading an army are raiders against a light tower
+line — Grunt against Sentry −0.193 to +0.652, Pawn against Guard −0.150 to +0.560 — and the simulator predicts
+nothing at all for either. It has the mechanism (`collision_saturates_a_short_range_blob`) and still misses the
+case, because its blob does not also *arrive* as a column and feed itself to the tower a few at a time. Over those
+28 pairings the simulator's gain correlates with the engine's at only 0.27 and is 1.8x too large on average, while
+agreeing in sign on 10 of the 15 pairings the engine moved by more than 0.05. **Read the policy numbers as a
+shortlist of what to test in the engine, not as a ranking.**
+
 Secondary, in the wide table: light towers against the fast scout cars (`armfav`, `corfav`) are the worst misses
 there, and they are the same shape — the tower's 20-energy shots plus a 0-lead prediction against a 150-speed
 target, where a small error in either swings the whole result.
@@ -171,10 +191,13 @@ cannot — see below.
 
 In priority order, all runnable with the existing harness except the first:
 
-1. **Measure the spacing an army actually fights at.** Record inter-unit distances at first contact for a
-   spacing-56 blob of Pawns, Maces and Shellshockers. This is the single number the artillery error turns on, and
-   it would tell us whether spawn spacing is even the right input. Needs a new probe in the duel director, not a
-   new batch.
+1. ~~**Measure the spacing an army actually fights at.**~~ Done 2026-09-20: `spread_x` / `spread_y` in
+   `duels.csv` are each army's root-mean-square distance from its own centre at the first damage. A spacing-56
+   army of tier-1 bots fights at a mean of 79-93 of them and the spread is wide: Centurion 49 (29-63), Rocketeer 79
+   (37-122), Aggravator 81, Mace 85, Pawn 86, Thud 91, Grunt 93 (76-136), and a light tower line stands at 114-119
+   simply because that is how it was placed. So spawn spacing is **not** what an army fights at, the number varies
+   by a factor of four within one unit type, and the formation density the artillery error turns on can now be
+   measured per unit instead of assumed (`micro-block-off`, 168 duels).
 2. **Artillery with a spotter.** `armart` plus two `armflea` against `armllt`, against `armart` alone. Tests
    K-units-duel-range-vs-turrets' conjecture that sight, not range, is what loses it, which the simulator says is
    only part of the story.

@@ -242,3 +242,72 @@ K-army-verdicts-v18's "1500 known against a real 3205".
 **Would be wrong if.** With the gate reading an unwindowed sum (or the tempo estimate), waves still launched into
 armies they had not counted at the same rate.
 **Used by.** H-ARMY-WAVE-GATE (as a criticism of its input, not yet a change).
+
+### K-army-blob-attack-move-wastes-the-raiders
+**Claim.** Sending a wave to one point makes it fight as a blob, and a blob is the worst formation our tier-1 raiders
+can be in. Spreading the same army over a block 110 elmos between neighbours is worth about a fifth of the metal it
+trades, and essentially all of that belongs to Pawns and Grunts: over 28 tier-1 pairings in the engine, metal killed
+per metal lost went 1.11 to 1.31, with a mean margin gain of +0.41 for Pawn and +0.46 for Grunt against +0.05 or less
+for Centurion, Thud, Mace, Aggravator and Rocketeer. Two mechanisms, not one: the blob feeds two or three units to
+every area shell (Mace and Thud 36 elmos, Rocketeer and Aggravator 48), and — the larger effect — a blob of
+180-range raiders cannot get more than its front rank inside its own range of a target, so it walks into a tower line
+a few at a time. Rocketeers are the exception and lose by spreading (−0.25 against Grunts): a slow fragile
+long-ranged unit needs its neighbours.
+**Status.** supported (2026-09-20) in the engine duel harness; **it does not reach the arena** — the
+`micro-spread` A/B is flat (K-army-a-real-wave-is-not-a-blob says why).
+**Evidence.** `docs/studies/micro-combat.md`; batches `micro-block-off` / `micro-block-on` (28 pairings x 6 duels an
+arm, equal metal at 1200, spawn spacing 56), compared with `run/duel_ab.py`. Biggest cells: Grunt against Sentry
+−0.193 to +0.652, Pawn against Guard −0.150 to +0.560. The behaviour was confirmed before the result: `spread_x` in
+`duels.csv` (RMS distance of an army's units from its own centre at the first shot) rose, per pairing, from 46-140 to 61-184 elmos
+while the opponent's did not move. Consistent with K-units-duel-spacing-decides-area-damage, measured from the other
+end (both sides loose) in the 2026-09-19 tables.
+**Would be wrong if.** An arena arm with H-MICRO-SPREAD off traded metal at least as well as one with it on, or if
+the gain in the duels came from the fight taking longer rather than from the formation (contact time rises with the
+spread order and was not separated).
+**Used by.** H-MICRO-SPREAD.
+
+### K-army-withdrawing-a-hurt-soldier-saves-metal-and-loses-the-fight
+**Claim.** Walking a unit out of a fight when its health falls below a third is the most metal-efficient policy
+tested and still loses ground: over 135 simulated tier-1 cells it took metal killed per metal lost from 1.41 to 2.41
+and cost 0.039 of margin. Fewer of ours die; the ones that leave stop shooting, so fewer of theirs die too, and what
+walks away walks away hurt. The two measures disagree by exactly the question of whether a hurt soldier is ever
+repaired, and ours are not. Only when outnumbered (0.7x metal) is it not negative: +0.005 of margin, 0.66 to 1.02.
+**Status.** conjectured (2026-09-20) — simulator only, never run in the engine. It also rests on an unchecked
+assumption: that a unit under a `Move` order keeps firing at what comes into range, which is what the engine's
+default fire state should do but was not verified.
+**Evidence.** `combatsim micro --reps 16`, `docs/studies/micro-combat.md`.
+**Would be wrong if.** A duel arm with `withdraw` orders traded better *and* won as often, or if soldiers were
+repaired at home, which would move the true measure from margin towards metal.
+**Used by.** (candidate: H-MICRO-WITHDRAW, after H-ECO-REPAIR is extended to soldiers)
+
+### K-army-focus-fire-cannot-be-ordered-and-would-not-pay
+**Claim.** There is no attack-unit command in the protocol: `Fight` names a point and the engine picks the target,
+roughly the nearest. Simulating the command we do not have says not to add it — a side that all shoots the enemy with
+the fewest hit points left scores 0.165 of margin *worse* than the engine's own targeting over 135 cells, because
+nothing stops a salvo already in the air and the overkill is most of a Rocketeer's 3.8-second volley.
+**Status.** conjectured (2026-09-20) — simulator only. The absence of the command is `supported`
+(`crates/bot-protocol/src/messages.rs`).
+**Evidence.** `combatsim micro --reps 16`; `finishing_the_weakest_target_wastes_shots_on_the_dead` in
+`crates/combatsim/tests/mechanics.rs`.
+**Would be wrong if.** A focus rule that avoided overkill (counting damage already in the air towards a target)
+priced out positive; the policy tested is the naive one.
+**Used by.** (nothing — it is a reason not to extend the protocol)
+
+### K-army-a-real-wave-is-not-a-blob
+**Claim.** Our waves already fight spread out, so a formation policy has nothing to fix. Measured over the 858
+engagements of the `micro-spread` batch with at least 300 metal of ours present, our soldiers stood at a mean 315
+elmos from their own centre (median 290; 241-258 in the enemy's half). The duel harness, which spawns an army in
+ranks 56 apart and sends it at one point, fights at 46-140 of the same measure, and the spread orders that beat it
+by a fifth of the metal traded only reach 61-184. **The blob the duel tables price is an artefact of the harness.**
+By the time a wave is in contact it has walked a thousand elmos, been marched, regrouped and lost its fastest, and
+it is scattered whether we ask for it or not.
+**Status.** supported (2026-09-20). Both numbers are the same statistic (RMS distance from the group's own centre):
+`present_before.our_fighters_spread` in `run/analyze_match.py --json`, and `spread_x` in the duel harness's
+`duels.csv`.
+**Evidence.** Batch `micro-spread` (48 games, `WITHIN_REASON_OBSERVE=1`) against batches `micro-block-off` /
+`micro-block-on` (336 duels). `docs/studies/micro-combat.md`.
+**Would be wrong if.** The arena measure were inflated by the way engagements are cut out (fighters within 1100 of
+the centre are counted, so the statistic is bounded well above what was seen — but 290 is far from that bound), or
+if waves that arrive together after H-ARMY-MARCH and H-ARMY-STAGE improve showed a lower number.
+**Used by.** H-MICRO-SPREAD (explains why its engine gain does not reach the arena); a caution for any future
+formation or spacing rule priced on the duel tables.

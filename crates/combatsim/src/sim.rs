@@ -8,7 +8,7 @@
 
 use crate::field::Flow;
 use crate::rng::Rng;
-use crate::scenario::{End, Odds, Outcome, Scenario, Vec2};
+use crate::scenario::{End, Focus, Micro, Odds, Outcome, Scenario, Vec2};
 use crate::units::{FPS, Units, aim_error};
 
 const NONE: u32 = u32::MAX;
@@ -45,6 +45,15 @@ impl Default for Tuning {
 /// without them a blob jams solid instead of flowing around its own front rank.
 const DEFLECTIONS: [f32; 7] = [0.0, 0.5, -0.5, 1.0, -1.0, 1.7, -1.7];
 
+/// `Micro::kite`: how much further a unit must reach than its target before backing off is worth anything, and how
+/// far inside its own stopping distance it lets the target come before it does. The slack is a hysteresis: without
+/// one a kiter oscillates on the spot at exactly its stop distance and never walks.
+const KITE_EDGE: f32 = 40.0;
+const KITE_SLACK: f32 = 30.0;
+/// `Micro::spread`: how strongly the push away from crowding friends is weighed against walking at the enemy. At 1
+/// a unit standing on top of a friend walks sideways as hard as it walks forward.
+const SPREAD_WEIGHT: f32 = 1.0;
+
 /// One weapon of one unit type, with everything the loop needs already in frames, elmos and radians.
 struct Shot {
     range: f32,
@@ -76,6 +85,8 @@ pub struct Rules {
     pub units: Units,
     pub tuning: Tuning,
     shots: Vec<Vec<Shot>>,
+    /// Damage a second against standard armour, per unit type: what `Focus::Threat` ranks targets by.
+    threat: Vec<f32>,
 }
 
 impl Default for Rules {
@@ -113,7 +124,15 @@ impl Rules {
                     .collect()
             })
             .collect();
-        Rules { units, tuning, shots }
+        let threat = (units.list.iter())
+            .map(|unit| {
+                (unit.weapons.iter())
+                    .filter(|w| w.hits_ground())
+                    .map(|w| w.damage_to("standard") * (w.burst.max(1) * w.projectiles.max(1)) as f32 / w.reload.max(0.01))
+                    .sum()
+            })
+            .collect();
+        Rules { units, tuning, shots, threat }
     }
 }
 
@@ -237,6 +256,7 @@ struct Sim<'a> {
     energy: [f32; 2],
     energy_cap: [f32; 2],
     metal: [f32; 2],
+    micro: [Micro; 2],
 }
 
 impl<'a> Sim<'a> {
@@ -301,6 +321,7 @@ impl<'a> Sim<'a> {
             energy: [0, 1].map(|s| scenario.energy[s].stored),
             energy_cap: [0, 1].map(|s| scenario.energy[s].stored),
             metal,
+            micro: scenario.micro,
         }
     }
 
@@ -454,17 +475,36 @@ impl<'a> Sim<'a> {
                 continue;
             }
             let (pos, side, old) = (self.bodies[i].pos, self.bodies[i].side, self.bodies[i].target);
+            let focus = self.micro[side as usize].focus;
+            let reach = self.bodies[i].reach;
             let mut best = (f32::MAX, NONE);
+            // The policy's pick, ranked among the enemies this unit can already shoot: a unit walks at the nearest
+            // thing until something is in range, whatever its orders say about priorities.
+            let mut chosen = (f32::MAX, NONE);
             for (j, other) in self.bodies.iter().enumerate() {
-                if other.here(frame) && other.side != side && self.seen[j] {
-                    let d = pos.dist2(other.pos);
-                    if d < best.0 {
-                        best = (d, j as u32);
-                    }
+                if !(other.here(frame) && other.side != side && self.seen[j]) {
+                    continue;
+                }
+                let d = pos.dist2(other.pos);
+                if d < best.0 {
+                    best = (d, j as u32);
+                }
+                if focus == Focus::Nearest || d > reach * reach {
+                    continue;
+                }
+                let rank = match focus {
+                    Focus::Nearest => continue,
+                    Focus::Weakest => other.hp,
+                    // Highest damage a second per hit point left, so smallest reciprocal.
+                    Focus::Threat => other.hp / self.rules.threat[other.def as usize].max(1e-3),
+                };
+                if rank < chosen.0 {
+                    chosen = (rank, j as u32);
                 }
             }
-            self.bodies[i].target = best.1;
-            if best.1 != old && best.1 != NONE {
+            let target = if chosen.1 != NONE { chosen.1 } else { best.1 };
+            self.bodies[i].target = target;
+            if target != old && target != NONE {
                 self.bodies[i].aimed_at = frame + (self.rules.tuning.aim_seconds * FPS) as u32;
             }
         }
@@ -479,17 +519,45 @@ impl<'a> Sim<'a> {
                 continue;
             }
             let (pos, side, target, reach, speed) = (body.pos, body.side as usize, body.target, body.reach, body.speed);
+            let (hp, max_hp) = (body.hp, body.max_hp);
+            let micro = self.micro[side];
             let stop = reach * self.rules.tuning.stop_at;
             let goal = if target != NONE { self.bodies[target as usize].pos } else { self.goal[side] };
-            if target != NONE && pos.dist(goal) <= stop {
-                self.bodies[i].vel = Vec2::default();
-                continue;
+            let range = pos.dist(goal);
+            // A unit too badly hurt to be worth spending turns round and leaves; it still shoots what comes into
+            // range on the way, as a unit under a move order does.
+            let withdrawing = micro.withdraw_below > 0.0 && hp < max_hp * micro.withdraw_below;
+            // Out-ranging the enemy is only worth something while the distance is kept: a unit that lets a shorter
+            // weapon walk into its face has thrown its range away.
+            let kiting = micro.kite && target != NONE && !withdrawing && {
+                let enemy = &self.bodies[target as usize];
+                let outranges = reach > enemy.reach + KITE_EDGE;
+                let outruns = speed > enemy.speed || micro.kite_when_slower;
+                outranges && outruns && range < stop - KITE_SLACK
+            };
+            if !withdrawing && !kiting {
+                if target != NONE && range <= stop {
+                    self.bodies[i].vel = Vec2::default();
+                    continue;
+                }
+                // Standing still rather than walking after something faster that is already out of reach.
+                if micro.no_chase && target != NONE && range > reach && self.bodies[target as usize].speed > speed {
+                    self.bodies[i].vel = Vec2::default();
+                    continue;
+                }
             }
             // Out of contact the walking field goes round cliffs; once a target is in sight, straight at it.
-            let dir = match &self.flows[side] {
+            let mut dir = match &self.flows[side] {
                 Some(flow) if target == NONE => flow.direction(pos).unwrap_or_else(|| pos.towards(goal)),
                 _ => pos.towards(goal),
             };
+            if withdrawing || kiting {
+                // Away from whatever is shooting at us: the target if there is one, else the enemy's centre.
+                let from = if target != NONE { self.bodies[target as usize].pos } else { self.goal[side] };
+                dir = from.towards(pos);
+            } else if micro.spread > 0.0 {
+                dir = normalise(dir + self.separation(i as u32, pos, side as u8, micro.spread) * SPREAD_WEIGHT);
+            }
             let mut moved = Vec2::default();
             for turn in DEFLECTIONS {
                 let (sin, cos) = turn.sin_cos();
@@ -502,6 +570,27 @@ impl<'a> Sim<'a> {
             self.bodies[i].pos = pos + moved;
             self.bodies[i].vel = moved;
         }
+    }
+
+    /// `Micro::spread`: the push away from friends standing closer than `want`, strongest at nought distance and
+    /// nothing at `want`. This is what a wave given one destination point each, spread over the ground, does as it
+    /// walks; the simulation has no orders, so the policy is expressed as the behaviour they produce.
+    fn separation(&self, me: u32, pos: Vec2, side: u8, want: f32) -> Vec2 {
+        let mut push = Vec2::default();
+        self.near(pos, want, |j| {
+            if j == me {
+                return;
+            }
+            let other = &self.bodies[j as usize];
+            if other.side != side || !other.alive {
+                return;
+            }
+            let d = pos.dist(other.pos);
+            if d < want {
+                push = push + other.pos.towards(pos) * ((want - d) / want);
+            }
+        });
+        push
     }
 
     /// Whether this unit may step from `pos` to `at`: walkable ground, and no other unit's footprint already
@@ -672,6 +761,10 @@ impl<'a> Sim<'a> {
         }
         hurt
     }
+}
+
+fn normalise(v: Vec2) -> Vec2 {
+    Vec2::default().towards(v)
 }
 
 fn centre(bodies: &[Body], side: usize, frame: u32) -> Vec2 {
