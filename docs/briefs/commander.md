@@ -69,7 +69,17 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
 - Keep the army out of the base: 40 soldiers among the buildings on the peninsula jam, and everything they do starts
   with a walk through the neck.
 
-**What earlier commanders did, right and wrong.** [experiments ledger: commander-1 to -6]
+**What earlier commanders did, right and wrong.** [experiments ledger: commander-1 to -8]
+- Game 8, low effort, thrown at minute 32: banked 10,000 metal of army on 4 extractors, marched on the base with no
+  rockets against 15 turrets, arrived with the Centurions 350 ahead of the Hammers and lost 3,000 in 17 seconds while
+  killing its tier-2 lab; noted "pressing through", and eleven seconds later ordered everyone home with `move`. At
+  that moment the opponent had 17-19 soldiers left, no lab of that tier and its construction turrets dying; our 19
+  Hammers walked out through its Pyros without firing and none got home. The retreat was judged on our losses alone.
+- Game 7, the lost one: metal traded ran 3.3 to 1 against us from minute 6 (0.8 to 1 in the game won beside it) and
+  nobody looked. Extractors stood up to 4,400 from home with turrets only at the base; the `take_first` list sent
+  constructors back to the same raided spots, one of them four times. It called a "decisive win" 23 seconds after a
+  fight order, with both armies intact on either side of a ridge, and gave up a position because a squad 15 seconds
+  old "sat stuck for 90+ seconds": read the clock in the report before judging what has or has not happened.
 - Game 6, won in 23 minutes: held the mouth of the peninsula and the near spots, judged from the usual curve and from
   what kept dying at its posts that the opponent's army was below par, scouted its base, then sent the whole main body
   (59 soldiers) at the commander's last sighting while one squad held home. That is the pattern.

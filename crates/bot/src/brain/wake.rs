@@ -16,7 +16,7 @@ const STAGNATION_FRAMES: i32 = 4 * 60 * FRAMES_PER_SECOND;
 
 #[derive(Default)]
 pub struct WakeState {
-    last_turn_frame: i32,
+    pub(super) last_turn_frame: i32,
     threatened_extractors: usize,
     squads_engaged: usize,
     pool_met: bool,

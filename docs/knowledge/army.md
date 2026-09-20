@@ -174,3 +174,20 @@ waves 10 and 12, with 4 and 2 attackers. Every retreat is followed by a 90-secon
 **Would be wrong if.** With the fix the south-east still times out at the same rate.
 **Used by.** H-ARMY-REGROUP.
 
+
+### K-army-groups-arrive-strung-out
+**Claim.** A group given one order strings out by unit speed and meets the enemy a few at a time; the loss happens in
+the first seconds of contact, before any judgement can be made.
+**Status.** observed repeatedly (2026-09-19/20); the fix (H-ARMY-MARCH) is unmeasured.
+**Evidence.** Commander game 8c, 32:09-32:26: 10 Centurions reached the enemy base about 350 elmos ahead of 36 Hammers;
+army value fell 9750 to 6930 in 17 seconds. Commander game 6 (lost): three squads ordered to one rally point arrived one
+after another and fought alone. v26: waves recalled because the six fastest attackers met something alone
+(K-army-won-games-are-recalled). BARb moves a squad on one shared path at its slowest member's speed
+(docs/studies/barb-comparison.md).
+
+### K-army-posted-squads-chase-singles
+**Claim.** A posted squad that turns, all of it, on the nearest intruder is led around by single cheap units.
+**Status.** observed once, from the record (2026-09-20, Opus analyst, code path confirmed).
+**Evidence.** Commander game 7/01, 10:02-11:56: one 43-metal Grunt walked all 38 members of `mainforce` from (1485,3376)
+to (3528,3027), about 1800 elmos, for 226 metal killed. The post code re-aimed every member at the single nearest
+enemy inside the radius every 2 seconds. Now: the biggest group, met by the nearest members good odds take.

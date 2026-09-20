@@ -248,6 +248,14 @@ pub struct Score {
     /// (minutes ago, extractors, metal income, army metal) for 3 and 6 minutes ago, when the game is that old.
     pub trend: Vec<(i32, usize, f32, u32)>,
     pub extractors_lost_3_min: usize,
+    /// Metal of ours destroyed and of theirs we saw destroyed (units and buildings): in the last three minutes, and
+    /// in the whole game. Kills out of our sight are not counted.
+    pub traded_3_min: (u32, u32),
+    pub traded: (u32, u32),
+    /// Game seconds since the commander's previous turn began.
+    pub seconds_since_turn: i32,
+    /// Where a factory of the opponent's has been seen, standing or not.
+    pub enemy_base_found: Option<Place>,
     /// The opponent's soldiers seen in the last three minutes and not seen to die, and their metal. Older sightings
     /// are left out: most of its soldiers die where we cannot see, and a count that never forgets only grows.
     pub enemy_soldiers_seen: usize,

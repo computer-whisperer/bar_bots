@@ -79,6 +79,8 @@ const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
 /// H-ECO-REACH: constructors take spots within this walking distance of home, plus this much per soldier we have.
 const EXPANSION_REACH: f32 = 1500.0;
 const EXPANSION_REACH_PER_SOLDIER: f32 = 50.0;
+/// H-ECO-FRONTIER: a spot this close to an extractor or turret of ours is the next step outward, however far from home.
+const FRONTIER_STEP: f32 = 1200.0;
 /// Metal spots within this walking distance of the start are built before anything else; farther ones after the lab.
 const OPENING_REACH: f32 = 300.0;
 /// Generators before the first lab, counting a wind generator as one and a solar as two.
@@ -461,7 +463,14 @@ impl Brain {
                     Some(radius) => self.reachable_on_foot(spot) && self.walk_from_home(spot) <= radius as f32,
                     None => {
                         let reach = EXPANSION_REACH + EXPANSION_REACH_PER_SOLDIER * soldiers as f32;
-                        self.spot_is_ours(spot) && (!self.enabled("H-ECO-REACH") || self.walk_from_home(spot) <= reach)
+                        // H-ECO-FRONTIER: what we hold carries the reach outward with it. Measured from home alone, the
+                        // reach stopped at the first gap in the map: from Quicksilver's north-west start seven spots lie
+                        // within 2100 on foot and the next eight at 2700-3400, which took 24-38 soldiers standing at
+                        // home at once; we held those eight for one minute a game and the opponent for seventy
+                        // (K-eco-raided-ground-is-raided-again). Raided ground still closes through the hot-spot rule.
+                        let frontier = self.enabled("H-ECO-FRONTIER")
+                            && own.iter().any(|u| (u.def == kit.extractor || u.def == kit.turret) && !u.being_built && u.pos.dist2d(spot) < FRONTIER_STEP);
+                        self.spot_is_ours(spot) && (!self.enabled("H-ECO-REACH") || self.walk_from_home(spot) <= reach || frontier)
                     }
                 }
             }

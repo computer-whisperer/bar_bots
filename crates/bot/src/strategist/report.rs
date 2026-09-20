@@ -52,6 +52,10 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         s.enemy_soldiers_seen_metal
     ));
     lines.push(format!(
+        "traded: in the last 3 min we lost {} metal of units and buildings and destroyed {} of theirs that we saw die; whole game {} lost, {} destroyed | {} of game time since your last turn began",
+        s.traded_3_min.0, s.traded_3_min.1, s.traded.0, s.traded.1, clock(s.seconds_since_turn)
+    ));
+    lines.push(format!(
         "eco: metal {:.0} ({:+.1}/-{:.1}), energy {:.0}/{:.0} ({:+.0}) | extractors {} constructors {} labs {} turrets {} converters {}",
         briefing.metal.current, briefing.metal.income, briefing.metal.usage, briefing.energy.current, briefing.energy.storage,
         briefing.energy.income - briefing.energy.usage, c.extractors, c.constructors, c.labs, c.turrets, c.converters
@@ -60,7 +64,9 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     lines.push(format!(
         "to win: its commander {}; its factories seen: {}",
         s.enemy_commander.as_ref().map_or("has never been seen".to_string(), |(p, ago)| format!("was last seen at {} ({}, {}) {} ago", p.grid, p.x, p.z, clock(*ago))),
-        if s.enemy_factories.is_empty() { format!("none, its base is unscouted (the game's guess is {} ({}, {}), often wrong by 500 or more)", briefing.presumed_enemy_start.grid, briefing.presumed_enemy_start.x, briefing.presumed_enemy_start.z) } else { places(&s.enemy_factories) }
+        if let (true, Some(base)) = (s.enemy_factories.is_empty(), &s.enemy_base_found) {
+            format!("none standing now; its base is FOUND at {} ({}, {}), where we saw a factory (since destroyed or out of mind); its commander and whatever else it has are most likely still there", base.grid, base.x, base.z)
+        } else if s.enemy_factories.is_empty() { format!("none, its base is unscouted (the game's guess is {} ({}, {}), often wrong by 500 or more)", briefing.presumed_enemy_start.grid, briefing.presumed_enemy_start.x, briefing.presumed_enemy_start.z) } else { places(&s.enemy_factories) }
     ));
     if let Some(elsewhere) = &s.guess_disproved {
         lines.push(format!(

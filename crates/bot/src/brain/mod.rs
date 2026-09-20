@@ -9,6 +9,7 @@ mod briefing;
 mod combat;
 mod economy;
 pub mod journal;
+mod march;
 mod raid;
 mod squads;
 mod wake;
@@ -79,6 +80,13 @@ pub struct Brain {
     enemy_defs: HashMap<UnitId, UnitDefId>,
     /// This minute's fight ledger for the log: "lost X to Y near home" and "killed Y", with counts.
     fight_ledger: std::collections::BTreeMap<String, u32>,
+    /// (frame, metal of ours destroyed, metal of theirs we saw destroyed), one entry per death: what the fighting costs
+    /// each side, which neither army count shows.
+    trade_log: Vec<(i32, f32, f32)>,
+    /// Extractors lost so far at each metal spot (its index in the map's list).
+    spot_losses: HashMap<usize, u32>,
+    /// Where we have seen a factory of the opponent's: its base is found, whether or not that factory still stands.
+    enemy_base_found: Option<Vec3>,
     /// This minute's soldier move failures by 200-elmo cell.
     stuck_cells: HashMap<(i32, i32), u32>,
     /// Frames at which we lost an extractor, within the trigger cooldown.
@@ -135,6 +143,9 @@ impl Brain {
             known_units: HashMap::new(),
             enemy_defs: HashMap::new(),
             fight_ledger: Default::default(),
+            trade_log: Vec::new(),
+            spot_losses: HashMap::new(),
+            enemy_base_found: None,
             stuck_cells: HashMap::new(),
             extractor_losses: VecDeque::new(),
             last_station: Vec3::default(),

@@ -64,7 +64,10 @@ impl Brain {
         }
         for event in &tick.events {
             if let Event::EnemyDestroyed { enemy } = event {
-                let name = self.enemy_defs.remove(enemy).map_or("unseen", |d| self.name(d));
+                let def = self.enemy_defs.remove(enemy);
+                let worth = def.and_then(|d| self.world.def(d)).map_or(0.0, |d| d.metal_cost);
+                self.trade_log.push((tick.frame, 0.0, worth));
+                let name = def.map_or("unseen", |d| self.name(d));
                 let line = format!("killed {name}");
                 if let Some(shared) = &self.strategist {
                     *shared.fights.lock().unwrap().entry(line.clone()).or_default() += 1;
@@ -75,6 +78,12 @@ impl Brain {
             let Some((def, pos)) = self.known_units.remove(unit) else { continue };
             if def == kit.extractor || def == kit.constructor {
                 self.note_hot_spot(pos, tick.frame);
+            }
+            self.trade_log.push((tick.frame, self.world.def(def).map_or(0.0, |d| d.metal_cost), 0.0));
+            if def == kit.extractor
+                && let Some(index) = self.world.hello.metal_spots.iter().position(|s| s.dist2d(pos) < 100.0)
+            {
+                *self.spot_losses.entry(index).or_default() += 1;
             }
             if self.spot_is_ours(pos) {
                 self.last_loss_at_home_frame = tick.frame;

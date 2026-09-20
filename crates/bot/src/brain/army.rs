@@ -48,7 +48,7 @@ const AFTER_RETREAT_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 const RETREAT_CHECK_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
 pub(super) const CONTACT_RADIUS: f32 = 1000.0;
 /// Responders are added until the odds against the raiders reach this.
-const RESPONSE_ODDS: f32 = 1.5;
+pub(super) const RESPONSE_ODDS: f32 = 1.5;
 /// Known defenders are the remembered armed buildings and the soldiers in sight this close to the target.
 const DEFENDED_RADIUS: f32 = 900.0;
 /// No wave leaves within this long of losing something on our side of the map.
@@ -60,7 +60,7 @@ const SCOUT_EVERY_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 const ENEMY_ARMY_MEMORY_FRAMES: i32 = 120 * FRAMES_PER_SECOND;
 /// H-ARMY-RESPONDERS: raiders are met by the nearest soldiers, at least this many and as many as good odds take,
 /// not by the whole home group trailing across the map.
-const MIN_RESPONDERS: usize = 4;
+pub(super) const MIN_RESPONDERS: usize = 4;
 /// An idle attacker this close to the attack target has arrived and needs a new one.
 const ARRIVED_RADIUS: f32 = 400.0;
 /// Home-group units farther than this from the rally point are called in.
@@ -106,6 +106,8 @@ pub struct Army {
     scout: Option<(UnitId, i32)>,
     /// Where the attackers are gathering before the assault, and since which frame.
     staging: Option<(Vec3, i32)>,
+    /// H-ARMY-MARCH: attackers stopped until the body of the wave has come up.
+    held: HashSet<UnitId>,
 }
 
 impl Army {
@@ -346,6 +348,9 @@ impl Brain {
             let n = base_marks.len() as f32;
             self.enemy_start = base_marks.iter().fold(Vec3::default(), |sum, pos| Vec3 { x: sum.x + pos.x / n, y: 0.0, z: sum.z + pos.z / n });
             self.resurvey_enemy();
+            if self.enabled("H-MAP-ENEMY-BASE") {
+                self.enemy_base_found = Some(self.enemy_start);
+            }
         }
         let mut target = nearest_building.or(self.army.target).unwrap_or(self.enemy_start);
         if let Some(ordered) = self.directives.attack_target {
@@ -557,6 +562,11 @@ impl Brain {
 
         // `attackers` was drawn up before this tick's launch, so a wave launched just now is judged from the next tick.
         let staging = self.army.staging.filter(|(_, since)| *since < tick.frame);
+        let mut held = std::mem::take(&mut self.army.held);
+        let destination = staging.map(|(point, _)| point).unwrap_or(target);
+        commands.extend(self.march(&mut held, &attackers, destination, snapshot.enemies.as_slice()));
+        let attackers: Vec<&OwnUnit> = attackers.into_iter().filter(|u| !held.contains(&u.id)).collect();
+        self.army.held = held;
         if staging.is_some() && attackers.is_empty() {
             self.army.staging = None;
         } else if let Some((point, since)) = staging {

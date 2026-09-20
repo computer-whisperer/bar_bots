@@ -1,10 +1,11 @@
 //! Squads: soldiers the field commander has claimed (`DESIGN.md`, "Field commander"). The commander asks by name
 //! and unit type; membership, posts and orders are carried out here. Everything unclaimed stays with the heuristics.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use bot_protocol::{Command, OwnUnit, Tick, UnitId, Vec3};
 
+use super::army::{MIN_RESPONDERS, RESPONSE_ODDS};
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
 use crate::strategist::shared::{ExtractorStatus, Field, OrderKind, Post, Score, SquadStatus};
@@ -13,6 +14,8 @@ use crate::strategist::shared::{ExtractorStatus, Field, OrderKind, Post, Score, 
 const REORDER_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
 /// Members of a posted squad this far from the post (as a share of its radius) with nothing to fight walk back.
 const POST_SLACK: f32 = 0.4;
+/// Intruders this close together are one group.
+const GROUP_RADIUS: f32 = 400.0;
 
 #[derive(Default)]
 pub struct Squads {
@@ -22,6 +25,8 @@ pub struct Squads {
     engaged: HashMap<String, bool>,
     /// What the commander should know about its last post or order for a squad (moved to walkable ground, or refused).
     remarks: HashMap<String, String>,
+    /// H-ARMY-MARCH: where a squad under a `fight` order is going, and which of its members are waiting for the rest.
+    marches: HashMap<String, (Vec3, HashSet<UnitId>)>,
 }
 
 impl Squads {
@@ -51,6 +56,7 @@ impl Brain {
                 if request.release {
                     self.squads.members.remove(&name);
                     self.squads.posts.remove(&name);
+                    self.squads.marches.remove(&name);
                     orders.squads.remove(&name);
                     continue;
                 }
@@ -58,6 +64,7 @@ impl Brain {
                     match self.walkable(post.at) {
                         Ok((at, remark)) => {
                             self.squads.posts.insert(name.clone(), Post { at, ..post });
+                            self.squads.marches.remove(&name);
                             self.squads.remarks.extend(remark.map(|r| (name.clone(), format!("post {r}"))));
                         }
                         Err(problem) => {
@@ -99,6 +106,11 @@ impl Brain {
 
         for (name, kind, to) in one_off {
             self.fire("D-SQUAD-ORDER");
+            // A withdrawal (`move`) is not slowed down; an advance arrives together.
+            match kind {
+                OrderKind::Fight => self.squads.marches.insert(name.clone(), (to, HashSet::new())),
+                OrderKind::Move => self.squads.marches.remove(&name),
+            };
             for id in self.squads.members.get(&name).into_iter().flatten() {
                 commands.push(match kind {
                     OrderKind::Move => Command::Move { unit: *id, to, queue: false },
@@ -108,14 +120,27 @@ impl Brain {
         }
 
         let enemies = &tick.snapshot.enemies;
+        let mut marches = std::mem::take(&mut self.squads.marches);
+        for (name, (to, held)) in marches.iter_mut() {
+            let members = self.squads.members.get(name).map(Vec::as_slice).unwrap_or_default();
+            let group: Vec<&OwnUnit> = soldiers.iter().filter(|u| members.contains(&u.id)).copied().collect();
+            commands.extend(self.march(held, &group, *to, enemies.as_slice()));
+        }
+        self.squads.marches = marches;
+
+        let mut responses: Vec<Command> = Vec::new();
         for (name, members) in &self.squads.members {
             let Some(post) = self.squads.posts.get(name).copied() else { continue };
             let units: Vec<&&OwnUnit> = soldiers.iter().filter(|u| members.contains(&u.id)).collect();
             let Some(centre) = centre_of(&units) else { continue };
-            let intruder = enemies
+            // The biggest group inside the post, the nearest of equals: a squad of 38 used to turn, all of it, on the
+            // single nearest intruder every two seconds, and one Grunt walked it 1800 elmos (commander game 7/01).
+            let inside: Vec<&bot_protocol::EnemyUnit> = enemies.iter().filter(|e| e.pos.dist2d(post.at) < post.radius).collect();
+            let company = |e: &bot_protocol::EnemyUnit| inside.iter().filter(|o| o.pos.dist2d(e.pos) < GROUP_RADIUS).count();
+            let intruder = inside
                 .iter()
-                .filter(|e| e.pos.dist2d(post.at) < post.radius)
-                .min_by(|a, b| a.pos.dist2d(centre).total_cmp(&b.pos.dist2d(centre)));
+                .copied()
+                .max_by(|a, b| company(a).cmp(&company(b)).then(b.pos.dist2d(centre).total_cmp(&a.pos.dist2d(centre))));
             self.squads.engaged.insert(name.clone(), intruder.is_some());
             let due = tick.frame - self.squads.last_order_frame.get(name).copied().unwrap_or(i32::MIN / 2) >= REORDER_FRAMES;
             if !due {
@@ -124,14 +149,24 @@ impl Brain {
             self.squads.last_order_frame.insert(name.clone(), tick.frame);
             match intruder {
                 Some(enemy) => {
-                    commands.extend(units.iter().map(|u| Command::Fight { unit: u.id, to: enemy.pos, queue: false }));
+                    // As many of the nearest as good odds take; the rest keep the post.
+                    let mut nearest: Vec<&OwnUnit> = units.iter().map(|u| **u).collect();
+                    nearest.sort_by(|a, b| a.pos.dist2d(enemy.pos).total_cmp(&b.pos.dist2d(enemy.pos)));
+                    let theirs = self.known_enemy_force(enemy.pos, GROUP_RADIUS, enemies.as_slice());
+                    let enough = (MIN_RESPONDERS.min(nearest.len())..=nearest.len())
+                        .find(|&k| self.odds(&Self::force_of(&nearest[..k]), &theirs) >= RESPONSE_ODDS)
+                        .unwrap_or(nearest.len());
+                    responses.extend(nearest.iter().take(enough).map(|u| Command::Fight { unit: u.id, to: enemy.pos, queue: false }));
+                    let rest = nearest.iter().skip(enough).filter(|u| u.pos.dist2d(post.at) > post.radius * POST_SLACK);
+                    responses.extend(rest.map(|u| Command::Move { unit: u.id, to: post.at, queue: false }));
                 }
                 None => {
                     let strays = units.iter().filter(|u| u.pos.dist2d(post.at) > post.radius * POST_SLACK);
-                    commands.extend(strays.map(|u| Command::Move { unit: u.id, to: post.at, queue: false }));
+                    responses.extend(strays.map(|u| Command::Move { unit: u.id, to: post.at, queue: false }));
                 }
             }
         }
+        commands.extend(responses);
         if !self.squads.posts.is_empty() {
             self.fire("D-SQUAD-POST");
         }
@@ -226,6 +261,10 @@ impl Brain {
             .collect();
         let recent = |seen: &i32| tick.frame - seen < 3 * 60 * FRAMES_PER_SECOND;
         let metal = |u: &&OwnUnit| self.world.def(u.def).map_or(0.0, |d| d.metal_cost);
+        let traded = |when: &dyn Fn(i32) -> bool| {
+            let sum = |pick: &dyn Fn(&(i32, f32, f32)) -> f32| self.trade_log.iter().filter(|t| when(t.0)).map(pick).sum::<f32>() as u32;
+            (sum(&|t| t.1), sum(&|t| t.2))
+        };
         let score = Score {
             extractors: own.iter().filter(|u| u.def == kit.extractor && !u.being_built).count(),
             extractor_peak: self.wake.extractor_peak,
@@ -238,6 +277,10 @@ impl Brain {
             metal_income: tick.snapshot.metal.income,
             trend: [3, 6].into_iter().filter_map(|m| self.minutes_ago(tick.frame, m).map(|(x, income, army)| (m, x, income, army))).collect(),
             extractors_lost_3_min: self.wake.losses.len(),
+            traded_3_min: traded(&|frame| recent(&frame)),
+            traded: traded(&|_| true),
+            seconds_since_turn: (tick.frame - self.wake.last_turn_frame) / FRAMES_PER_SECOND,
+            enemy_base_found: self.enemy_base_found.map(|pos| self.place(pos)),
             enemy_spots_seen: enemy_extractors.len(),
             enemy_factories: self
                 .enemy_buildings
@@ -283,7 +326,15 @@ impl Brain {
             production_weights: self.production_weights.clone().into_iter().collect(),
             turret_requests_pending: self.turret_requests.len(),
             spot_plan: {
-                let name = |i: &usize| self.world.hello.metal_spots.get(*i).map_or(format!("#{i}"), |s| format!("#{i} {}", self.world.grid(*s)));
+                // What taking the spot has cost so far and whether anything of ours stands by it: the commander's list
+                // overrides the bot's caution about raided ground, so it is shown what that caution would have said.
+                let name = |i: &usize| {
+                    let Some(spot) = self.world.hello.metal_spots.get(*i) else { return format!("#{i}") };
+                    let lost = self.spot_losses.get(i).map_or(String::new(), |n| format!(", lost here {n} times"));
+                    let ours_near = soldiers.iter().any(|u| u.pos.dist2d(*spot) < PLAN_COVER) || turrets.iter().any(|t| t.dist2d(*spot) < PLAN_COVER);
+                    let cover = if held(*spot, &our_extractors) { "" } else if ours_near { ", soldiers or a turret of ours near" } else { ", nothing of ours within 800" };
+                    format!("#{i} {}{lost}{cover}", self.world.grid(*spot))
+                };
                 let list = |spots: &[usize]| spots.iter().map(name).collect::<Vec<_>>().join(", ");
                 match (self.spot_priority.is_empty(), self.spot_avoid.is_empty()) {
                     (true, true) => String::new(),
@@ -297,6 +348,8 @@ impl Brain {
 /// The scoreboard's "near": free spots within this walk of home, soldiers within this of the start point.
 const SCORE_NEAR: f32 = 2500.0;
 const SCORE_AT_HOME: f32 = 800.0;
+/// A planned spot with a soldier or turret of ours this close has something of ours near.
+const PLAN_COVER: f32 = 800.0;
 
 fn centre_of(units: &[&&OwnUnit]) -> Option<Vec3> {
     if units.is_empty() {

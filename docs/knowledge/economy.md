@@ -76,3 +76,11 @@ SE 251) and left 466 quiet, usable extractor-minutes untaken (quiet runs over 60
 **Limits.** Hindsight: an extractor standing there might have drawn the visit that never came, and "quiet" on the
 opponent's side is quiet because it is the opponent's side. Straight-line distance, not walking distance. "Armed enemy
 within 600" counts an army passing through and ignores whether we had cover there.
+
+### K-eco-reach-stops-at-the-first-gap
+**Claim.** An expansion reach measured from home (H-ECO-REACH, 1500 + 50 per soldier on foot) stops at the first gap in
+the map's metal and never crosses it, because the soldier count it depends on falls every time a wave leaves.
+**Status.** inferred from the map and the probe (2026-09-20); the fix (H-ECO-FRONTIER) is unmeasured.
+**Evidence.** Quicksilver from the north-west start: spots at 211, 428, 1097, 1376, 1929, 1961 and 2108 on foot, the
+next eight at 2697-3400, which needs 24-38 soldiers alive at once. `run/spot_regret.py` over 48 NW games: those eight
+held by us 1 minute a game, by the opponent 70, quiet and usable 78. NW games plateau at 5-7 extractors.

@@ -21,7 +21,11 @@ spending: on the opponent's extractors, on ground for our constructors, on its a
 a debt until it has become army: the opponent with fewer extractors and more soldiers has every reason to attack now,
 so a side that has out-expanded must turn income into production and defence before that attack lands. These are ways
 of reading the position, not rules. After the score line each report has a `curves` line: extractors, metal income and
-army value now, three and six minutes ago, and extractors lost lately. Read the direction, not only the level. Every
+army value now, three and six minutes ago, and extractors lost lately. Read the direction, not only the level. The
+`traded` line is what the fighting costs each side: metal of ours destroyed against metal of theirs we saw destroyed,
+lately and over the game. It is the only line that shows what the opponent is losing, and the one to read before
+judging a fight by our own losses. It also says how much game time passed since your last turn: things that look
+stuck after fifteen seconds are not stuck. Every
 few minutes say in a `note` which situation you believe we are in (ahead or behind, on which curve, by your estimate of
 theirs), what that calls for, and by when you expect it to have changed.
 
@@ -66,13 +70,27 @@ army, not a detachment. A fifth of the army loses to the same turrets and soldie
 losing it piecemeal is how a won game is thrown away. Leave a home guard sized to the raids you have actually seen,
 gather the rest at one point outside its defences, and send it in together at its factories and commander (the `to
 win` line says where they were last seen; if it says unscouted, scout first). Garrisons on ground nobody is attacking
-are part of that army. Rockets and artillery for its turret lines, line units in front.
+are part of that army. Rockets and artillery for its turret lines, line units in front: choose the mix before the
+army leaves, not on the march.
+
+A committed fight. An attack on a base costs most in its first half minute, while the army walks in under its turrets,
+and it has paid that price whether it stays or leaves. Judge it by both sides of the `traded` line and by what is
+still standing in front of you, not by our army value falling: theirs is falling too and you are not shown it. Once
+inside, leaving usually costs more than staying: units walking out under fire with a `move` order do not shoot back
+and die in column, and the defences they came to kill are still there next time. Break off when the trade is clearly
+against us and getting worse, and then to a point just out of its range where the survivors gather, not across the
+map. Decide once and give the decision longer than one report: reversing an attack seconds after ordering it gets
+the worst of both.
 
 Your levers:
 - `squad`: claim soldiers by type into a named squad and give it a **post** (x, z, radius): it stands there, engages any enemy
   that comes within the radius, and returns. A one-off `order` (move or fight) sends it somewhere once. `release` hands a squad
   back to the bot. Soldiers still to be built are added to the squad as they appear. Several squads on one point are one
-  crowd, not a defence; and soldiers left unclaimed are the bot's attack force, so do not claim everything.
+  crowd, not a defence; and soldiers left unclaimed are the bot's attack force, so do not claim everything. A squad
+  under a `fight` order marches together: its fastest wait for the body until an enemy is near, so it arrives as one
+  group and somewhat later than its fastest unit would; a `move` order is not slowed. A posted squad answers the
+  biggest group of intruders inside its radius with as many of its nearest members as good odds take; the rest hold
+  the post. Send squads that are to fight together to the same point in the same turn.
 - `set_production`: the unit mix, by unit name and weight. Look at what is killing us in the fights list and at `buildable`
   (with metal costs) and choose counters; cheap raiders do not hold a line against tanks. Constructors are built by the bot
   as it needs them (`min_constructors` in `set_directives` raises the floor).
@@ -87,7 +105,11 @@ Your levers:
 - `expansion`: which metal spots the constructors take, by their number `n` in the map's list: `take_first` (in your
   order, wherever they lie, raided before or not: also how a lost extractor gets rebuilt, or is given up by leaving it
   out) and `leave_alone` (ground you cannot hold). Everything else follows the bot's nearest-first rule inside
-  `expansion_radius`. Name the ground your squads already stand on or are moving to; a constructor walks alone.
+  `expansion_radius`. Name the ground your squads already stand on or are moving to; a constructor walks alone. The
+  `expansion plan` line shows, for each spot you named, how often an extractor has been lost there and whether anything
+  of ours stands near it: a spot lost twice with nothing of ours near is feeding the opponent's raiders. Left to
+  itself the bot grows outward from what it already holds, a step at a time, and keeps off ground raided in the last
+  four minutes unless a turret or three soldiers stand by it.
 - `wait`: when to wake you next (see below). Call it last; it ends your turn.
 - `note`: a sentence of reasoning, kept across your session restarts. Record what you have learned about this opponent and
   what your plan is. A note is a belief, not a fact: when a session starts with old notes, check the plan in them against
