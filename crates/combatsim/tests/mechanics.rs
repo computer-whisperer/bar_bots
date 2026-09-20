@@ -40,6 +40,42 @@ fn unit_numbers_are_the_games_own() {
 }
 
 #[test]
+fn the_advanced_labs_line_is_in_the_table() {
+    let units = Units::default();
+    for name in [
+        "armzeus", "armmav", "armfido", "armsnipe", "armfboy", "armsptk", "armfast", "armamph", "corcan",
+        "corsumo", "corpyro", "corhrk", "cormort", "cortermite", "coramph",
+    ] {
+        assert!(units.get(name).reach() > 0.0, "{name} should have a land weapon");
+    }
+    // The labs' constructors and support bots come along too, and are unarmed.
+    for name in ["armack", "corack", "corfast", "armfark"] {
+        assert!(units.get(name).builder && units.get(name).reach() == 0.0, "{name} builds and does not shoot");
+    }
+    // The ones whose whole mechanism the model has no answer for are left out, not quietly left harmless.
+    for name in ["armvader", "corroach", "corsktl", "armspid"] {
+        assert!(units.index(name).is_none(), "{name} should be excluded from the table");
+    }
+}
+
+#[test]
+fn weapons_that_take_no_part_in_a_land_fight_are_dropped() {
+    let units = Units::default();
+    // A paralyser is not damage (Shockwave), a stockpiled launcher has nothing built (nuclear silo), a torpedo
+    // needs water (Duck keeps its laser and loses its torpedo), and the D-Gun is fired by hand, not by itself.
+    assert_eq!(units.get("armshockwave").reach(), 0.0);
+    assert_eq!(units.get("armsilo").reach(), 0.0);
+    assert_eq!(units.get("coramph").reach(), 300.0);
+    assert_eq!(units.get("armcom").reach(), 300.0);
+    assert_eq!(units.get("armcom").weapons.iter().filter(|w| w.hits_ground()).count(), 1);
+    // A smart-trajectory plasma battery mounts its gun twice and fires it once (see the extraction tool).
+    for name in ["armguard", "corpun", "armamb", "cortoast"] {
+        let firing = units.get(name).weapons.iter().filter(|w| w.hits_ground()).count();
+        assert_eq!(firing, 1, "{name} should fire one plasma shot a reload, not two");
+    }
+}
+
+#[test]
 fn aim_error_uses_the_engines_conversion() {
     // WeaponDef.cpp's AccuracyToSin: sin(x * pi / 0xafff). The Pawn's spray of 1180 is about 4.7 degrees.
     assert!((aim_error(1180.0) - 0.0822).abs() < 1e-3);
@@ -97,6 +133,19 @@ fn units_arriving_late_lose_a_fight_their_value_should_win() {
     // The effect is real but small at this size: a wave that arrives ten seconds late is worth about five
     // points of margin. It is much larger when the late half never joins at all.
     assert!(b < a - 0.05, "arriving in two halves should cost: {b} against {a}");
+}
+
+#[test]
+fn a_force_placed_on_top_of_itself_still_gets_moving() {
+    // Two groups on the same point is how a mixed force arrives from a caller that does not lay it out. Until
+    // a unit could step out of one it already overlaps, every deflection landed inside the neighbour as well
+    // and the whole side froze on the spot for the duel's whole four minutes.
+    let rules = rules();
+    let mut scenario = Scenario::new();
+    scenario.sides[0] = vec![blob(&rules, "armpw", 8, 0.0, 1.0), blob(&rules, "armrock", 8, 0.0, 1.0)];
+    scenario.sides[1] = vec![blob(&rules, "armlab", 1, duels::APART, -1.0)];
+    let outcome = simulate(&rules, &scenario, 0);
+    assert_eq!(outcome.winner, Some(0), "stacked groups should reach the target, ended {:?}", outcome.reason);
 }
 
 #[test]

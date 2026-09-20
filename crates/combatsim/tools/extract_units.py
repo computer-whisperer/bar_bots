@@ -17,11 +17,22 @@ import json, math, re, subprocess, sys, pathlib
 root = pathlib.Path(sys.argv[1])
 FPS = 30
 
-# Which units: the two factions' commanders, everything the tier-1 bot lab and vehicle plant build, and every land
-# defence of either faction. That covers the duel tables with room to spare.
-FACTORIES = ["lab", "vp"]
+# Which units: the two factions' commanders, everything the tier-1 and tier-2 bot labs and vehicle plants build,
+# and every land defence of either faction. That covers the duel tables, our own tier-2 options and what BARb
+# fields against us (which includes tier-2 vehicles it builds from an advanced plant).
+FACTORIES = ["lab", "vp", "alab", "avp"]
 EXTRA = ["com"]
 DEFENCE_DIRS = ["ArmBuildings/LandDefenceOffence", "CorBuildings/LandDefenceOffence"]
+
+# Units whose whole reason for existing is a mechanism the simulation has no model for. Keeping them would put a
+# plausible-looking number on a fight the simulator cannot judge, so they are left out and the reason is written
+# into the table (`_excluded`), which makes a query for one fail loudly instead of quietly lying.
+EXCLUDED = {
+    "armvader": "crawling bomb: walks into the enemy and self-destructs; the sim has no suicide attack",
+    "corroach": "crawling bomb: walks into the enemy and self-destructs; the sim has no suicide attack",
+    "corsktl": "crawling bomb: walks into the enemy and self-destructs; the sim has no suicide attack",
+    "armspid": "its only weapon is a paralyser, and the sim has no stun; it would fight as an unarmed walker",
+}
 
 ENCODE = """
 local function esc(s) return (s:gsub('[%c"\\\\]', function(c)
@@ -152,6 +163,14 @@ def weapon(wdef, mount):
         "lead_limit": wdef.get("leadlimit", -1.0),
         "energy_per_shot": wdef.get("energypershot", 0.0),
         "only_targets": mount.get("onlytargetcategory", ""),
+        # Four ways a weapon does not take part in a stand-up land fight, all of which the simulation would
+        # otherwise score as ordinary damage: a paralyser stuns instead of killing, a stockpiled launcher (nuke,
+        # anti-nuke) has nothing to fire until one has been built, a torpedo or submerged gun needs water, and a
+        # `commandfire` weapon (the commander's D-Gun) only fires when a player or AI orders it by hand.
+        "paralyzer": bool(wdef.get("paralyzer")),
+        "stockpile": bool(wdef.get("stockpile")),
+        "water_only": bool(wdef.get("waterweapon")) or kind == "TorpedoLauncher",
+        "command_fire": bool(wdef.get("commandfire")),
     }
 
 
@@ -178,12 +197,18 @@ def main():
     units = {}
     for name in wanted:
         udef = defs.get(name)
-        if udef is None or "health" not in udef:
+        if udef is None or "health" not in udef or name in EXCLUDED:
             continue
         # One entry per mount, not per weapondef: Janus carries the same launcher twice and fires both at once.
+        # The exception is BAR's smart-trajectory plasma battery (armguard, corpun, armamb, cortoast), which
+        # mounts the same gun twice — `plasma` and `plasma_high` — plus a `smart_trajectory_dummy`, and a gadget
+        # picks one arc per shot. Firing both would double the battery's rate of fire, so the high-arc twin is
+        # dropped; with no height in the model the two are the same shot anyway.
         defs_by_key = {k.lower(): w for k, w in udef.get("weapondefs", {}).items()}
-        weapons = [weapon(defs_by_key[key], mount) for mount in mounted(udef.get("weapons", []))
-                   if (key := mount.get("def", "").lower()) in defs_by_key]
+        mounts = mounted(udef.get("weapons", []))
+        keys = [m.get("def", "").lower() for m in mounts]
+        weapons = [weapon(defs_by_key[key], mount) for mount, key in zip(mounts, keys)
+                   if key in defs_by_key and not (key.endswith("_high") and key[: -len("_high")] in keys)]
         units[name] = {
             "metal": udef.get("metalcost", 0.0),
             "energy": udef.get("energycost", 0.0),
@@ -194,6 +219,8 @@ def main():
             "armor": classes.get(name, "standard"),
             "air": bool(udef.get("canfly")),
             "builder": bool(udef.get("workertime")),
+            # `customparams.techlevel`, which only the tier-2 and tier-3 files set; everything else is tier 1.
+            "tech": int(udef.get("customparams", {}).get("techlevel", 1)),
             "max_slope": moves.get(udef.get("movementclass", ""), (0, 0.0))[0],
             "max_depth": moves.get(udef.get("movementclass", ""), (0, 0.0))[1],
             "weapons": weapons,
@@ -201,6 +228,7 @@ def main():
     print(json.dumps({
         "_source": f"Beyond-All-Reason units/**/*.lua at {commit}, by crates/combatsim/tools/extract_units.py",
         "_note": "Post-processed for the arena's default mod options; see the tool's docstring.",
+        "_excluded": EXCLUDED,
         "units": units,
     }, indent=0, sort_keys=True))
 

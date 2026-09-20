@@ -494,7 +494,7 @@ impl<'a> Sim<'a> {
             for turn in DEFLECTIONS {
                 let (sin, cos) = turn.sin_cos();
                 let step = Vec2::new(dir.x * cos - dir.z * sin, dir.x * sin + dir.z * cos) * speed;
-                if self.open(side, pos + step, i as u32) {
+                if self.open(side, pos, pos + step, i as u32) {
                     moved = step;
                     break;
                 }
@@ -504,8 +504,12 @@ impl<'a> Sim<'a> {
         }
     }
 
-    /// Whether this unit may stand at `at`: walkable ground, and no other unit's footprint already there.
-    fn open(&self, side: usize, at: Vec2, me: u32) -> bool {
+    /// Whether this unit may step from `pos` to `at`: walkable ground, and no other unit's footprint already
+    /// there. A unit that already stands inside another — two groups placed on the same spot, which is how a
+    /// mixed force is set up — may still move as long as the step takes it further from what it is standing in.
+    /// The engine pushes overlapping units apart rather than freezing them; without this a mixed force cannot
+    /// move at all, since every deflection from a shared position lands inside the neighbour as well.
+    fn open(&self, side: usize, pos: Vec2, at: Vec2, me: u32) -> bool {
         if self.flows[side].as_ref().is_some_and(|f| !f.walkable(at)) {
             return false;
         }
@@ -520,7 +524,8 @@ impl<'a> Sim<'a> {
             }
             let other = &self.bodies[j as usize];
             let want = radius + other.radius;
-            if at.dist2(other.pos) < want * want {
+            let (after, before) = (at.dist2(other.pos), pos.dist2(other.pos));
+            if after < want * want && after <= before {
                 clear = false;
             }
         });

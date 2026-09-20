@@ -59,6 +59,16 @@ pub struct Weapon {
     pub lead_limit: f32,
     pub energy_per_shot: f32,
     pub only_targets: String,
+    /// Ways a weapon takes no part in a stand-up land fight. The simulation has no stun, no stockpile, no water
+    /// and nobody to press the D-Gun button, so each of these would otherwise be scored as ordinary damage.
+    #[serde(default)]
+    pub paralyzer: bool,
+    #[serde(default)]
+    pub stockpile: bool,
+    #[serde(default)]
+    pub water_only: bool,
+    #[serde(default)]
+    pub command_fire: bool,
 }
 
 /// The engine's own conversion from a weapondef's aim-error number to an angle, `WeaponDef.cpp`'s `AccuracyToSin`.
@@ -72,9 +82,16 @@ impl Weapon {
         self.damage.get(armor).or_else(|| self.damage.get("default")).copied().unwrap_or(0.0)
     }
 
-    /// Anti-air weapons (`onlytargetcategory` VTOL) do not exist as far as a land fight is concerned.
+    /// Whether this weapon fights in a dry land battle at all. Anti-air (`onlytargetcategory` VTOL) does not
+    /// exist as far as a land fight is concerned; nor do paralysers (no stun model), stockpiled launchers
+    /// (nothing built to fire), underwater weapons, or the manually fired D-Gun.
     pub fn hits_ground(&self) -> bool {
-        self.only_targets != "VTOL" && self.damage_to("standard") > 0.0
+        self.only_targets != "VTOL"
+            && !self.paralyzer
+            && !self.stockpile
+            && !self.water_only
+            && !self.command_fire
+            && self.damage_to("standard") > 0.0
     }
 
     /// Seconds for a shot to cover `distance`. Missiles start slow and accelerate to `velocity`; everything else
@@ -97,6 +114,10 @@ impl Weapon {
     }
 }
 
+fn one() -> u32 {
+    1
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Unit {
     pub metal: f32,
@@ -111,6 +132,9 @@ pub struct Unit {
     pub armor: String,
     pub air: bool,
     pub builder: bool,
+    /// The unit file's `customparams.techlevel`: 1 unless the file says otherwise.
+    #[serde(default = "one")]
+    pub tech: u32,
     /// The steepest ground this unit's movement class can stand on, in the engine's slope units (the terrain
     /// grid's own scale), and the deepest water it can wade. Both come from `gamedata/movedefs.lua`, not from the
     /// unit file's legacy `maxslope`.
