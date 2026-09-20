@@ -150,3 +150,15 @@ away from labs.
 `armwin.lua` (196).
 **Would be wrong if.** Raids on our generator field in logs killed only what they shot at.
 **Used by.** (candidate: building placement keeps ≥ 1 footprint gap between converters/turbines)
+
+### K-mech-builder-trip-overhead
+**Claim.** A mobile builder's time from finishing one building to laying the next frame is the straight-line walk (distance
+minus build reach, at the unit's `speed` in elmos/s) plus a fixed loss: median 1.2-1.5 s when the next site is already in
+reach, 2.4-3.4 s when it has to walk; on walks over 1000 elmos the total is 8 % above straight-line time. Build reach is
+measured to the target's edge, roughly `builddistance` + 40. With these, `buildtime / workertime` predicts our first
+factory's finish within 0.7 s (mean absolute, 12 games), which also checks K-open-build-times.
+**Status.** supported (2026-09-19) on Quicksilver, near home; our bot's orders (0.5 s tick) are part of the fixed loss
+**Evidence.** 565 commander and constructor trips in the 12 records of `v15-terrain-medium`; `buildorder calibrate`
+(`../studies/data/calibration.md`). Far trips across cliffs are barely sampled.
+**Would be wrong if.** On another map or for far outposts the recorded trip times exceeded this by more than ~20 %.
+**Used by.** `crates/buildorder` (`Scenario::detour`, `mobile_overhead`, `walk_overhead`, `reach_bonus`).
