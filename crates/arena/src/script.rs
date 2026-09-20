@@ -5,6 +5,8 @@ pub struct MatchSetup<'a> {
     pub game: &'a str,
     pub map: &'a str,
     pub opponent_profile: &'a str,
+    /// BARb's `disabledunits` option (`name+name`), empty for none: how its opening is pinned.
+    pub opponent_disabled_units: &'a str,
     pub host_port: u16,
     pub autohost_port: u16,
     pub seed: u32,
@@ -27,7 +29,10 @@ impl MatchSetup<'_> {
 
     pub fn render(&self) -> String {
         let ours = "ShortName=WReason; Version=0.1;".to_string();
-        let theirs = format!("ShortName=BARb; Version=stable; [OPTIONS] {{ profile={}; }}", self.opponent_profile);
+        // `random_seed` is read by BARb (CircuitAI.cpp) though the lobby does not offer it. It does NOT make BARb
+        // repeatable: it draws from the C library's `rand()`, which the whole engine process shares, and the same seed
+        // gave a bot lab in one run and a vehicle plant in the next. It is set so that the clock is at least not an input.
+        let theirs = format!("ShortName=BARb; Version=stable; [OPTIONS] {{ profile={}; random_seed={}; disabledunits={}; }}", self.opponent_profile, self.seed, self.opponent_disabled_units);
         let their_side = match (self.mirror, self.our_side) {
             (true, side) => side,
             (false, "Armada") => "Cortex",

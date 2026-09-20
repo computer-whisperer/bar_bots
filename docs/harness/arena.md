@@ -57,6 +57,12 @@ With `WITHIN_REASON_OBSERVE=1` the shim also writes `truth-<ai>.jsonl` into the 
 (`[id, name, x, z, health %, being built]`) every two seconds, read through the engine's cheat callbacks switched on for
 that one query. It is for analysis only; the bot never sees it.
 
+Controlling for the opponent: BARb's profile is the only choice the lobby offers, but within a profile its first
+factory varies (bot lab or vehicle plant) and with it the whole game (K-barb-opening-varies). `--opponent-opening
+bots|vehicles` pins it; with `WITHIN_REASON_OBSERVE=1` every result carries `opponent_first_factory`, and
+`run/batch_curves.py --by-opening` splits the curves by it. Match i plays seed `--seed-base` + i (engine and BARb), and the
+two arms of an A/B batch meet the same seeds; the seed does not make BARb repeatable.
+
 Stopping a match by hand: `run/stop_match.py <match or batch dir> [loss|win]` writes a `stop` file the arena's referee
 sees within a second; the match is recorded with that outcome (a timeout when none is given, `called: true`) and the
 engine is ended with `/kill` like any other, so the replay is written. Do not kill the arena or the engine: the replay

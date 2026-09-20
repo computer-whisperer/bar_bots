@@ -565,3 +565,16 @@ it in every report as "typical", which is the harness asserting knowledge it doe
 commander-3 it had 6 extractors to our 13 at minute 8 and its army was still 1445 then, half the curve).
 **Used by.** The commander's brief.
 
+### K-barb-opening-varies
+**Claim.** At one profile BARb does not play one game: about 30 % of the time on Quicksilver it opens with a vehicle plant
+instead of a bot lab, and the two make different games against us. The lobby's "strategy" choice is only the profile;
+this variation is BARb's dice, and its `random_seed` option does not control it (it draws from the C library's `rand()`,
+shared by the whole engine process: the same seed gave a bot lab in one run and a vehicle plant in the next).
+**Status.** measured (2026-09-20); first raised by the user, who saw different strategies against the Sonnet commander.
+**Evidence.** Opponent ground truth, v20 + v22 (48 games): first factory a bot lab in 34, a vehicle plant in 14. From the
+north-west we went 2-16 against bots and 0-6 against vehicles; from the south-east 5-1-10 against bots (ten timeouts)
+and 5-3-0 against vehicles (every game decided). `seedtest` runs: matches 02 and 03 swapped openings between two runs
+with identical seeds. `--opponent-opening bots|vehicles` (BARb's `disabledunits`: the other factory) pinned all 8 of 8.
+**Would be wrong if.** Outcomes by opening evened out over more games (14 vehicle games is few).
+**Used by.** Arena `--opponent-opening`; `opponent_first_factory` in `results.jsonl`; read batches by opening.
+

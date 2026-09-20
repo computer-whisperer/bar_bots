@@ -10,6 +10,8 @@
 //!              [--ab-disable H-ID,H-ID]   (interleaved A/B: arm B also switches these off; blocks of four matches)
 //!              [--claude-config-dir DIR]   (subscription for --strategist sessions; default ~/.claude2)
 //!              [--effort low|medium|high|xhigh|max]   (the LLM session's `claude --effort`; default high)
+//!              [--opponent-opening any|bots|vehicles]   (pins BARb's first factory by disabling the other; default any)
+//!              [--seed-base N]   (default 1; match i plays seed N+i, for the engine and for BARb: a fresh N is a fresh set of games)
 //!              [--base-port N]   (default 9100; match i uses N+2i and N+2i+1, so a second arena needs another range)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
 //!              [--commander]    (Sonnet field commander per match; the game is held still during its turns, so any --speed)
@@ -64,6 +66,9 @@ struct Options {
     ab_disable: Option<String>,
     /// Claude Code config dir for strategist sessions (which subscription they run on).
     claude_config_dir: Option<String>,
+    seed_base: u32,
+    /// `bots`, `vehicles` or `any` (BARb's own choice, about 70 % bots on Quicksilver).
+    opponent_opening: String,
     effort: Option<String>,
     /// First of the UDP ports the matches use (two each); a second arena on the same machine needs its own range.
     base_port: u16,
@@ -91,6 +96,10 @@ struct MatchResult {
     wall_seconds: f32,
     /// The referee ended the game because it was settled (`Win` or `Loss` then says for whom), not the engine.
     called: bool,
+    /// The engine's and the opponent's random seed.
+    seed: u32,
+    /// The opponent's first factory, from its ground truth (`WITHIN_REASON_OBSERVE=1`), else empty.
+    opponent_first_factory: String,
 }
 
 fn main() -> io::Result<()> {
@@ -124,7 +133,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "effort": options.effort, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "effort": options.effort, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "NW" } else { "SE" }), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -140,7 +149,7 @@ fn main() -> io::Result<()> {
                     let Some(index) = queue.lock().unwrap().pop() else { break };
                     let result = run_match(&repo, &batch_dir, &options, index).unwrap_or_else(|e| {
                         eprintln!("match {index}: {e}");
-                        MatchResult { index, arm: "", outcome: Outcome::Aborted, our_side: "?", our_corner: "?", game_minutes: 0.0, wall_seconds: 0.0, called: false }
+                        MatchResult { index, arm: "", outcome: Outcome::Aborted, our_side: "?", our_corner: "?", game_minutes: 0.0, wall_seconds: 0.0, called: false, seed: 0, opponent_first_factory: String::new() }
                     });
                     println!(
                         "match {:>2}: {:<7} {} {} {:>5.1} game-min in {:>4.0}s",
@@ -199,9 +208,17 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         game: &game,
         map: &options.map,
         opponent_profile: &options.profile,
+        // Its first factory decides the kind of game (K-barb-opening-varies); taking the other away pins it.
+        opponent_disabled_units: match options.opponent_opening.as_str() {
+            "bots" => "armvp+corvp",
+            "vehicles" => "armlab+corlab",
+            _ => "",
+        },
         host_port,
         autohost_port: host_port + 1,
-        seed: index as u32 + 1,
+        // The engine's and the opponent's dice. Match i has the same seed in every batch, and in an A/B batch the two
+        // arms meet the same seeds (match i of arm A and match i + 4 of arm B, which also share corner and faction).
+        seed: options.seed_base + if options.ab_disable.is_some() { (index / 8 * 4 + index % 4) as u32 } else { index as u32 },
         // Alternate corner and faction so neither start nor side biases the batch.
         // `--corner` names the corner; which team slot that means depends on `--swap-corners`.
         we_are_first: options.corner.map_or(index.is_multiple_of(2), |north_west| north_west != options.swap_corners),
@@ -276,11 +293,27 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         game_minutes,
         wall_seconds: started.elapsed().as_secs_f32(),
         called,
+        seed: setup.seed,
+        opponent_first_factory: first_factory(&dir),
     };
     if let Err(e) = record::finish(&dir, &result, &options.profile) {
         eprintln!("match {index}: could not close the match record: {e}");
     }
     Ok(result)
+}
+
+/// The first factory in the opponent's ground-truth log, by name; empty without a log.
+fn first_factory(dir: &Path) -> String {
+    const FACTORIES: [&str; 10] = ["armlab", "armvp", "armap", "armsy", "armhp", "corlab", "corvp", "corap", "corsy", "corhp"];
+    let Some(truth) = fs::read_dir(dir).ok().and_then(|entries| {
+        entries.flatten().map(|e| e.path()).find(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("truth-")))
+    }) else {
+        return String::new();
+    };
+    let text = fs::read_to_string(truth).unwrap_or_default();
+    text.lines()
+        .find_map(|line| FACTORIES.iter().find(|name| line.contains(&format!("\"{name}\""))))
+        .map_or(String::new(), |name| name.to_string())
 }
 
 /// Follows one match over the autohost channel until it is decided or out of time.
@@ -464,6 +497,8 @@ fn parse_args() -> Options {
         disable: String::new(),
         ab_disable: None,
         claude_config_dir: None,
+        seed_base: 1,
+        opponent_opening: "any".into(),
         effort: None,
         base_port: BASE_PORT,
     };
@@ -505,6 +540,13 @@ fn parse_args() -> Options {
             "--ab-disable" => options.ab_disable = Some(value()),
             "--claude-config-dir" => options.claude_config_dir = Some(value()),
             "--effort" => options.effort = Some(value()),
+            "--opponent-opening" => {
+                options.opponent_opening = value();
+                if !["any", "bots", "vehicles"].contains(&options.opponent_opening.as_str()) {
+                    usage("--opponent-opening");
+                }
+            }
+            "--seed-base" => options.seed_base = value().parse().unwrap_or_else(|_| usage("--seed-base")),
             "--side" => {
                 options.side = Some(match value().to_lowercase().as_str() {
                     "armada" => "Armada",
@@ -528,7 +570,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander] [--side armada|cortex] [--corner nw|se] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
     std::process::exit(2)
 }
 
