@@ -54,6 +54,9 @@ pub struct Scenario {
     pub factory_overhead: f64,
     /// The commander takes no metal spot farther from home than this on foot: the game ends with it.
     pub commander_leash: f64,
+    /// An extractor farther from home than this with no turret within `turret_cover` is exposed: raiders take it.
+    pub exposed_beyond: f64,
+    pub turret_cover: f64,
     /// A builder within this of home puts economy buildings beside itself (H-OPEN-PLAN places them so).
     pub base_radius: f64,
     /// Length of one `Item::Assist`.
@@ -82,6 +85,8 @@ impl Scenario {
             walk_overhead: 0.0,
             factory_overhead: 1.0,
             commander_leash: f64::MAX,
+            exposed_beyond: 900.0,
+            turret_cover: 450.0,
             base_radius: 600.0,
             assist_chunk: 20.0,
             converter_level: 0.75,
@@ -149,6 +154,9 @@ pub struct Outcome {
     pub effective: Vec<Vec<Step>>,
     /// Metal already sunk into combat units still on the pad at the end.
     pub army_in_progress: f64,
+    /// Metal per second from extractors standing at the end farther than `Scenario::exposed_beyond` from home with no
+    /// turret of ours within `Scenario::turret_cover`.
+    pub exposed_income: f64,
 }
 
 impl Outcome {
@@ -236,7 +244,8 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
     let (mut army_count, mut army_value) = (0u32, 0.0);
     let (mut metal_wasted, mut energy_wasted, mut metal_spent) = (0.0, 0.0, 0.0);
 
-    let mut outcome = Outcome { samples: Vec::new(), finished: Vec::new(), effective: vec![Vec::new(); plan.queue_count()], army_in_progress: 0.0 };
+    let mut outcome = Outcome { samples: Vec::new(), finished: Vec::new(), effective: vec![Vec::new(); plan.queue_count()], army_in_progress: 0.0, exposed_income: 0.0 };
+    let (mut extractor_sites, mut turret_sites): (Vec<((f64, f64), f64)>, Vec<(f64, f64)>) = (Vec::new(), Vec::new());
     let (mut second_metal, mut second_energy, mut second_stall, mut second_steps) = (0.0, 0.0, 0.0, 0u32);
     let steps = (seconds / sc.dt).round() as usize;
 
@@ -280,6 +289,10 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                             continue;
                         }
                         if def.role == Role::Factory && factories_planned(&builders, units) >= plan.factories.len() {
+                            continue;
+                        }
+                        // The leash holds for whatever the commander is sent to build.
+                        if queue == 0 && next.site.is_some_and(|site| sc.commander_leash < f64::MAX && sc.ground.walk(sc.home, site) > sc.commander_leash) {
                             continue;
                         }
                         let mut pays = 0.0;
@@ -421,6 +434,7 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
             if def.extracts_metal > 0.0 {
                 extractors += 1;
                 extractor_metal += pays;
+                extractor_sites.push((site, pays));
             }
             if def.wind_cap > 0.0 {
                 wind_caps.push(def.wind_cap);
@@ -464,7 +478,8 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
                     army_count += 1;
                     army_value += def.metal_cost;
                 }
-                Role::Commander | Role::Eco | Role::Turret => {}
+                Role::Turret => turret_sites.push(site),
+                Role::Commander | Role::Eco => {}
             }
         }
 
@@ -521,6 +536,11 @@ pub fn simulate(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -
         }
     }
 
+    outcome.exposed_income = extractor_sites
+        .iter()
+        .filter(|(at, _)| distance(*at, sc.home) > sc.exposed_beyond && !turret_sites.iter().any(|t| distance(*t, *at) < sc.turret_cover))
+        .map(|(_, pays)| pays)
+        .sum();
     outcome.army_in_progress = builders
         .iter()
         .filter_map(|b| match b.state {

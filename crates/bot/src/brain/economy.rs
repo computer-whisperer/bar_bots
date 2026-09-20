@@ -177,7 +177,8 @@ impl Brain {
             if is_builder && is_mobile {
                 let (plan, rule) = match self.opening_step(unit, tick, kit) {
                     Some(Planned::Extractor(spot)) => (Plan::Extractor(spot), "H-OPEN-PLAN"),
-                    Some(Planned::Building(def_id)) => (self.place_planned(def_id, unit, own, kit), "H-OPEN-PLAN"),
+                    Some(Planned::Building(def_id, Some(site))) => (Plan::Near(def_id, site), "H-OPEN-PLAN"),
+                    Some(Planned::Building(def_id, None)) => (self.place_planned(def_id, unit, own, kit), "H-OPEN-PLAN"),
                     None => self.plan_for(unit, tick, kit),
                 };
                 // A stationed commander builds where it stands, whatever anchor the rule had in mind.

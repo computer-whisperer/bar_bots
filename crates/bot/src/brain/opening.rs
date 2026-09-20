@@ -43,7 +43,8 @@ pub(super) struct Opening {
 /// What a builder on the plan does next.
 pub(super) enum Planned {
     Extractor(Vec3),
-    Building(UnitDefId),
+    /// With the place the plan names for it, if it names one (a turret at a metal spot).
+    Building(UnitDefId, Option<Vec3>),
 }
 
 impl Brain {
@@ -98,9 +99,9 @@ impl Brain {
             let mut scenario = game.scenario(spots, game.ground());
             scenario.constructors_default_to_extractors = true;
             scenario.commander_leash = super::economy::EARLY_COMMANDER_LEASH as f64;
-            let palette = Palette::new(&game.units, game.commander, lab, false);
+            let palette = Palette::new(&game.units, game.commander, lab, false, self.world.hello.unit_defs.iter().position(|d| d.id == kit.turret));
             let horizon = (HORIZON_FRAMES / FRAMES_PER_SECOND) as f64;
-            let search = Search { objective: Objective::Tempo { army: 1.0 }, horizon, iterations: 0, seed: 1, factories: 1, constructors: SEARCHED_CONSTRUCTORS, hot: 0.02, start: Some(plan.clone()) };
+            let search = Search { objective: Objective::Tempo { army: 1.0, exposed: 0.3 }, horizon, iterations: 0, seed: 1, factories: 1, constructors: SEARCHED_CONSTRUCTORS, hot: 0.02, start: Some(plan.clone()) };
             let started = std::time::Instant::now();
             let before = search.objective.score(&simulate(&game.units, &scenario, &plan, horizon), horizon);
             let found = anneal_within(&game.units, &scenario, &palette, &search, SEARCH_BUDGET, SEARCH_THREADS);
@@ -139,7 +140,7 @@ impl Brain {
     /// time between units.
     pub(super) fn opening_factory_batch(&mut self, factory: &OwnUnit, tick: &Tick, kit: &Kit) -> Option<Vec<UnitDefId>> {
         let mut batch = Vec::new();
-        while let Some(Planned::Building(def)) = self.opening_step(factory, tick, kit) {
+        while let Some(Planned::Building(def, _)) = self.opening_step(factory, tick, kit) {
             batch.push(def);
         }
         (!batch.is_empty()).then_some(batch)
@@ -194,7 +195,7 @@ impl Brain {
                 continue;
             }
             if def != kit.extractor {
-                return Some(Planned::Building(def));
+                return Some(Planned::Building(def, step.site.map(|(x, z)| Vec3 { x: x as f32, y: 0.0, z: z as f32 })));
             }
             // The plan's own spot when it names one that is still free, else the spot the rules would hand out.
             let named = step.site.map(|(x, z)| Vec3 { x: x as f32, y: 0.0, z: z as f32 }).and_then(|site| {

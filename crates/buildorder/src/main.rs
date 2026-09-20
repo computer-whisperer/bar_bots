@@ -11,7 +11,7 @@ use buildorder::sim::{simulate, Outcome, Sample, Scenario, Wind};
 const USAGE: &str = "usage: (the game, that is map, start, faction and unit numbers, comes from a match record's header)
   buildorder optimize  --game RECORD.jsonl [--factory lab|vp] [--objective income|army|mix|tempo] [--minutes 10]
                        [--iterations 40000] [--restarts 8] [--seed 1] [--wind MEAN] [--detour X] [--factories 2] [--constructors 6] [--leash ELMOS]
-                       [--no-nano] [--csv FILE] [--plan-out FILE]      (--detour X: open ground, every walk X straight lines,
+                       [--no-nano] [--turret llt] [--csv FILE] [--plan-out FILE]      (--detour X: open ground, every walk X straight lines,
                                                                         in place of the map's own ground)
   buildorder simulate  --game RECORD.jsonl --plan FILE [--minutes ..] [--wind ..] [--detour X] [--csv FILE]
   buildorder walks     RECORD.jsonl... [--minutes 6]      (builders' ways between builds: recorded against predicted)
@@ -124,7 +124,7 @@ fn optimize(args: &Args) {
     let minutes: f64 = args.number("--minutes", 10.0);
     let scenario = scenario(&game, args);
     let factory_unit = game.factory(&factory).unwrap_or_else(|| die(&format!("the commander builds no {factory}")));
-    let palette = Palette::new(units, game.commander, factory_unit, !args.has("--no-nano"));
+    let palette = Palette::new(units, game.commander, factory_unit, !args.has("--no-nano"), units.index(&format!("{}{}", game.side(), args.text("--turret", "llt"))));
     let search = Search {
         objective,
         horizon: minutes * 60.0,

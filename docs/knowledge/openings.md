@@ -207,7 +207,9 @@ never comes, and solars where the rules took wind.
 The simulator's prediction holds to minute 3 (extractors 5.2 predicted, 5.2 played; income 12.5 against 11.5) and is
 optimistic at minute 5 (14 extractors and 30 metal/s predicted, 11.4 and 20 played): it knows no enemy and no losses.
 **Evidence.** `open-search-1-ab`; `run/opening_ab.py <batch dir>`.
-**Would be wrong if.** Full games lost the gain (the far extractors it takes die; the late first soldier loses the base):
-open-search-2-ab is that test.
+**Would be wrong if.** Full games lost the gain. **They did** (open-search-2-ab, 2026-09-20: 3-7-2 against 7-5-0 on
+Quicksilver, 1-7 against 2-5-1 on Mithril): with no turret to minute 6 the extractors it takes are raided away from
+minute 6 on. The claim stands for the opening measures only; an opening objective has to price exposure
+(`Objective::Tempo`'s `exposed`, open-search-3-ab).
 **Used by.** H-OPEN-SEARCH.
 

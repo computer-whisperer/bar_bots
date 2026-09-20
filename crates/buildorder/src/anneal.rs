@@ -40,7 +40,9 @@ pub enum Objective {
     /// The opening's measure (`docs/design/2026-09-20-opening-search.md`), in metal: all metal made over the horizon,
     /// plus `TEMPO_INCOME_SECONDS` of the income it ends on (what stands at the horizon goes on paying), plus the
     /// army built times `army` per metal, less `TEMPO_STALL_METAL` for every builder-second lost to a stall.
-    Tempo { army: f64 },
+    /// Income from exposed extractors (`Outcome::exposed_income`) counts `exposed` of its worth at the horizon: in
+    /// open-search-2-ab an opening with no turret held 8.8 extractors at minute 6 and 5.8 at minute 10.
+    Tempo { army: f64, exposed: f64 },
 }
 
 pub const TEMPO_INCOME_SECONDS: f64 = 90.0;
@@ -55,7 +57,7 @@ impl Objective {
             "income" => Some(Objective::Income),
             "army" => Some(Objective::Army),
             "mix" => Some(Objective::Mix),
-            "tempo" => Some(Objective::Tempo { army: 1.0 }),
+            "tempo" => Some(Objective::Tempo { army: 1.0, exposed: 0.3 }),
             _ => None,
         }
     }
@@ -79,10 +81,10 @@ impl Objective {
             Objective::Income => income + 1e-3 * shaping,
             Objective::Army => army + shaping,
             Objective::Mix => army + MIX_INCOME_SECONDS * income + shaping,
-            Objective::Tempo { army: weight } => {
+            Objective::Tempo { army: weight, exposed } => {
                 let made: f64 = outcome.samples.iter().map(|s| s.metal_income).sum();
                 let stalled: f64 = outcome.samples.iter().map(|s| 1.0 - s.stall).sum();
-                made + TEMPO_INCOME_SECONDS * income + weight * army - TEMPO_STALL_METAL * stalled + shaping
+                made + TEMPO_INCOME_SECONDS * (income - (1.0 - exposed) * outcome.exposed_income) + weight * army - TEMPO_STALL_METAL * stalled + shaping
             }
         }
     }
@@ -94,6 +96,8 @@ pub struct Palette {
     pub factory: Vec<Item>,
     pub constructor: usize,
     pub factory_unit: usize,
+    /// The turrets on offer: the search may stand one at a metal spot.
+    pub turrets: Vec<usize>,
 }
 
 /// Not offered to the search: anti-air (worthless without aircraft) and the scouts, which are not fighters and would
@@ -101,10 +105,11 @@ pub struct Palette {
 const NOT_FIGHTERS: [&str; 7] = ["jeth", "crash", "sam", "mist", "flea", "armfav", "corfav"];
 
 impl Palette {
-    /// `commander`, `factory`: unit types. `nanos`: whether construction turrets are on offer. What goes on offer is
+    /// `commander`, `factory`: unit types. `turret`: the ground turret on offer, by the caller's word (the numbers do
+    /// not tell an anti-air launcher from a laser tower). `nanos`: whether construction turrets are on offer. What goes on offer is
     /// chosen by what a unit does, not by its name: the cheapest extractor, wind generator, steady generator, converter
     /// and energy storage in the commander's or the constructor's menu.
-    pub fn new(units: &Units, commander: usize, factory: usize, nanos: bool) -> Palette {
+    pub fn new(units: &Units, commander: usize, factory: usize, nanos: bool, turret: Option<usize>) -> Palette {
         let constructor = units
             .cheapest(factory, |u| u.role == Role::Builder && u.builds.contains(&factory))
             .unwrap_or_else(|| panic!("{} builds no constructor", units.list[factory].name));
@@ -118,6 +123,7 @@ impl Palette {
             offer(&|u| plain(u) && u.energy_storage >= 1000.0),
             Some(factory),
             offer(&|u| nanos && u.role == Role::Nano),
+            turret,
         ]
         .into_iter()
         .flatten()
@@ -132,7 +138,8 @@ impl Palette {
                 from_factory.push(Item::Build(*unit));
             }
         }
-        Palette { mobile, factory: from_factory, constructor, factory_unit: factory }
+        let turrets = turret.into_iter().collect();
+        Palette { mobile, factory: from_factory, constructor, factory_unit: factory, turrets }
     }
 
     fn pick(&self, kind: QueueKind, rng: &mut Rng) -> Step {
@@ -204,7 +211,8 @@ fn mutate(plan: &mut Plan, live: &[usize], palette: &Palette, spots: &[(f64, f64
                 // Name the spot an extractor goes to (or leave it to "the nearest free one" again): how the search
                 // sends a builder on a walk the greedy choice would not take.
                 let at = rng.below(len);
-                if plan.queue(q)[at].item != palette.mobile[0] {
+                let Item::Build(unit) = plan.queue(q)[at].item else { continue };
+                if plan.queue(q)[at].item != palette.mobile[0] && !palette.turrets.contains(&unit) {
                     continue;
                 }
                 let site = (rng.below(4) > 0).then(|| spots[rng.below(spots.len())]);
