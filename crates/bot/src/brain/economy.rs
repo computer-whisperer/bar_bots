@@ -10,6 +10,15 @@ use super::{Brain, FRAMES_PER_SECOND};
 
 /// The commander never builds farther from home than this.
 const COMMANDER_LEASH: f32 = 900.0;
+/// H-ECO-NANO: a construction turret per this much metal income, up to this many per factory, placed within reach of it.
+const NANO_PER_INCOME: f32 = 8.0;
+const NANOS_PER_LAB: usize = 3;
+const NANO_REACH: f32 = 260.0;
+/// H-ECO-RECLAIM: with less metal than this banked, a constructor reclaims the wrecks of a recent fight within this
+/// walking distance before anything else; one constructor per site.
+const RECLAIM_WHEN_METAL_BELOW: f32 = 150.0;
+const RECLAIM_RADIUS: f32 = 350.0;
+const RECLAIM_WITHIN: f32 = 1800.0;
 /// A stationed commander (D-COMMANDER-STATION) builds within this distance of its station and walks back beyond it.
 const COMMANDER_STATION_REACH: f32 = 500.0;
 const MAX_LABS: usize = 8;
@@ -50,6 +59,8 @@ const TICK_FRAMES: i32 = 15;
 
 /// The rules a builder tries once the opening stands and energy is not short.
 enum Step {
+    Reclaim,
+    Nano,
     FirstTurrets,
     MoreTurrets,
     MoreLabs,
@@ -63,6 +74,10 @@ enum Plan {
     Extractor(Vec3),
     /// A building placed near `anchor`.
     Near(UnitDefId, Vec3),
+    /// A building placed right beside `anchor`: a construction turret has to reach the factory it helps.
+    Beside(UnitDefId, Vec3),
+    /// Reclaim the wrecks around a place where units died.
+    Reclaim(Vec3),
 }
 
 impl Brain {
@@ -90,9 +105,17 @@ impl Brain {
                     (Plan::Near(def_id, _), Some(station)) => Plan::Near(def_id, station),
                     (plan, _) => plan,
                 };
+                if let Plan::Reclaim(site) = plan {
+                    self.fire(rule);
+                    // Busy, but building nothing: the commander's type stands for "no building" in the job counts.
+                    self.jobs.insert(unit.id, kit.commander);
+                    commands.push(Command::ReclaimArea { unit: unit.id, centre: site, radius: RECLAIM_RADIUS, queue: false });
+                    continue;
+                }
                 let planned_def = match plan {
                     Plan::Extractor(_) => kit.extractor,
-                    Plan::Near(def_id, _) => def_id,
+                    Plan::Near(def_id, _) | Plan::Beside(def_id, _) => def_id,
+                    Plan::Reclaim(_) => unreachable!("handled above"),
                 };
                 let buildable = self.world.def(unit.def).is_some_and(|d| d.build_options.contains(&planned_def));
                 if !buildable {
@@ -112,6 +135,8 @@ impl Brain {
                     Plan::Near(def_id, anchor) => {
                         (def_id, BuildSite { near: anchor, search_radius: 1000.0, min_dist: self.gap_around(def_id, kit) })
                     }
+                    Plan::Beside(def_id, anchor) => (def_id, BuildSite { near: anchor, search_radius: NANO_REACH, min_dist: 2 }),
+                    Plan::Reclaim(_) => unreachable!("handled above"),
                 };
                 // An order whose builder is idle again within two ticks never started: count it and say where.
                 if let Some((frame, earlier, near)) = self.last_orders.insert(unit.id, (tick.frame, def_id, site.near))
@@ -128,6 +153,13 @@ impl Brain {
                 }
                 self.jobs.insert(unit.id, def_id);
                 commands.push(Command::Build { unit: unit.id, def: def_id, site: Some(site), queue: false });
+            } else if unit.def == kit.nano {
+                // H-ECO-NANO: a construction turret guards the nearest factory, which lends it its build power.
+                let lab = own.iter().filter(|u| u.def == kit.lab).min_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos)));
+                if let Some(lab) = lab {
+                    self.jobs.insert(unit.id, kit.commander);
+                    commands.push(Command::Guard { unit: unit.id, target: lab.id });
+                }
             } else if is_builder && let Some(def_id) = self.weighted_production(unit, own, kit) {
                 self.fire("D-PRODUCTION-MIX");
                 commands.push(Command::Build { unit: unit.id, def: def_id, site: None, queue: false });
@@ -226,10 +258,10 @@ impl Brain {
         }
         // Once the opening stands, the remaining rules run in an order the strategist can change.
         let order: &[Step] = match focus {
-            Some(Focus::Expand) => &[Step::Expand, Step::OutpostTurret, Step::FirstTurrets, Step::MoreLabs, Step::Convert, Step::MoreTurrets],
-            Some(Focus::Production) => &[Step::MoreLabs, Step::FirstTurrets, Step::Expand, Step::OutpostTurret, Step::Convert, Step::MoreTurrets],
-            Some(Focus::Defence) => &[Step::MoreTurrets, Step::OutpostTurret, Step::Expand, Step::MoreLabs, Step::Convert],
-            Some(Focus::Energy) | None => &[Step::FirstTurrets, Step::MoreLabs, Step::OutpostTurret, Step::Expand, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Expand) => &[Step::Reclaim, Step::Expand, Step::OutpostTurret, Step::FirstTurrets, Step::MoreLabs, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Production) => &[Step::Nano, Step::MoreLabs, Step::FirstTurrets, Step::Expand, Step::OutpostTurret, Step::Convert, Step::MoreTurrets],
+            Some(Focus::Defence) => &[Step::Reclaim, Step::MoreTurrets, Step::OutpostTurret, Step::Expand, Step::MoreLabs, Step::Convert],
+            Some(Focus::Energy) | None => &[Step::Reclaim, Step::FirstTurrets, Step::Nano, Step::MoreLabs, Step::OutpostTurret, Step::Expand, Step::Convert, Step::MoreTurrets],
         };
         if focus.is_some() {
             self.fire("D-ECONOMY-FOCUS");
@@ -238,9 +270,29 @@ impl Brain {
         let floating = if focus == Some(Focus::Production) { FLOATING_METAL / 3.0 } else { FLOATING_METAL };
         for step in order {
             match step {
+                Step::Reclaim if !is_commander && snapshot.metal.current < RECLAIM_WHEN_METAL_BELOW && self.enabled("H-ECO-RECLAIM") => {
+                    if let Some(site) = self.claim_wreck_site(builder, tick.frame) {
+                        return (Plan::Reclaim(site), "H-ECO-RECLAIM");
+                    }
+                }
+                Step::Nano if can_build(kit.nano) && self.enabled("H-ECO-NANO") => {
+                    // One turret per NANO_PER_INCOME of metal income, and no more than a factory can use.
+                    let labs: Vec<Vec3> = snapshot.own_units.iter().filter(|u| u.def == kit.lab && !u.being_built).map(|u| u.pos).collect();
+                    let wanted = ((snapshot.metal.income / NANO_PER_INCOME) as usize).min(labs.len() * NANOS_PER_LAB);
+                    if planned(kit.nano) < wanted
+                        && let Some(lab) = labs.iter().min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
+                    {
+                        return (Plan::Beside(kit.nano, *lab), "H-ECO-NANO");
+                    }
+                }
                 Step::FirstTurrets if planned(kit.turret) < 2 => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
                 Step::MoreTurrets if planned(kit.turret) < MAX_TURRETS => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
-                Step::MoreLabs if snapshot.metal.current > floating && planned(kit.lab) < MAX_LABS => {
+                // A construction turret is a third of a lab's metal for the same build power: labs come after them.
+                Step::MoreLabs
+                    if snapshot.metal.current > floating
+                        && planned(kit.lab) < MAX_LABS
+                        && (!self.enabled("H-ECO-NANO") || planned(kit.nano) >= planned(kit.lab) * NANOS_PER_LAB) =>
+                {
                     return (Plan::Near(kit.lab, yard), "H-ECO-MORE-LABS");
                 }
                 Step::OutpostTurret if !is_commander => {
@@ -293,6 +345,20 @@ impl Brain {
         self.spot_claims.insert(index, frame);
         // The engine stores the spot's metal value in `y`.
         Some(Vec3 { y: 0.0, ..*spot })
+    }
+
+    /// The nearest place, on our side of the map, where units died lately and nobody has been sent to reclaim yet.
+    fn claim_wreck_site(&mut self, builder: &OwnUnit, frame: i32) -> Option<Vec3> {
+        const FRESH_FRAMES: i32 = 4 * 60 * 30;
+        self.wreck_sites.retain(|(_, since)| frame - since < FRESH_FRAMES);
+        let index = self
+            .wreck_sites
+            .iter()
+            .enumerate()
+            .filter(|(_, (site, _))| site.dist2d(builder.pos) < RECLAIM_WITHIN && self.spot_is_ours(*site))
+            .min_by(|(_, (a, _)), (_, (b, _))| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
+            .map(|(index, _)| index)?;
+        Some(self.wreck_sites.swap_remove(index).0)
     }
 
     /// The nearest far-flung extractor with no turret beside it; raiders pick those off first.

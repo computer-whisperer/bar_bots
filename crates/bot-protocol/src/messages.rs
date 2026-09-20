@@ -173,6 +173,10 @@ pub enum Command {
     Fight { unit: UnitId, to: Vec3, queue: bool },
     Stop { unit: UnitId },
     SetRepeat { unit: UnitId, repeat: bool },
+    /// Follow and help `target`: a builder guarding a factory adds its build power to whatever the factory makes.
+    Guard { unit: UnitId, target: UnitId },
+    /// Reclaim every wreck and rock within `radius` of `centre` for their metal.
+    ReclaimArea { unit: UnitId, centre: Vec3, radius: f32, queue: bool },
 }
 
 /// The shim resolves this to the closest legal build position, since only it can query the map.

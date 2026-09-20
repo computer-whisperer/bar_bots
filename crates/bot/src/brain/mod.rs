@@ -38,6 +38,8 @@ pub struct Brain {
     spot_claims: HashMap<usize, i32>,
     /// Walking distances over the terrain, once our faction (and so our movement class) is known.
     routes: Option<routes::Routes>,
+    /// Where our units died lately, for H-ECO-RECLAIM: place and frame (enemy wrecks lie in the same places). Deaths close together are one site.
+    wreck_sites: Vec<(Vec3, i32)>,
     army: army::Army,
     squads: squads::Squads,
     wake: wake::WakeState,
@@ -93,6 +95,7 @@ impl Brain {
             jobs: HashMap::new(),
             spot_claims: HashMap::new(),
             routes: None,
+            wreck_sites: Vec::new(),
             army: army::Army::default(),
             squads: Default::default(),
             wake: Default::default(),

@@ -344,6 +344,24 @@ impl Engine {
                     repeat,
                 })
             }
+            Command::Guard { unit, target } => self.handle(sys::COMMAND_UNIT_GUARD, &mut sys::SGuardUnitCommand {
+                unitId: unit.0,
+                groupId: NO_GROUP,
+                options: 0,
+                timeOut: NO_TIMEOUT,
+                toGuardUnitId: target.0,
+            }),
+            Command::ReclaimArea { unit, centre, radius, queue } => {
+                let mut pos = [centre.x, centre.y, centre.z];
+                self.handle(sys::COMMAND_UNIT_RECLAIM_AREA, &mut sys::SReclaimAreaUnitCommand {
+                    unitId: unit.0,
+                    groupId: NO_GROUP,
+                    options: options(queue),
+                    timeOut: NO_TIMEOUT,
+                    pos_posF3: pos.as_mut_ptr(),
+                    radius,
+                })
+            }
         }
     }
 

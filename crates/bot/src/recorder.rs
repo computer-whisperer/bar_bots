@@ -189,6 +189,8 @@ impl Recorder {
                 Command::Fight { unit, to, .. } => json!(["fight", unit.0, to.x as i32, to.z as i32]),
                 Command::Stop { unit } => json!(["stop", unit.0]),
                 Command::SetRepeat { unit, repeat } => json!(["repeat", unit.0, repeat as i32]),
+                Command::Guard { unit, target } => json!(["guard", unit.0, target.0]),
+                Command::ReclaimArea { unit, centre, radius, .. } => json!(["reclaim", unit.0, centre.x as i32, centre.z as i32, radius as i32]),
             })
             .collect();
         self.line(&json!({ "t": "cmd", "f": frame, "c": list }));

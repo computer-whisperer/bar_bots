@@ -33,6 +33,8 @@ Every rule in `crates/bot/src/brain/` that embodies a judgment about the game. I
 | D-EXPANSION-RADIUS | Constructors take no metal spot farther than this from home on foot | `economy.rs` `claim_spot` | K-army-defence-is-positioning-and-mix (Sonnet asked for it) | directive only |
 | D-COMMANDER-STATION | The commander walks to a station and builds only within 500 of it | `economy.rs` `run_economy`, `claim_spot` | same | directive only |
 | D-SQUAD-POST / D-SQUAD-ORDER / D-PRODUCTION-MIX / D-TURRET-REQUEST | The field commander's levers: posted squads, one-off orders, unit mix, turret requests; posts and orders are snapped to walkable ground or refused | `squads.rs`, `economy.rs` | DESIGN.md "Field commander" | commander mode only |
+| H-ECO-NANO | A construction turret beside the nearest factory per 8 metal income, up to 3 per factory, ordered to guard it; a further factory only once the existing ones have their 3 | `economy.rs` `plan_for` (`Step::Nano`), `run_economy` | K-eco-nano-turrets-and-reclaim-are-normal-play | active (mechanism checked; effect unmeasured) |
+| H-ECO-RECLAIM | With under 150 metal banked, a constructor area-reclaims (radius 350) the nearest place on our side where our units died in the last 4 minutes, within 1800; one constructor per site | `economy.rs` `claim_wreck_site`, `briefing.rs` `track_losses` | same | active (mechanism checked; effect unmeasured) |
 | H-ARMY-SWEEP | Idle attackers at an empty target sweep metal spots from the enemy side | `army.rs` `run_army` | (unexamined) | active |
 
 Retired:

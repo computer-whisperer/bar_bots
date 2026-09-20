@@ -14,6 +14,7 @@ pub struct Roster {
     converter: &'static str,
     lab: &'static str,
     turret: &'static str,
+    nano: &'static str,
     constructor: &'static str,
     raider: &'static str,
     skirmisher: &'static str,
@@ -23,12 +24,12 @@ pub struct Roster {
 pub const ROSTERS: [Roster; 2] = [
     Roster {
         commander: "armcom", extractor: "armmex", solar: "armsolar", wind: "armwin", advanced_solar: "armadvsol",
-        converter: "armmakr", lab: "armlab", turret: "armllt", constructor: "armck",
+        converter: "armmakr", lab: "armlab", turret: "armllt", nano: "armnanotc", constructor: "armck",
         raider: "armpw", skirmisher: "armrock", artillery: "armham",
     },
     Roster {
         commander: "corcom", extractor: "cormex", solar: "corsolar", wind: "corwin", advanced_solar: "coradvsol",
-        converter: "cormakr", lab: "corlab", turret: "corllt", constructor: "corck",
+        converter: "cormakr", lab: "corlab", turret: "corllt", nano: "cornanotc", constructor: "corck",
         raider: "corak", skirmisher: "corstorm", artillery: "corthud",
     },
 ];
@@ -44,6 +45,8 @@ pub struct Kit {
     pub converter: UnitDefId,
     pub lab: UnitDefId,
     pub turret: UnitDefId,
+    /// Construction turret: a fixed builder that adds its build power to a factory it stands beside.
+    pub nano: UnitDefId,
     pub constructor: UnitDefId,
     pub raider: UnitDefId,
     pub skirmisher: UnitDefId,
@@ -63,6 +66,7 @@ impl Roster {
             converter: id(self.converter)?,
             lab: id(self.lab)?,
             turret: id(self.turret)?,
+            nano: id(self.nano)?,
             constructor: id(self.constructor)?,
             raider: id(self.raider)?,
             skirmisher: id(self.skirmisher)?,

@@ -45,7 +45,7 @@ large share of every dead unit's metal to whoever holds the field after a fight.
 important but possibly not why that game was lost.
 **Evidence.** Consistent with the census: BARb medium plays one lab plus one nano turret all game where we build 3-4
 labs (K-barb-medium-observed-build), and its resurrection bots feed on our wrecks (K-army-dead-waves-are-resurrected).
-We build no nano turrets and never issue a reclaim order (the protocol has no reclaim command).
+Until 2026-09-19 we built no nano turrets and never issued a reclaim order.
 **Would be wrong if.** A version with nano turrets and wreck reclaim near home showed no gain in army built by minute 10.
-**Used by.** (none yet)
+**Used by.** H-ECO-NANO, H-ECO-RECLAIM.
 

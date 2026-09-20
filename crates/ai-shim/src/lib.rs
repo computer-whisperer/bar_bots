@@ -145,7 +145,9 @@ impl Instance {
                 | Command::Move { unit, .. }
                 | Command::Fight { unit, .. }
                 | Command::Stop { unit }
-                | Command::SetRepeat { unit, .. }) = command;
+                | Command::SetRepeat { unit, .. }
+                | Command::Guard { unit, .. }
+                | Command::ReclaimArea { unit, .. }) = command;
                 self.events.push(Event::CommandRejected { unit, code });
             }
         }
