@@ -74,8 +74,6 @@ const LAB_YARD: f32 = 350.0;
 const LAB_CLEARANCE: f32 = 230.0;
 const BUILDING_CLEARANCE: f32 = 90.0;
 const TURRET_LINE: f32 = 650.0;
-/// `buildorder::sim::Scenario::base_radius`.
-const PLANNED_BESIDE_RADIUS: f32 = 600.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
 const UNREACHABLE_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
@@ -333,8 +331,10 @@ impl Brain {
             d if d == kit.lab => Plan::Near(d, self.beside_builder(builder, self.forward_of_home(LAB_YARD), own, LAB_CLEARANCE)),
             d if d == kit.turret => Plan::Near(d, self.forward_of_home(TURRET_LINE)),
             d if d == kit.nano && lab.is_some() => Plan::Beside(d, lab.unwrap().pos),
-            // As the simulator places them: beside a builder that is about the base, no walking.
-            d if d != kit.nano && builder.pos.dist2d(self.home) < PLANNED_BESIDE_RADIUS => Plan::Beside(d, self.beside_builder(builder, self.enemy_base(builder.pos), own, BUILDING_CLEARANCE)),
+            // As the simulator places them: beside the builder wherever it stands, no walking (queue-smoke: a planned
+            // solar went to the back field 497 elmos from a commander out at a far extractor, and the plan's timing
+            // with it).
+            d if d != kit.nano => Plan::Beside(d, self.beside_builder(builder, self.enemy_base(builder.pos), own, BUILDING_CLEARANCE)),
             d => Plan::Near(d, self.forward_of_home(-BACK_FIELD)),
         }
     }
