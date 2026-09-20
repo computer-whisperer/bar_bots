@@ -96,6 +96,34 @@ impl Engine {
         let metal_spots: Vec<Vec3> =
             floats.chunks_exact(3).map(|s| Vec3 { x: s[0], y: s[1], z: s[2] }).collect();
         self.metal_spots = metal_spots.clone();
+        // The raw metal map: one value per 2x2 heightmap squares (16 elmos), index 0 top left. Each square with metal
+        // belongs to the nearest spot within a patch's reach of it.
+        const METAL_SQUARE: f32 = 2.0 * SQUARE_SIZE;
+        const PATCH_REACH: f32 = 200.0;
+        let (half_w, half_h) = ((call!(self, Map_getWidth()) / 2) as usize, (call!(self, Map_getHeight()) / 2) as usize);
+        let raw_count = call!(self, Map_getResourceMapRaw(self.metal, std::ptr::null_mut(), 0));
+        let mut raw = vec![0i16; raw_count.max(0) as usize];
+        call!(self, Map_getResourceMapRaw(self.metal, raw.as_mut_ptr(), raw_count));
+        let mut metal_spot_squares: Vec<Vec<(f32, f32)>> = vec![Vec::new(); metal_spots.len()];
+        for (index, value) in raw.iter().enumerate() {
+            if *value <= 0 || half_w == 0 {
+                continue;
+            }
+            let (x, z) = (((index % half_w) as f32 + 0.5) * METAL_SQUARE, ((index / half_w) as f32 + 0.5) * METAL_SQUARE);
+            if index / half_w >= half_h {
+                break;
+            }
+            let nearest = metal_spots.iter().enumerate().min_by(|a, b| {
+                let da = (a.1.x - x).hypot(a.1.z - z);
+                let db = (b.1.x - x).hypot(b.1.z - z);
+                da.total_cmp(&db)
+            });
+            if let Some((i, spot)) = nearest
+                && (spot.x - x).hypot(spot.z - z) < PATCH_REACH
+            {
+                metal_spot_squares[i].push((x, z));
+            }
+        }
 
         let teams = (0..call!(self, Game_getTeams()))
             .map(|team| TeamInfo {
@@ -133,6 +161,7 @@ impl Engine {
             map,
             unit_defs,
             metal_spots,
+            metal_spot_squares,
             terrain: self.terrain(),
         }
     }

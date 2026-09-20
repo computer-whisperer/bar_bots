@@ -61,14 +61,22 @@ const STALLED_ENERGY: f32 = 0.15;
 /// How long a metal spot stays reserved for a builder that was sent to it.
 const SPOT_CLAIM_FRAMES: i32 = 60 * FRAMES_PER_SECOND;
 /// A metal extractor this close to a spot occupies it.
+/// An extractor this close to a spot's centre stands on that spot, at least; the map's extractor radius when larger,
+/// since an extractor may be built anywhere within it (`extractor_site`; rush-20: offset extractors were not seen as
+/// occupying their spot, which was claimed and ordered again and again, 3 extractors built by minute 3 for 12 orders).
 const SPOT_OCCUPIED_RADIUS: f32 = 60.0;
 /// Gaps between base buildings, in 8-elmo build squares. Three squares made a maze the army could not leave.
 const BUILDING_GAP: i32 = 5;
 const LAB_GAP: i32 = 8;
 /// Distances from the start point along the line to the enemy: generators behind, labs ahead, turrets beyond them.
 const BACK_FIELD: f32 = 150.0;
-/// How far a metal spot's squares may lie from its reported centre, taken off the extractor radius for the offset.
-const MEX_PATCH: f32 = 40.0;
+/// A metal-map square is 16 elmos; an extractor offset is tried in steps of this and keeps this margin inside the
+/// game's allowance (its rule is strict and its spot centre may differ from the engine's).
+const MEX_SQUARE: f32 = 16.0;
+const MEX_STEP: f32 = 8.0;
+const MEX_MARGIN: f32 = 6.0;
+/// How far off its centre an extractor still counts as refused for that spot (the dropped-order fallback).
+const MEX_PATCH: f32 = 130.0;
 const LAB_YARD: f32 = 350.0;
 /// How far a building's anchor keeps from anything of ours standing or started, so the engine's closest free site
 /// to it stays within the builder's reach: the lab's gap (LAB_GAP squares) plus half of it and a neighbour, and a
@@ -137,11 +145,10 @@ impl Brain {
             let bot_protocol::Event::UnitCreated { unit, builder: Some(builder) } = event else { continue };
             self.job_started.insert(*builder, tick.frame);
             self.step_begun(*builder);
-            let Some((def, near, _)) = self.queued.get(builder).copied() else { continue };
-            // The queued build has started when the builder's last order was this type too, or was not a build: the
-            // current job (its own nanoframe) comes first, and only a second creation of the queued type is the queued one.
-            let current_is_same = self.jobs.get(builder).is_some_and(|job| *job == def) && self.last_orders.get(builder).is_some_and(|(frame, _, _)| self.job_started.get(builder).is_some_and(|started| started > frame && *started < tick.frame));
-            if own.iter().any(|u| u.id == *unit && u.def == def) && (!self.jobs.get(builder).is_some_and(|job| *job == def) || current_is_same) {
+            let Some((def, near, since)) = self.queued.get(builder).copied() else { continue };
+            // The pass queues only once the current job's nanoframe exists, so a creation of the queued type by this
+            // builder after the queued order went out is the queued build (the current job may be the same type).
+            if tick.frame > since && own.iter().any(|u| u.id == *unit && u.def == def) {
                 self.queued.remove(builder);
                 self.jobs.insert(*builder, def);
                 self.last_orders.insert(*builder, (tick.frame, def, near));
@@ -167,7 +174,7 @@ impl Brain {
             if let Some((def, near, since)) = self.queued.remove(&unit.id) {
                 eprintln!("[ai {}] f={} queued {} near ({:.0}, {:.0}) never started ({}s ago); the plan takes it again", self.ai(), tick.frame, self.name(def), near.x, near.z, (tick.frame - since) / FRAMES_PER_SECOND);
                 if def == kit.extractor
-                    && let Some((i, _)) = self.world.hello.metal_spots.iter().enumerate().find(|(_, s)| s.dist2d(near) < 1.0)
+                    && let Some((i, _)) = self.world.hello.metal_spots.iter().enumerate().min_by(|a, b| a.1.dist2d(near).total_cmp(&b.1.dist2d(near)))
                 {
                     self.spot_claims.remove(&i);
                 }
@@ -265,8 +272,9 @@ impl Brain {
                     Plan::Reclaim(_) | Plan::Repair(_) => unreachable!("handled above"),
                 };
                 // An order whose builder is idle again within two ticks never started: count it and say where.
+                // (The window is the first re-plan after the order grace: a shorter one never fired.)
                 if let Some((frame, earlier, near)) = self.last_orders.insert(unit.id, (tick.frame, def_id, site.near))
-                    && tick.frame - frame <= 2 * TICK_FRAMES
+                    && tick.frame - frame <= ORDER_GRACE_FRAMES + TICK_FRAMES
                 {
                     self.dropped_orders += 1;
                     // An extractor refused off its centre: that spot takes the exact centre from now on.
@@ -419,18 +427,31 @@ impl Brain {
     /// The spot's squares are taken to lie within `MEX_PATCH` of its centre; a refused offset puts that spot on the
     /// exact centre from then on.
     fn extractor_site(&self, spot: Vec3, builder: &OwnUnit) -> Vec3 {
-        let index = self.world.hello.metal_spots.iter().position(|s| s.dist2d(spot) < 1.0);
-        if index.is_some_and(|i| self.centre_only.contains(&i)) {
+        let hello = &self.world.hello;
+        let Some(index) = hello.metal_spots.iter().position(|s| s.dist2d(spot) < 1.0) else { return spot };
+        let squares = hello.metal_spot_squares.get(index).map_or(&[][..], |s| s.as_slice());
+        if self.centre_only.contains(&index) || squares.is_empty() {
             return spot;
         }
-        let slack = (self.world.hello.map.extractor_radius - MEX_PATCH).max(0.0);
         let reach = self.world.def(builder.def).map_or(100.0, |d| d.build_distance.max(60.0));
         let d = spot.dist2d(builder.pos);
-        let offset = (d - reach + 8.0).clamp(0.0, slack);
-        if offset <= 0.0 || d <= 0.0 {
+        let wanted = (d - reach + 8.0).max(0.0);
+        if wanted <= 0.0 || d <= 0.0 {
             return spot;
         }
-        Vec3 { x: spot.x + (builder.pos.x - spot.x) / d * offset, y: spot.y, z: spot.z + (builder.pos.z - spot.z) / d * offset }
+        // The game's rule (cmd_mex_denier.lua, IsBuildingPositionValid): the position must lie within the extractor
+        // radius plus one metal square of every square of the patch. Tried from the offset wanted down to nothing.
+        let allowed = hello.map.extractor_radius + MEX_SQUARE - MEX_MARGIN;
+        let valid = |p: Vec3| squares.iter().all(|(sx, sz)| (p.x - sx).hypot(p.z - sz) < allowed);
+        let mut offset = wanted.min(hello.map.extractor_radius);
+        while offset > 0.0 {
+            let p = Vec3 { x: spot.x + (builder.pos.x - spot.x) / d * offset, y: spot.y, z: spot.z + (builder.pos.z - spot.z) / d * offset };
+            if valid(p) {
+                return p;
+            }
+            offset -= MEX_STEP;
+        }
+        spot
     }
 
     /// What a plan builds and where the engine is asked to put it. None when the builder cannot build it.
@@ -759,8 +780,13 @@ impl Brain {
         Some(target)
     }
 
+    pub(super) fn spot_occupied_radius(&self) -> f32 {
+        self.world.hello.map.extractor_radius.max(SPOT_OCCUPIED_RADIUS)
+    }
+
     pub(super) fn spot_taken(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
-        own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < SPOT_OCCUPIED_RADIUS) || self.allied_extractor_on(spot)
+        let radius = self.spot_occupied_radius();
+        own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < radius) || self.allied_extractor_on(spot)
     }
 
     /// The nearest far-flung extractor with no turret beside it; raiders pick those off first.
@@ -821,7 +847,7 @@ impl Brain {
             .hello
             .metal_spots
             .iter()
-            .filter(|s| self.spot_is_ours(**s) && !own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
+            .filter(|s| self.spot_is_ours(**s) && !own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(**s) < self.spot_occupied_radius()))
             .count();
         (2 + extractors / 3 + free_spots / 3).min(MAX_CONSTRUCTORS).max(floor)
     }

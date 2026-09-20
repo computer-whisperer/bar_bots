@@ -48,6 +48,9 @@ pub struct Hello {
     pub map: MapInfo,
     pub unit_defs: Vec<UnitDefInfo>,
     pub metal_spots: Vec<Vec3>,
+    /// Per metal spot (same order), the centres of the metal-map squares (16 elmos) that make up its patch, from the
+    /// engine's raw metal map: the game allows an extractor wherever its extractor radius covers every square.
+    pub metal_spot_squares: Vec<Vec<(f32, f32)>>,
     pub terrain: Terrain,
 }
 

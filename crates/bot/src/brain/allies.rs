@@ -36,7 +36,7 @@ impl super::Brain {
     }
 
     pub(super) fn allied_extractor_on(&self, spot: Vec3) -> bool {
-        self.allies.iter().any(|a| a.pos.dist2d(spot) < ON_SPOT && self.world.def(a.def).is_some_and(|d| d.extracts_metal > 0.0))
+        self.allies.iter().any(|a| a.pos.dist2d(spot) < ON_SPOT.max(self.spot_occupied_radius()) && self.world.def(a.def).is_some_and(|d| d.extracts_metal > 0.0))
     }
 
     /// False for a spot at an ally's door that the ally has not had three minutes to take (or retake).
