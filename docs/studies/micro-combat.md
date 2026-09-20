@@ -121,33 +121,44 @@ gained `spread_x` / `spread_y`: how far each army's units stood from their own c
 landed. That is the probe `combat-sim.md` asked for first, and it is what tells us the behaviour happened.
 
 **First probe** (batches `micro-spread-off` / `micro-spread-on`, 3 pairings x 8 duels, a single line 110 apart,
-which for 23-26 Pawns is 2500 elmos of front):
-dispersion at contact 86-100 → 288-303 elmos for us, 93-104 unchanged for them. The behaviour happens.
-Margins: armpw v armham −0.437 → −0.258, armpw v corthud −0.455 → −0.321, armpw v corak +0.150 → +0.253. The
-baseline reproduced the recorded table row for armpw v armham to three decimals (−0.437 against −0.436).
+which for 23-26 Pawns is 2500 elmos of front): dispersion at contact 86-100 → 288-303 elmos for us, 93-104
+unchanged for them. The behaviour happens. Margins: armpw v armham −0.437 → −0.258, armpw v corthud
+−0.455 → −0.321, armpw v corak +0.150 → +0.253. The baseline reproduced the recorded table row for armpw v armham
+to three decimals (−0.437 against −0.436).
 
-**The A/B that counts** (batches `micro-block-off` / `micro-block-on`, 28 pairings x 6 duels per arm, equal metal
-at 1200, spawn spacing 56, block gap 110 — the bot's own geometry):
+**The A/B that counts** (batches `micro2-off` / `micro2-on`, 28 pairings x 6 duels per arm, equal metal at 1200,
+spawn spacing 56, block gap 110 — the bot's own geometry, both arms re-run after the corrections in *Two faults
+found on review* below):
 
-**Metal killed per metal lost over all 336 duels: 1.11 without, 1.31 with.** Mean margin gain +0.131.
+**Metal killed per metal lost over all 336 duels: 1.09 without, 1.30 with.** Mean margin gain +0.146.
+Dispersion at contact: ours 81 → 131 elmos (28-152 → 60-200), theirs 94 either way. The behaviour happens, and
+the block is deliberately far more compact than the first probe's line.
 
 Gain by our own unit, averaged over the four opponents each met:
 
-| ours | armpw | corak | armwar | corthud | armham | corstorm | armrock |
+| ours | corak | armpw | corstorm | armwar | armrock | armham | corthud |
 |---|---|---|---|---|---|---|---|
-| mean gain | **+0.41** | **+0.46** | +0.05 | +0.02 | +0.02 | −0.00 | −0.03 |
+| mean gain | **+0.47** | **+0.47** | +0.04 | +0.04 | +0.02 | −0.01 | −0.01 |
 
-The whole gain belongs to the raiders, and the rest is inside the noise of six duels. The largest cells:
+**The whole gain belongs to the raiders; everything else is inside ±0.05, which at six duels a cell is nothing.**
+The largest cells:
 
 | pairing | margin without | margin with | gain | metal killed per metal lost |
 |---|---|---|---|---|
-| corak v armllt | −0.193 ±0.028 | +0.652 ±0.048 | **+0.845** | 0.80 → 2.84 |
-| armpw v corllt | −0.150 ±0.093 | +0.560 ±0.019 | **+0.710** | 0.84 → 2.27 |
-| armpw v corstorm | −0.234 ±0.066 | +0.253 ±0.016 | +0.487 | 0.78 → 1.36 |
-| corak v armrock | −0.021 ±0.082 | +0.381 ±0.033 | +0.402 | 0.97 → 1.61 |
-| armpw v corthud | −0.423 ±0.033 | −0.052 ±0.064 | +0.372 | 0.58 → 0.94 |
-| corak v armham | −0.419 ±0.022 | −0.056 ±0.062 | +0.363 | 0.59 → 0.95 |
-| **armrock v corak** | +0.111 ±0.069 | −0.143 ±0.036 | **−0.254** | 1.13 → 0.86 |
+| armpw v corllt | −0.182 ±0.035 | +0.570 ±0.031 | **+0.753** | 0.82 → 2.33 |
+| corak v armllt | −0.070 ±0.049 | +0.613 ±0.030 | **+0.683** | 0.91 → 2.55 |
+| corak v armrock | −0.153 ±0.041 | +0.426 ±0.031 | +0.580 | 0.84 → 1.74 |
+| armpw v corthud | −0.477 ±0.020 | +0.094 ±0.040 | +0.571 | 0.52 → 1.10 |
+| corak v armham | −0.418 ±0.020 | +0.081 ±0.037 | +0.499 | 0.59 → 1.10 |
+| armpw v corstorm | −0.312 ±0.035 | +0.135 ±0.045 | +0.447 | 0.70 → 1.18 |
+| armham v corak | +0.425 ±0.034 | +0.355 ±0.043 | −0.071 | 1.73 → 1.54 |
+
+**A correction to the first pass.** The pre-correction batches put Rocketeers against Grunts at −0.254 and I
+reported it as the policy's one clear cost. Re-run it is −0.056, and the Rocketeer's row mean is +0.02. Six
+duels a cell cannot separate a fifth of a margin from noise, and that cell was noise. The claim that a slow
+fragile long-ranged unit is hurt by spreading out is **not supported by this harness**; the engine's own spacing
+tables still say it (armrock v corak −0.03 tight against −0.23 wide), and those have more duels behind them, so
+the question is open rather than settled either way.
 
 So there are two mechanisms, not one, and only the first was designed for:
 
@@ -160,17 +171,16 @@ So there are two mechanisms, not one, and only the first was designed for:
    predicts nothing here (below): what it is missing is that a *blob* also walks in as a column and feeds itself
    to a tower a few at a time.
 
-The one clear cost, Rocketeers against Grunts (−0.254), is the same shape as the tables' own −0.20 from spacing:
-a slow, fragile, long-ranged unit needs its neighbours, and spread out it is run down one at a time.
+There is no clear cost anywhere in the matrix: the worst cell is −0.071 and the worst row mean −0.01.
 
 ### 3. Where the simulator and the engine disagree
 
 Per pairing, the gain the simulator predicts against the gain the engine measured, over the same 28 pairings at
 the same counts:
 
-- mean gain: simulated +0.237, engine +0.131 — overstated by about 1.8x, as in check 1;
-- sign agreement 10 of the 15 pairings where the engine moved by more than 0.05;
-- **correlation 0.27, slope 0.31**: the simulator is a poor ranker of which matchup the policy pays in.
+- mean gain: simulated +0.237, engine +0.146 — overstated by about 1.6x, as in check 1;
+- sign agreement 11 of the 19 pairings where the engine moved by more than 0.05 (58 %, barely better than a coin);
+- **correlation 0.36, slope 0.42**: the simulator is a poor ranker of which matchup the policy pays in.
 
 The two biggest engine gains are the two the simulator misses completely: raiders against a tower line, where it
 predicts nothing at all. **The engine is right; the simulator's answer was used to choose what to test, not what

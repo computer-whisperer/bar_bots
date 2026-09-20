@@ -244,26 +244,31 @@ armies they had not counted at the same rate.
 **Used by.** H-ARMY-WAVE-GATE (as a criticism of its input, not yet a change).
 
 ### K-army-blob-attack-move-wastes-the-raiders
-**Claim.** Sending a wave to one point makes it fight as a blob, and a blob is the worst formation our tier-1 raiders
-can be in. Spreading the same army over a block 110 elmos between neighbours is worth about a fifth of the metal it
-trades, and essentially all of that belongs to Pawns and Grunts: over 28 tier-1 pairings in the engine, metal killed
-per metal lost went 1.11 to 1.31, with a mean margin gain of +0.41 for Pawn and +0.46 for Grunt against +0.05 or less
-for Centurion, Thud, Mace, Aggravator and Rocketeer. Two mechanisms, not one: the blob feeds two or three units to
-every area shell (Mace and Thud 36 elmos, Rocketeer and Aggravator 48), and — the larger effect — a blob of
-180-range raiders cannot get more than its front rank inside its own range of a target, so it walks into a tower line
-a few at a time. Rocketeers are the exception and lose by spreading (−0.25 against Grunts): a slow fragile
-long-ranged unit needs its neighbours.
+**Claim.** Sending a wave to one point makes it fight as a blob, and a blob is the worst formation our tier-1
+raiders can be in. Spreading the same army over a block 110 elmos between neighbours is worth about a fifth of the
+metal it trades, and essentially all of that belongs to Pawns and Grunts: over 28 tier-1 pairings in the engine,
+metal killed per metal lost went 1.09 to 1.30, with a mean margin gain of +0.47 for Grunt and +0.47 for Pawn
+against ±0.05 or less for every other unit. Two mechanisms, not one: the blob feeds two or three units to every
+area shell (Mace and Thud 36 elmos, Rocketeer and Aggravator 48), and — the larger effect — a blob of 180-range
+raiders cannot get more than its front rank inside its own range of a target, so it walks into a tower line a few
+at a time.
 **Status.** supported (2026-09-20) in the engine duel harness; **it does not reach the arena** — the
-`micro-spread` A/B is flat (K-army-a-real-wave-is-not-a-blob says why).
-**Evidence.** `docs/studies/micro-combat.md`; batches `micro-block-off` / `micro-block-on` (28 pairings x 6 duels an
-arm, equal metal at 1200, spawn spacing 56), compared with `run/duel_ab.py`. Biggest cells: Grunt against Sentry
-−0.193 to +0.652, Pawn against Guard −0.150 to +0.560. The behaviour was confirmed before the result: `spread_x` in
-`duels.csv` (RMS distance of an army's units from its own centre at the first shot) rose, per pairing, from 46-140 to 61-184 elmos
-while the opponent's did not move. Consistent with K-units-duel-spacing-decides-area-damage, measured from the other
-end (both sides loose) in the 2026-09-19 tables.
+`micro2-spread` A/B is flat (K-army-a-real-wave-is-not-a-blob says why).
+**Evidence.** `docs/studies/micro-combat.md`; batches `micro2-off` / `micro2-on` (28 pairings x 6 duels an arm,
+equal metal at 1200, spawn spacing 56), compared with `run/duel_ab.py`. Biggest cells: Pawn against Guard −0.182
+to +0.570, Grunt against Sentry −0.070 to +0.613. The behaviour was confirmed before the result: `spread_x` in
+`duels.csv` (RMS distance of an army's units from its own centre at the first shot) rose from a mean 81 to 131
+elmos while the opponent's stayed at 94. Consistent with K-units-duel-spacing-decides-area-damage, measured from
+the other end (both sides loose) in the 2026-09-19 tables.
+**Retracted from the first pass.** An earlier run of this A/B, on an implementation since corrected, put
+Rocketeers against Grunts at −0.254 and it was reported as the policy's one clear cost. Re-run it is −0.056 and
+the Rocketeer's row mean is +0.02: six duels a cell cannot separate a fifth of a margin from noise. The engine's
+own spacing tables still say spreading hurts that pairing (−0.03 tight against −0.23 wide) and have more duels
+behind them, so the question is open, not settled either way. **The raw data of the first pass was lost with the
+worktree it lived in and cannot be re-examined.**
 **Would be wrong if.** An arena arm with H-MICRO-SPREAD off traded metal at least as well as one with it on, or if
-the gain in the duels came from the fight taking longer rather than from the formation (contact time rises with the
-spread order and was not separated).
+the gain in the duels came from the fight taking longer rather than from the formation (contact time rises with
+the spread order and was not separated).
 **Used by.** H-MICRO-SPREAD.
 
 ### K-army-withdrawing-a-hurt-soldier-saves-metal-and-loses-the-fight
