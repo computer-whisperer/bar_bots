@@ -91,13 +91,13 @@ impl Brain {
         // Not the commander's to switch off: every other condition is a threat, and a commander woken only by threats
         // defends four extractors for half an hour.
         let stagnant = tick.frame - self.wake.growth_frame.max(self.wake.last_stagnation_wake);
-        if stagnant >= STAGNATION_FRAMES && field.score.free_spots_ours > 0 {
+        if stagnant >= STAGNATION_FRAMES && field.score.free_spots > 0 {
             self.wake.last_stagnation_wake = tick.frame;
             reasons.push(format!(
-                "no growth: we have not held more than {} extractors for {} min, with {} free spots on our side of the map",
+                "no growth: we have not held more than {} extractors for {} min, with {} free spots we can walk to",
                 self.wake.extractor_peak,
                 (tick.frame - self.wake.growth_frame) / (60 * FRAMES_PER_SECOND),
-                field.score.free_spots_ours
+                field.score.free_spots
             ));
         }
 

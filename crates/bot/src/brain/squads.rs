@@ -204,20 +204,30 @@ impl Brain {
                     .collect()
             })
             .unwrap_or_default();
+        let enemy_extractors: Vec<Vec3> = self
+            .enemy_buildings
+            .values()
+            .filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0))
+            .map(|(_, pos, _)| *pos)
+            .collect();
+        let our_extractors: Vec<Vec3> = own.iter().filter(|u| u.def == kit.extractor).map(|u| u.pos).collect();
+        let held = |spot: Vec3, by: &[Vec3]| by.iter().any(|p| p.dist2d(spot) < 100.0);
         let free: Vec<Vec3> = self
             .world
             .hello
             .metal_spots
             .iter()
-            .filter(|s| self.spot_is_ours(**s) && !own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(**s) < 100.0))
+            .filter(|s| self.reachable_on_foot(**s))
+            .filter(|s| !held(**s, &our_extractors) && !held(**s, &enemy_extractors))
             .copied()
             .collect();
+        let recent = |seen: &i32| tick.frame - seen < 3 * 60 * FRAMES_PER_SECOND;
         let metal = |u: &&OwnUnit| self.world.def(u.def).map_or(0.0, |d| d.metal_cost);
         let score = Score {
             extractors: own.iter().filter(|u| u.def == kit.extractor && !u.being_built).count(),
             extractor_peak: self.wake.extractor_peak,
             seconds_since_growth: (tick.frame - self.wake.growth_frame) / FRAMES_PER_SECOND,
-            free_spots_ours: free.len(),
+            free_spots: free.len(),
             free_spots_near: free.iter().filter(|s| self.walk_from_home(**s) < SCORE_NEAR).count(),
             soldiers: soldiers.len(),
             army_metal: soldiers.iter().map(metal).sum::<f32>() as u32,
@@ -225,10 +235,9 @@ impl Brain {
             metal_income: tick.snapshot.metal.income,
             trend: [3, 6].into_iter().filter_map(|m| self.minutes_ago(tick.frame, m).map(|(x, income, army)| (m, x, income, army))).collect(),
             extractors_lost_3_min: self.wake.losses.len(),
-            enemy_extractors_seen: self.enemy_buildings.values().filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0)).count(),
-            enemy_soldiers_seen_metal: self.enemy_soldiers.values().map(|(def, _)| self.world.def(*def).map_or(0.0, |d| d.metal_cost)).sum::<f32>() as u32,
-            enemy_soldiers_seen_lately: self.enemy_soldiers.values().filter(|(_, seen)| tick.frame - seen < 2 * 60 * FRAMES_PER_SECOND).count(),
-            enemy_soldiers_seen: self.enemy_soldiers.len(),
+            enemy_spots_seen: enemy_extractors.len(),
+            enemy_soldiers_seen: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).count(),
+            enemy_soldiers_seen_metal: self.enemy_soldiers.values().filter(|(_, seen)| recent(seen)).map(|(def, _)| self.world.def(*def).map_or(0.0, |d| d.metal_cost)).sum::<f32>() as u32,
         };
         *shared.field.lock().unwrap() = Field {
             score,

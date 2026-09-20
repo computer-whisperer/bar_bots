@@ -63,7 +63,8 @@ Your levers:
   as it needs them (`min_constructors` in `set_directives` raises the floor).
 - `request_turret`: a light turret near a position, built by the next free constructor. Squads fight far better under one.
 - `set_directives`: the bot's standing orders. `economy_focus` (expand, production, defence, energy) reorders what
-  constructors do. `expansion_radius` limits how far on foot from home constructors take spots: a small radius means no
+  constructors do. `expansion_radius` is how far on foot from home constructors take spots; left unset the bot keeps to the half of the
+  map nearer to us than to the opponent, and a radius replaces that rule, so it is also how you take the opponent's side: a small radius means no
   growth, so set it to what you intend to hold, and move the army out to hold it, rather than shrinking it to what the army
   covers from home. `commander_station` puts the commander somewhere (it is a strong builder and fighter, and the game is
   lost the moment it dies). Also wave size, stance, army station, attack target. Directives expire; renew the ones you mean.

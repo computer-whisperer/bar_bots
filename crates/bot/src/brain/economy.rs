@@ -431,8 +431,15 @@ impl Brain {
             } else {
                 // H-ECO-REACH: no farther from home than the army can answer for. The far line of spots (2000-2400
                 // out) was bought and swept in every game, constructors and all.
-                let reach = expansion_radius.map_or(EXPANSION_REACH + EXPANSION_REACH_PER_SOLDIER * soldiers as f32, |radius| radius as f32);
-                self.spot_is_ours(spot) && (!self.enabled("H-ECO-REACH") && expansion_radius.is_none() || self.walk_from_home(spot) <= reach)
+                // A commander's radius is the whole rule: it may reach past the half of the map the bot keeps to on its
+                // own (in commander game 5 it could not, and sat on 7 extractors with 2.7 times the opponent's army).
+                match expansion_radius {
+                    Some(radius) => self.reachable_on_foot(spot) && self.walk_from_home(spot) <= radius as f32,
+                    None => {
+                        let reach = EXPANSION_REACH + EXPANSION_REACH_PER_SOLDIER * soldiers as f32;
+                        self.spot_is_ours(spot) && (!self.enabled("H-ECO-REACH") || self.walk_from_home(spot) <= reach)
+                    }
+                }
             }
         };
         let (index, spot) = self

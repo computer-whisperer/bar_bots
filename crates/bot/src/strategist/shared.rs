@@ -229,23 +229,23 @@ pub struct Score {
     pub extractor_peak: usize,
     /// Game seconds since our extractor count last reached a new high.
     pub seconds_since_growth: i32,
-    /// Free metal spots nearer to us than to the opponent on foot, and how many of them lie within 2500 of home.
-    pub free_spots_ours: usize,
+    /// Metal spots we can walk to that nobody is known to hold: all of them, and those within 2500 walk of home.
+    pub free_spots: usize,
     pub free_spots_near: usize,
+    /// Spots the opponent is known to hold (its extractors seen and not seen dead).
+    pub enemy_spots_seen: usize,
     pub soldiers: usize,
     pub army_metal: u32,
     pub soldiers_near_home: usize,
     /// Opponent extractors seen and not known to be dead: a floor, since we see little of their side.
-    pub enemy_extractors_seen: usize,
     pub metal_income: f32,
     /// (minutes ago, extractors, metal income, army metal) for 3 and 6 minutes ago, when the game is that old.
     pub trend: Vec<(i32, usize, f32, u32)>,
     pub extractors_lost_3_min: usize,
-    /// Metal of the opponent's soldiers we have seen and not seen die: a floor on its army, usually far below it.
-    pub enemy_soldiers_seen_metal: u32,
-    /// How many of those were seen in the last two minutes.
-    pub enemy_soldiers_seen_lately: usize,
+    /// The opponent's soldiers seen in the last three minutes and not seen to die, and their metal. Older sightings
+    /// are left out: most of its soldiers die where we cannot see, and a count that never forgets only grows.
     pub enemy_soldiers_seen: usize,
+    pub enemy_soldiers_seen_metal: u32,
 }
 
 #[derive(Clone, Debug, Serialize)]

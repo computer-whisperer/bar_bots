@@ -37,19 +37,18 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     let s = &field.score;
     let clock = |seconds: i32| format!("{}:{:02}", seconds / 60, seconds % 60);
     lines.push(format!(
-        "score: extractors {} (most held {}, no new high for {}; free spots on our side {}, {} of them within 2500 walk of home) | army {} soldiers worth {} metal, {} of them within 800 of our start | opponent: we see only what our units see. Extractors seen {}. Soldiers seen and not seen dead: {} worth {} metal ({} of them seen in the last 2 min); that is a floor, not its army",
+        "score: extractors {} (most held {}, no new high for {}; free spots we can walk to {}, {} of them within 2500 walk of home; the opponent is known to hold {}) | army {} soldiers worth {} metal, {} of them within 800 of our start | opponent: we see only what our units see. Its soldiers seen in the last 3 min and not seen to die: {} worth {} metal; its army is at least that and may be much more",
         s.extractors,
         s.extractor_peak,
         clock(s.seconds_since_growth),
-        s.free_spots_ours,
+        s.free_spots,
         s.free_spots_near,
+        s.enemy_spots_seen,
         s.soldiers,
         s.army_metal,
         s.soldiers_near_home,
-        s.enemy_extractors_seen,
         s.enemy_soldiers_seen,
-        s.enemy_soldiers_seen_metal,
-        s.enemy_soldiers_seen_lately
+        s.enemy_soldiers_seen_metal
     ));
     lines.push(format!(
         "eco: metal {:.0} ({:+.1}/-{:.1}), energy {:.0}/{:.0} ({:+.0}) | extractors {} constructors {} labs {} turrets {} converters {}",
