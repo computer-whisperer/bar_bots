@@ -18,7 +18,7 @@ const fail = (message) => {
   chrome.kill();
   process.exit(1);
 };
-setTimeout(() => fail("timed out"), 60000);
+setTimeout(() => fail("timed out"), 120000);
 
 let stderr = "";
 chrome.stderr.on("data", async (chunk) => {
@@ -60,6 +60,15 @@ function run(socket) {
     const report = { loaded, subtitle: await evaluate("document.getElementById('subtitle').textContent") };
 
     // Scrub: a click at 60 % of the timeline lands at about 60 % of the game.
+    // A match still being played: the page follows it, and stops following once the reader scrubs.
+    if (await evaluate("!viewer.match.result")) {
+      const first = await evaluate("viewer.match.lastFrame");
+      if (!(await evaluate("document.getElementById('follow').checked && viewer.frame === viewer.match.lastFrame"))) fail("a live match does not open on its newest sample");
+      for (let i = 0; i < 450 && (await evaluate("viewer.match.lastFrame")) === first; i++) await sleep(100);
+      report.live = { from: first, to: await evaluate("viewer.match.lastFrame"), following: await evaluate("viewer.frame === viewer.match.lastFrame") };
+      if (!(report.live.to > first)) fail("the live match did not grow in 45 s (is it paused for a long turn, or over?)");
+      if (!report.live.following) fail("the playhead did not follow the live match");
+    }
     const [tx, ty] = await centre("#timeline", 0.6, 0.5);
     await mouse("mousePressed", tx, ty, 1);
     await mouse("mouseReleased", tx, ty);

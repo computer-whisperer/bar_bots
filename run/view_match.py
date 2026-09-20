@@ -7,6 +7,9 @@ Serves viewer/ at / and the match directory at /match/, read-only, until interru
 every interface, IPv6 and IPv4, so the viewer can be opened from another machine on the network. That exposes the
 match directory (logs, records, transcripts) to that network; `--bind 127.0.0.1` keeps it to this machine.
 A batch directory is accepted too and means its match 00.
+
+A match still being played can be watched: the viewer asks for each file's new bytes (`?from=<byte offset>`) every few
+seconds and follows the newest sample.
 """
 import argparse, http.server, json, os, socket, sys, webbrowser
 
@@ -35,7 +38,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if self.path.startswith("/match/") and "?from=" in self.path:
+            return self.send_tail()
         super().do_GET()
+
+    def send_tail(self):
+        """The file from a byte offset on: how the viewer follows a growing record without fetching it whole."""
+        path, _, offset = self.path.partition("?from=")
+        try:
+            with open(self.translate_path(path), "rb") as f:
+                f.seek(int(offset))
+                body = f.read()
+        except (OSError, ValueError):
+            return self.send_error(404)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("X-From", str(int(offset)))  # tells the viewer this is a tail, not the whole file
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")  # a match still being played grows between reloads

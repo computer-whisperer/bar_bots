@@ -75,8 +75,13 @@ extractors sits between them.
 Plain HTML, CSS and JS, no build step, nothing fetched from outside. `viewer/record.js` is the parser and model (also
 runs under node), `viewer/app.js` the page. URL parameters: `t=<seconds>` start position, `record=<file>`, `bg=<image URL>`.
 Terrain: an image at `viewer/maps/<map name>.png` (whole map, north up) is drawn under the map when present; none ship.
+Live: a record with no `result` line is a match still being played. The page then asks the server every 3 s for each
+file's new bytes (`<file>?from=<byte offset>`, answered by `run/view_match.py` with an `X-From` header; any other server
+sends the whole file and the page copes), parses up to the last complete line, and with "follow live" ticked stays on the
+newest sample. Scrubbing, stepping or playing unticks it; ticking it again jumps to the newest sample. Opened details and
+the scroll position of the decision list survive each refresh. Polling stops when the result line arrives.
 Tests: `node viewer/test/smoke.js <match dir>` (model, truncated file) and `node viewer/test/browser.js <url>` (the real
-page in headless Chromium: load, scrub, play, hover, toggles; fails on any page error).
+page in headless Chromium: load, follow a live match if it is one, scrub, play, hover, toggles; fails on any page error).
 
 ## Terrain
 

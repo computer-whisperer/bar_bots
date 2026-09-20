@@ -2,6 +2,8 @@
 //
 // URL parameters: match=<base URL of the match files, default "match/">, record=<file name>, t=<seconds>,
 // bg=<image URL drawn under the map>. Without a server, use "Open files" and pick the record and its siblings.
+// A record without a result line is a match still being played: its files are polled for new bytes
+// (run/view_match.py serves `?from=<offset>`) and, with "follow live" ticked, the playhead stays on the newest sample.
 "use strict";
 
 (() => {
@@ -35,31 +37,87 @@
     }
   }
 
-  async function boot() {
-    const params = new URLSearchParams(location.search);
-    const base = params.get("match") || "match/";
-    let recordName = params.get("record");
-    const index = await fetchText(`${base}index.json`);
-    const files = index ? JSON.parse(index).files : [];
-    if (!recordName) {
-      recordName = files.find((f) => /^record-.*\.jsonl$/.test(f));
-      if (index && !recordName) return status(`No record-*.jsonl in the match directory (was it played with WITHIN_REASON_RECORD=1?). Files: ${files.join(", ")}`);
+  /// A file of the match being followed: the text so far and how many bytes of the file it is.
+  const pulled = new Map();
+  const POLL_MS = 3000;
+
+  /// Fetches what a file has gained since the last pull. True if it grew.
+  async function pull(base, name) {
+    const file = pulled.get(name) || { bytes: 0, text: "", decoder: new TextDecoder() };
+    try {
+      const response = await fetch(`${base}${name}?from=${file.bytes}`);
+      if (!response.ok) return false;
+      const chunk = new Uint8Array(await response.arrayBuffer());
+      // A server that does not know `from` (anything but run/view_match.py) sends the whole file every time.
+      const tail = response.headers.get("X-From") === String(file.bytes);
+      if (tail ? !chunk.length : chunk.length === file.bytes) return false;
+      if (!tail) Object.assign(file, { bytes: 0, text: "", decoder: new TextDecoder() });
+      file.text += file.decoder.decode(chunk, { stream: true });
+      file.bytes += chunk.length;
+      pulled.set(name, file);
+      return true;
+    } catch {
+      return false;
     }
-    const record = recordName && (await fetchText(base + recordName));
-    if (!record) return status("No match loaded. Start with run/view_match.py <match dir>, or use Open files.");
-    const texts = { record };
+  }
+
+  /// The text up to its last complete line: the writer may be half way through one.
+  const complete = (name) => {
+    const text = (pulled.get(name) || {}).text;
+    return text ? text.slice(0, text.lastIndexOf("\n") + 1) : null;
+  };
+
+  /// Pulls every file of the match; returns the texts `open` takes, or null when nothing has changed.
+  async function pullMatch(live) {
+    const index = await fetchText(`${live.base}index.json`);
+    const files = index ? JSON.parse(index).files : [];
+    if (!live.record) live.record = files.find((f) => /^record-.*\.jsonl$/.test(f));
+    if (!live.record) return { files };
+    let grew = await pull(live.base, live.record);
+    const record = complete(live.record);
+    if (!record) return { files };
     const header = JSON.parse(record.slice(0, record.indexOf("\n")));
     const siblings = header.siblings || {};
     // Transcripts the header names, and any other the directory lists (a record and a transcript brought together by hand).
-    const logs = new Set([...(siblings.decision_logs || []), ...files.filter((f) => /^strategist-.*\.jsonl$/.test(f))]);
-    texts.strategist = (await Promise.all([...logs].map((name) => fetchText(base + name)))).filter(Boolean);
-    texts.engineLog = await fetchText(base + (siblings.engine_log || "engine.log"));
-    texts.botLog = await fetchText(base + (siblings.bot_log || "bot.log"));
-    texts.truth = await fetchText(base + `truth-${header.ai_id}.jsonl`);
-    open(texts, Number(params.get("t") || 0) * WR.FPS);
+    const logs = [...new Set([...(siblings.decision_logs || []), ...files.filter((f) => /^strategist-.*\.jsonl$/.test(f))])];
+    const names = { engineLog: siblings.engine_log || "engine.log", botLog: siblings.bot_log || "bot.log", truth: `truth-${header.ai_id}.jsonl` };
+    for (const name of [...logs, ...Object.values(names)]) grew = (await pull(live.base, name)) || grew;
+    if (!grew) return null;
+    return {
+      files,
+      texts: { record, strategist: logs.map(complete).filter(Boolean), engineLog: complete(names.engineLog), botLog: complete(names.botLog), truth: complete(names.truth) },
+    };
+  }
+
+  async function boot() {
+    const params = new URLSearchParams(location.search);
+    const live = { base: params.get("match") || "match/", record: params.get("record") };
+    const first = await pullMatch(live);
+    if (!first.texts) {
+      if (first.files.length) return status(`No record-*.jsonl in the match directory (was it played with WITHIN_REASON_RECORD=1?). Files: ${first.files.join(", ")}`);
+      return status("No match loaded. Start with run/view_match.py <match dir>, or use Open files.");
+    }
+    open(first.texts, Number(params.get("t") || 0) * WR.FPS);
     const bg = params.get("bg") || `maps/${encodeURIComponent(view.match.header.map.name)}.png`;
     loadBackground(bg);
-    loadTerrain(base, view.match.header.terrain);
+    loadTerrain(live.base, view.match.header.terrain);
+    if (!view.match.result) follow(live, !params.get("t"));
+  }
+
+  /// Keeps a match that is still being played up to date, until its result line arrives.
+  function follow(live, stayOnNewest) {
+    $("follow-label").hidden = false;
+    $("follow").checked = stayOnNewest;
+    if (stayOnNewest) seek(view.match.lastFrame);
+    const timer = setInterval(async () => {
+      const next = await pullMatch(live);
+      if (!next || !next.texts) return;
+      open(next.texts, $("follow").checked ? Infinity : view.frame, true);
+      if (view.match.result) {
+        clearInterval(timer);
+        $("follow-label").hidden = true;
+      }
+    }, POLL_MS);
   }
 
   // The record's terrain grid (docs/harness/record-format.md): heights then slopes, rendered once into three
@@ -147,7 +205,8 @@
     open(texts, 0);
   }
 
-  function open(texts, frame) {
+  /// `refresh`: the same match with more of it; what the reader has open and where they have scrolled is kept.
+  function open(texts, frame, refresh = false) {
     let match;
     try {
       match = WR.parseRecord(texts.record);
@@ -168,8 +227,9 @@
     view.posts = WR.squadPosts(match.decisions, match.lastFrame);
     view.frame = Math.min(frame, match.lastFrame);
     describeMatch();
-    buildDecisionList();
-    buildLegend();
+    if (refresh) rebuildDecisionList();
+    else buildDecisionList();
+    if (!refresh) buildLegend();
     renderAll();
     document.body.dataset.loaded = `${match.samples.length} samples`;
   }
@@ -800,6 +860,26 @@
     if (!view.decisionItems.length) list.append(el("li", null, "no decision records of the selected kinds"));
   }
 
+  /// Rebuilds the list for a match that has grown, keeping the opened details open and the scroll position.
+  function rebuildDecisionList() {
+    const list = $("decisions");
+    const key = (d) => `${d.closest("li").querySelector(".when").textContent} ${d.querySelector("summary").textContent}`;
+    const opened = new Set([...list.querySelectorAll("details[open]")].map(key));
+    const scroll = list.scrollTop;
+    const current = view.currentDecision;
+    buildDecisionList();
+    for (const d of list.querySelectorAll("details")) if (opened.has(key(d))) d.open = true;
+    // Following the newest decision scrolls by itself (renderDecisions); otherwise stay where the reader was.
+    if (!$("follow").checked) {
+      view.currentDecision = current;
+      list.scrollTop = scroll;
+      view.decisionItems.forEach((item, i) => {
+        item.li.classList.toggle("future", i > current);
+        item.li.classList.toggle("current", i === current);
+      });
+    }
+  }
+
   function renderDecisions() {
     const items = view.decisionItems;
     const current = WR.indexAt(items, view.frame);
@@ -860,8 +940,15 @@
   }
 
   $("play").addEventListener("click", () => setPlaying(!view.playing));
+  // Going anywhere by hand stops following the live match; ticking the box again jumps back to the newest sample.
+  const leaveLive = () => ($("follow").checked = false);
+  $("follow").addEventListener("change", (e) => e.target.checked && view.match && seek(view.match.lastFrame));
+  $("play").addEventListener("click", leaveLive);
+  $("back").addEventListener("click", leaveLive);
+  $("timeline").addEventListener("mousedown", leaveLive);
   $("back").addEventListener("click", () => seek(view.frame - 10 * WR.FPS));
   $("forward").addEventListener("click", () => seek(view.frame + 10 * WR.FPS));
+  $("forward").addEventListener("click", leaveLive);
   $("speed").addEventListener("change", (e) => (view.speed = Number(e.target.value)));
   $("files").addEventListener("change", (e) => openFiles(e.target.files));
   $("timeline").addEventListener("mousedown", (e) => view.match && seek(timelineFrame(e)));
@@ -885,6 +972,7 @@
     else if (e.key === "ArrowLeft") seek(view.frame - (e.shiftKey ? 60 : 10) * WR.FPS);
     else if (e.key === "ArrowRight") seek(view.frame + (e.shiftKey ? 60 : 10) * WR.FPS);
     else return;
+    leaveLive();
     e.preventDefault();
   });
   new ResizeObserver(() => renderAll()).observe(document.body);
