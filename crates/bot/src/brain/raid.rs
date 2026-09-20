@@ -168,7 +168,7 @@ impl Brain {
             };
         let outmatched = outmatched && !too_small_for_commander;
         match target {
-            Some(target) if too_small_for_commander && party.len() >= 2 => {
+            Some(target) if too_small_for_commander && party.len() >= PARTY => {
                 // Too few for the commander: wait for the rest out of its reach, as a player gathers at the edge of a
                 // base, rather than walk home and lose the ground already covered.
                 self.raid.target = Some(target);
@@ -181,7 +181,7 @@ impl Brain {
                     commands.extend(party.iter().map(|u| Command::Move { unit: u.id, to: wait, queue: false }));
                 }
             }
-            Some(target) if !outmatched && party.len() >= 2 => {
+            Some(target) if !outmatched && party.len() >= PARTY => {
                 if self.raid.target != Some(target) {
                     self.raid.last_order_frame = 0;
                 }
@@ -203,7 +203,7 @@ impl Brain {
             _ => {
                 eprintln!(
                     "[ai {}] f={} pressure: party of {} comes home ({})",
-                    self.ai(), tick.frame, party.len(), if outmatched { "outmatched" } else if party.len() < 2 { "too few left" } else { "no target" }
+                    self.ai(), tick.frame, party.len(), if outmatched { "outmatched" } else if party.len() < PARTY { "too few left" } else { "no target" }
                 );
                 let station = self.last_station;
                 commands.extend(party.iter().map(|u| Command::Move { unit: u.id, to: station, queue: false }));

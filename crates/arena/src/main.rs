@@ -3,7 +3,7 @@
 //! the start script, engine log, bot log and replay.
 //!
 //! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
-//!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out]
+//!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out]
 //!              [--side armada|cortex] [--corner nw|se]   (default: alternate; `nw` is the first start box, whatever --boxes says)
 //!              [--ours N] [--allies N] [--enemies N] [--ffa]   (seats of ours, allied BARb seats, enemy BARb seats, default 1 0 1;
 //!                                                               --ffa: every enemy seat is its own team)
@@ -22,6 +22,7 @@
 //!              [--commander-each]   (a commander of its own for every seat of ours)
 //!              [--commander-model ID]   (the session's model instead of the role's usual one, e.g. claude-opus-5)
 
+mod place;
 mod record;
 mod script;
 
@@ -54,6 +55,8 @@ struct Options {
     max_minutes: u32,
     label: String,
     mirror: bool,
+    /// `--place`: the arena chooses our commander's start inside its box by the opening search (`place.rs`).
+    place: bool,
     swap_corners: bool,
     /// End a game once it is settled (see [`Settled`]); `--play-out` turns it off.
     call_settled: bool,
@@ -148,7 +151,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "commander_each": options.commander_each, "commander_model": options.commander_model, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "place": options.place, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "commander_each": options.commander_each, "commander_model": options.commander_model, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -239,6 +242,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         we_are_first: options.corner.map_or(index.is_multiple_of(2), |north_west| north_west != options.swap_corners),
         our_side: options.side.unwrap_or(if (index / 2).is_multiple_of(2) { "Armada" } else { "Cortex" }),
         mirror: options.mirror,
+        starts: Vec::new(),
         swap_corners: options.swap_corners,
         ours: options.ours,
         allies: options.allies,
@@ -246,6 +250,15 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         free_for_all: options.free_for_all,
         boxes: options.boxes,
     };
+    let mut setup = setup;
+    // `--place`: our spawn is the opening search's choice inside our box (a 1v1 only: the opponent keeps the spawn it
+    // had in the earlier match the map is read from). In team order, which is ally-team order.
+    if options.place && options.ours == 1 && options.allies == 0 && options.enemies == 1 {
+        match place::choose_starts(repo, &options.map, setup.our_rect(), setup.their_rect(), &setup.our_side.to_lowercase()[..3]) {
+            Ok((ours, theirs)) => setup.starts = if setup.we_are_first { vec![ours, theirs] } else { vec![theirs, ours] },
+            Err(why) => eprintln!("match {index}: not placed: {why}"),
+        }
+    }
     copy_tree(&repo.join("run/match-template"), &dir)?;
     let cache_template = repo.join("run/cache-template");
     if cache_template.is_dir() {
@@ -515,6 +528,7 @@ fn parse_args() -> Options {
         max_minutes: 40,
         label: "batch".into(),
         mirror: false,
+        place: false,
         swap_corners: false,
         call_settled: true,
         strategist: false,
@@ -541,6 +555,10 @@ fn parse_args() -> Options {
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
+            "--place" => {
+                options.place = true;
+                continue;
+            }
             "--mirror" => {
                 options.mirror = true;
                 continue;
@@ -630,7 +648,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
     std::process::exit(2)
 }
 

@@ -56,6 +56,8 @@ pub struct MatchSetup<'a> {
     pub our_side: &'static str,
     /// Give the opponents our faction instead of the other one.
     pub mirror: bool,
+    /// Start positions chosen before the game (`place.rs`), per team in team order; none means the game's own placement.
+    pub starts: Vec<(f32, f32)>,
 }
 
 struct Seat {
@@ -72,6 +74,15 @@ impl MatchSetup<'_> {
     /// The start box our ally team plays from, by name.
     pub fn our_box(&self) -> &'static str {
         self.boxes.rect(self.box_of(self.our_ally_team() as usize)).1
+    }
+
+    /// Our box and the first enemy ally team's, as fractions of the map [left, top, right, bottom].
+    pub fn our_rect(&self) -> [f32; 4] {
+        self.boxes.rect(self.box_of(self.our_ally_team() as usize)).0
+    }
+
+    pub fn their_rect(&self) -> [f32; 4] {
+        self.boxes.rect(self.box_of(1 - self.our_ally_team() as usize)).0
     }
 
     fn box_of(&self, ally_team: usize) -> usize {
@@ -113,12 +124,15 @@ impl MatchSetup<'_> {
             sections += &format!("\t[AI{team}] {{ Name=ai{team}; Team={team}; Host=0; {} }}\n", seat.ai);
         }
         for (team, seat) in seats.iter().enumerate() {
-            sections += &format!("\t[TEAM{team}] {{ TeamLeader=0; AllyTeam={}; Side={}; }}\n", seat.ally_team, seat.side);
+            let start = self.starts.get(team).map_or(String::new(), |(x, z)| format!(" StartPosX={x:.0}; StartPosZ={z:.0};"));
+            sections += &format!("\t[TEAM{team}] {{ TeamLeader=0; AllyTeam={}; Side={};{start} }}\n", seat.ally_team, seat.side);
         }
         for ally_team in 0..ally_teams {
             let [left, top, right, bottom] = self.boxes.rect(self.box_of(ally_team)).0;
             sections += &format!("\t[ALLYTEAM{ally_team}] {{ NumAllies=0; StartRectLeft={left}; StartRectTop={top}; StartRectRight={right}; StartRectBottom={bottom}; }}\n");
         }
+        // 3 (chosen before the game) takes the teams' StartPosX/Z; 2 lets the game place everyone.
+        let start_pos_type = if self.starts.is_empty() { 2 } else { 3 };
         format!(
             "[GAME]
 {{
@@ -130,7 +144,7 @@ impl MatchSetup<'_> {
 	AutohostIP=127.0.0.1;
 	AutohostPort={autohost_port};
 	MyPlayerName=arena;
-	StartPosType=2;
+	StartPosType={start_pos_type};
 	GameStartDelay=0;
 	FixedRNGSeed={seed};
 	NumPlayers=1;

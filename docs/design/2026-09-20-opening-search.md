@@ -113,3 +113,11 @@ time lost to walking, by minute, across settings of the knobs in arena batches; 
   raided away from minute 6. To be re-measured after the army's contact response is rebuilt. Not built: the priorities as input (section 3: the
   `build_priorities` tool, the pre-game turn), the first-contact weighting of the army term, the mid-game search.
   Step 4 (the commander unit forward and fighting): not started.
+- 2026-09-20, the user's ruling on the start position: where the commander starts inside its box is the first genuine
+  game input, and the search takes it either way: **forced** (a human placed us through the lobby, as BAR does for
+  every AI: the search plans from that point, and walks only where a step of the plan says so; no extra walk) or
+  **open** (the arena can place us: the search chooses the point inside the box and the arena writes it into the
+  script as the spawn). The LLM commander's `build_priorities` gets the point as a lever when that tool is built.
+  Not built yet; the arena needs the map's spots and boxes before the engine runs, which the bot can leave behind
+  from an earlier game on the map.
+

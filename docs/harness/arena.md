@@ -113,3 +113,12 @@ opening search's half second, a commander's turn) costs game time that it does n
 half a second of search was twenty game seconds of a standing commander. Batches before this date ran the heuristic
 without it (orders landed a frame or two late, nothing more).
 
+## Placing our commander (`--place`)
+With `--place` the arena chooses where our commander spawns inside its box (a 1v1 only): the opening search's best
+start (`crates/buildorder/src/start.rs`, ranked first by the user's rule of thumb, within reach of two extractor spots
+with a short walk to a third), run from the map as the latest earlier match on it recorded it (its record header, its
+`terrain-*.bin`, and the opponent's spawn from its truth file, which must lie in the opponent's box now). The script
+then carries `StartPosType=3` with `StartPosX/Z` per team; the opponent keeps the spawn it had. Without it, or when no
+such match exists, the game places everyone (`StartPosType=2`) and the log says why. In a game with people the lobby
+places an AI, so the bot itself never chooses: it plans from where it stands (the user's ruling, 2026-09-20).
+
