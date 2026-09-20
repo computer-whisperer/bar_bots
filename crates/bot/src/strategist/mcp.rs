@@ -158,7 +158,7 @@ fn tool_list() -> Value {
               "take_first": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
               "leave_alone": { "type": "array", "items": { "type": "integer", "minimum": 0 } } } } },
         { "name": "orders",
-          "description": "A whole turn in one call: every order you want to give, carried out in the order listed, `wait` last. Each entry names one of the other tools and its arguments, exactly as you would call it alone. Use this instead of separate calls: every separate call is another round trip with the game held.",
+          "description": "Your whole turn in one call, and it ENDS the turn: every order you want to give, carried out in the order listed, then the game resumes. Each entry names one of the other tools and its arguments, exactly as you would call it alone. Include a `wait` entry to change when you are next woken; without one the wake settings in force stand. Call nothing and write nothing after it.",
           "inputSchema": { "type": "object", "additionalProperties": false, "required": ["calls"], "properties": {
               "calls": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["tool"], "properties": {
                   "tool": { "type": "string", "enum": ["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"] },
@@ -181,7 +181,13 @@ fn tool_list() -> Value {
 /// The `orders` tool: several tool calls in one request. `wait` goes last wherever it was listed, since it ends the turn.
 fn orders(arguments: &Value, shared: &Shared) -> Result<String, String> {
     let calls = arguments["calls"].as_array().ok_or("calls must be a list")?;
-    let (waits, others): (Vec<&Value>, Vec<&Value>) = calls.iter().partition(|c| c["tool"] == "wait");
+    let (mut waits, others): (Vec<&Value>, Vec<&Value>) = calls.iter().partition(|c| c["tool"] == "wait");
+    // `orders` is the whole turn: with no `wait` listed the wake settings stand and the turn ends all the same. (In
+    // commander game 11 half the turns were `orders` and then a separate `wait`: a second request, 2 s against 5.)
+    let keep = json!({ "tool": "wait" });
+    if waits.is_empty() {
+        waits.push(&keep);
+    }
     let empty = json!({});
     let mut lines = Vec::new();
     for call in others.into_iter().chain(waits) {
