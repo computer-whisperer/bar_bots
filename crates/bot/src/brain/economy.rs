@@ -25,7 +25,15 @@ const MAX_LABS: usize = 8;
 const MAX_TURRETS: usize = 6;
 const MAX_CONVERTERS: usize = 40;
 /// An extractor beyond this distance from home gets a turret of its own.
-const OUTPOST_DISTANCE: f32 = 1200.0;
+/// Extractors farther from home than this want a turret of their own. It was 1200, which left the third and fourth
+/// spots of the north-west start (963 and 1199 out, past the base turret line) with none, and they died 3-5 times a game.
+const OUTPOST_DISTANCE: f32 = 500.0;
+/// H-ECO-HOT-SPOTS: a metal spot where we lost an extractor or a constructor is left alone for this long, unless a
+/// turret or soldiers cover it by then.
+const HOT_SPOT_FRAMES: i32 = 4 * 60 * 30;
+/// Soldiers this close to a spot, at least this many, count as cover.
+const COVER_RADIUS: f32 = 500.0;
+const COVER_SOLDIERS: usize = 3;
 const OUTPOST_GUARD_RADIUS: f32 = 350.0;
 /// BARb medium runs 4-6 constructors by minute 10 and 10-20 later; we ran 2-4 and never rebuilt what raids took (observe-2).
 const MAX_CONSTRUCTORS: usize = 10;
@@ -359,6 +367,7 @@ impl Brain {
             .iter()
             .enumerate()
             .filter(|(i, s)| !self.spot_claims.contains_key(i) && reachable(**s) && !self.is_unreachable(**s))
+            .filter(|(_, s)| !self.is_hot(**s, frame) || self.is_covered(**s, own, kit))
             .filter(|(_, s)| !own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
             .min_by(|(_, a), (_, b)| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))?;
         self.spot_claims.insert(index, frame);
@@ -380,6 +389,28 @@ impl Brain {
         Some(self.wreck_sites.swap_remove(index).0)
     }
 
+    /// Whether we lost an extractor or a constructor at this metal spot lately.
+    fn is_hot(&self, spot: Vec3, frame: i32) -> bool {
+        self.hot_spots.iter().any(|(hot, until)| *until > frame && hot.dist2d(spot) < SPOT_OCCUPIED_RADIUS)
+    }
+
+    /// A turret beside the spot, or a few soldiers standing by it.
+    fn is_covered(&self, spot: Vec3, own: &[OwnUnit], kit: &Kit) -> bool {
+        own.iter().any(|u| u.def == kit.turret && !u.being_built && u.pos.dist2d(spot) < OUTPOST_GUARD_RADIUS)
+            || own.iter().filter(|u| self.is_army(u, kit) && u.pos.dist2d(spot) < COVER_RADIUS).count() >= COVER_SOLDIERS
+    }
+
+    /// Notes the metal spot nearest a lost extractor or constructor as hot.
+    pub(super) fn note_hot_spot(&mut self, lost_at: Vec3, frame: i32) {
+        self.hot_spots.retain(|(_, until)| *until > frame);
+        let nearest = self.world.hello.metal_spots.iter().min_by(|a, b| a.dist2d(lost_at).total_cmp(&b.dist2d(lost_at)));
+        if let Some(spot) = nearest.filter(|s| s.dist2d(lost_at) < 400.0) {
+            let spot = Vec3 { y: 0.0, ..*spot };
+            self.hot_spots.retain(|(hot, _)| hot.dist2d(spot) > 1.0);
+            self.hot_spots.push((spot, frame + HOT_SPOT_FRAMES));
+        }
+    }
+
     /// The nearest far-flung extractor with no turret beside it; raiders pick those off first.
     fn unguarded_outpost(&self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Option<Vec3> {
         let guarded = |pos: Vec3| {
@@ -387,9 +418,13 @@ impl Brain {
             let on_its_way = self.jobs.iter().any(|(id, job)| *job == kit.turret && *id != builder.id);
             turret_near || on_its_way
         };
+        // Hot spots count as outposts to be: the turret goes up first, and the spot reopens once it stands.
+        let hot = self.hot_spots.iter().map(|(spot, _)| *spot).filter(|spot| self.spot_is_ours(*spot));
         own.iter()
-            .filter(|u| u.def == kit.extractor && u.pos.dist2d(self.home) > OUTPOST_DISTANCE && !guarded(u.pos))
+            .filter(|u| u.def == kit.extractor)
             .map(|u| u.pos)
+            .chain(hot)
+            .filter(|pos| pos.dist2d(self.home) > OUTPOST_DISTANCE && !guarded(*pos))
             .min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
     }
 
@@ -424,7 +459,16 @@ impl Brain {
         // H-PROD-CONSTRUCTOR-FLOOR
         let own_floor = if self.enabled("H-PROD-CONSTRUCTOR-FLOOR") { MIN_CONSTRUCTORS } else { 0 };
         let floor = self.directives.min_constructors.map_or(own_floor, |d| d.value);
-        (3 + extractors / 2).min(MAX_CONSTRUCTORS).max(floor)
+        // By the work there is, not by what we hold: a target that follows our extractor count is lowest exactly
+        // when raids have taken them and there is most to rebuild.
+        let free_spots = self
+            .world
+            .hello
+            .metal_spots
+            .iter()
+            .filter(|s| self.spot_is_ours(**s) && !own.iter().any(|u| u.def == kit.extractor && u.pos.dist2d(**s) < SPOT_OCCUPIED_RADIUS))
+            .count();
+        (2 + extractors / 3 + free_spots / 3).min(MAX_CONSTRUCTORS).max(floor)
     }
 
     /// What an idle factory queues next.

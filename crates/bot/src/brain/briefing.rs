@@ -73,6 +73,12 @@ impl Brain {
             }
             let Event::UnitDestroyed { unit, attacker } = event else { continue };
             let Some((def, pos)) = self.known_units.remove(unit) else { continue };
+            if def == kit.extractor || def == kit.constructor {
+                self.note_hot_spot(pos, tick.frame);
+            }
+            if self.spot_is_ours(pos) {
+                self.last_loss_at_home_frame = tick.frame;
+            }
             if !self.wreck_sites.iter().any(|(site, _)| site.dist2d(pos) < 300.0) {
                 self.wreck_sites.push((pos, tick.frame));
             }

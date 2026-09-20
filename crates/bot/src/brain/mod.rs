@@ -40,6 +40,10 @@ pub struct Brain {
     routes: Option<routes::Routes>,
     /// Where our units died lately, for H-ECO-RECLAIM: place and frame (enemy wrecks lie in the same places). Deaths close together are one site.
     wreck_sites: Vec<(Vec3, i32)>,
+    /// Metal spots where an extractor or a constructor of ours died, and until which frame they stay closed.
+    hot_spots: Vec<(Vec3, i32)>,
+    /// When something of ours last died on our side of the map; no wave leaves while that is fresh.
+    last_loss_at_home_frame: i32,
     army: army::Army,
     squads: squads::Squads,
     wake: wake::WakeState,
@@ -96,6 +100,8 @@ impl Brain {
             spot_claims: HashMap::new(),
             routes: None,
             wreck_sites: Vec::new(),
+            hot_spots: Vec::new(),
+            last_loss_at_home_frame: i32::MIN / 2,
             army: army::Army::default(),
             squads: Default::default(),
             wake: Default::default(),

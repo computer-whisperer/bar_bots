@@ -32,7 +32,22 @@ const BAD_TARGET_RADIUS: f32 = 350.0;
 /// A candidate station this close to one given up as unreachable is skipped too.
 const BAD_STATION_RADIUS: f32 = 200.0;
 /// Extractors nearer to home than this are covered by the base itself.
-const OUTPOST_DISTANCE: f32 = 1200.0;
+const OUTPOST_DISTANCE: f32 = 600.0;
+/// H-ARMY-HOME-GUARD: a wave leaves this many soldiers (those nearest the station) at home.
+const HOME_GUARD: usize = 6;
+/// H-ARMY-WAVE-GATE: a wave goes only at a target whose known defenders it outweighs by this factor. Turrets count
+/// for more than their metal, and an enemy commander for a fixed value.
+const WAVE_ADVANTAGE: f32 = 1.3;
+const TURRET_WORTH: f32 = 1.5;
+const COMMANDER_WORTH: f32 = 1500.0;
+/// Known defenders are the remembered armed buildings and the soldiers in sight this close to the target.
+const DEFENDED_RADIUS: f32 = 900.0;
+/// No wave leaves within this long of losing something on our side of the map.
+const QUIET_BEFORE_WAVE_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
+/// H-ARMY-RESPONDERS: a few raiders are met by the nearest soldiers, this many per raider and at least this many,
+/// not by the whole home group trailing across the map.
+const RESPONDERS_PER_RAIDER: usize = 3;
+const MIN_RESPONDERS: usize = 4;
 /// An idle attacker this close to the attack target has arrived and needs a new one.
 const ARRIVED_RADIUS: f32 = 400.0;
 /// Home-group units farther than this from the rally point are called in.
@@ -171,6 +186,27 @@ impl Brain {
         }
     }
 
+    /// Metal worth of what we know defends `target`: remembered armed buildings, soldiers in sight, and the enemy
+    /// commander if this is its base. A floor: what we have not seen is not counted.
+    fn known_defenders(&self, target: Vec3, visible: &[EnemyUnit]) -> f32 {
+        let worth = |def: bot_protocol::UnitDefId| self.world.def(def).filter(|d| d.weapon_count > 0).map_or(0.0, |d| d.metal_cost);
+        let turrets: f32 = self
+            .enemy_buildings
+            .values()
+            .filter(|(_, pos, _)| pos.dist2d(target) < DEFENDED_RADIUS)
+            .map(|(def, _, _)| worth(*def) * TURRET_WORTH)
+            .sum();
+        let soldiers: f32 = visible
+            .iter()
+            .filter(|e| e.pos.dist2d(target) < DEFENDED_RADIUS)
+            .filter_map(|e| e.def)
+            .filter(|def| self.world.def(*def).is_some_and(|d| d.speed > 0.0 && d.build_speed == 0.0))
+            .map(worth)
+            .sum();
+        let commander = if target.dist2d(self.enemy_start) < DEFENDED_RADIUS { COMMANDER_WORTH } else { 0.0 };
+        turrets + soldiers + commander
+    }
+
     /// A remembered building that our soldiers are standing next to and cannot see is gone.
     fn forget_razed_buildings(&mut self, soldiers: &[&OwnUnit], visible: &[EnemyUnit]) {
         const IN_PLAIN_SIGHT: f32 = 250.0;
@@ -300,7 +336,16 @@ impl Brain {
                     let grid = self.world.grid(intruder.pos);
                     self.trigger("base-attack", tick.frame, format!("Our base is under attack: {count} enemies near {grid}."));
                 }
-                commands.extend(home_group.iter().map(|u| Command::Fight { unit: u.id, to: intruder.pos, queue: false }));
+                // An attack on the base is everyone's business; raiders at an outpost are met by the nearest few.
+                let raiders = snapshot.enemies.iter().filter(|e| e.pos.dist2d(intruder.pos) < RAID_RADIUS).count();
+                let wanted = if rule == "H-ARMY-DEFEND" || !self.enabled("H-ARMY-RESPONDERS") {
+                    home_group.len()
+                } else {
+                    (raiders * RESPONDERS_PER_RAIDER).max(MIN_RESPONDERS)
+                };
+                let mut nearest: Vec<&&OwnUnit> = home_group.iter().collect();
+                nearest.sort_by(|a, b| a.pos.dist2d(intruder.pos).total_cmp(&b.pos.dist2d(intruder.pos)));
+                commands.extend(nearest.iter().take(wanted).map(|u| Command::Fight { unit: u.id, to: intruder.pos, queue: false }));
             }
         } else {
             let own_wave_size = (FIRST_WAVE + WAVE_GROWTH * self.army.waves_sent).min(MAX_WAVE);
@@ -310,7 +355,25 @@ impl Brain {
                 _ => own_wave_size,
             };
             let may_launch = !matches!(stance, Some(Stance::Defend | Stance::Gather));
-            if may_launch && home_group.len() >= wave_size {
+            // H-ARMY-HOME-GUARD: the soldiers nearest the station stay; the rest are the wave.
+            let guard = if self.enabled("H-ARMY-HOME-GUARD") { HOME_GUARD } else { 0 };
+            let mut by_station: Vec<&OwnUnit> = home_group.clone();
+            by_station.sort_by(|a, b| a.pos.dist2d(rally).total_cmp(&b.pos.dist2d(rally)));
+            let wave: Vec<&OwnUnit> = by_station.into_iter().skip(guard).collect();
+            let quiet = tick.frame - self.last_loss_at_home_frame >= QUIET_BEFORE_WAVE_FRAMES;
+            // H-ARMY-WAVE-GATE: weigh the wave against what we know stands at the target.
+            let wave_value: f32 = wave.iter().filter_map(|u| self.world.def(u.def)).map(|d| d.metal_cost).sum();
+            let defenders = self.known_defenders(target, snapshot.enemies.as_slice());
+            let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || wave_value >= WAVE_ADVANTAGE * defenders;
+            let ordered_attack = stance == Some(Stance::Attack);
+            if may_launch && wave.len() >= wave_size && !ordered_attack && (!quiet || !outweighs) && tick.frame % (30 * FRAMES_PER_SECOND) == 0 {
+                eprintln!(
+                    "[ai {}] f={} wave held: {} soldiers worth {wave_value:.0} against {defenders:.0} known at ({:.0}, {:.0}){}",
+                    self.ai(), tick.frame, wave.len(), target.x, target.z, if quiet { "" } else { "; losses at home in the last 30 s" }
+                );
+            }
+            let home_group = wave;
+            if may_launch && home_group.len() >= wave_size && (ordered_attack || (quiet && outweighs)) {
                 self.army.waves_sent += 1;
                 self.fire(if wave_size == own_wave_size { "H-ARMY-WAVES" } else { "D-WAVE-LAUNCH" });
                 let grid = self.world.grid(target);
