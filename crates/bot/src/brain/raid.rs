@@ -49,6 +49,16 @@ const COMMANDER_REACH: f32 = 700.0;
 /// trickling out of the lab, and its centre lay 2000 elmos behind the Pawn walking into the commander's D-gun).
 const BODY_BAND: f32 = 1500.0;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Mode {
+    #[default]
+    Idle,
+    Going,
+    TooSmall,
+    Elsewhere,
+    Waiting,
+}
+
 #[derive(Default)]
 pub struct Raid {
     pub(super) members: Vec<UnitId>,
@@ -66,6 +76,9 @@ pub struct Raid {
     held: HashSet<UnitId>,
     /// Waiting out of reach for reinforcements (logged once).
     pub(super) waiting: bool,
+    /// What the party was doing last tick; a change means new orders at once, not at the next 4 s slot (rush-16:
+    /// the first Pawn kept its fight order for 3 s after sighting the commander and died).
+    mode: Mode,
     /// The last pricing's verdict, held until the next: between pricings the party was "not outmatched" and went
     /// back at the target for four seconds, then retreated for four (rush-11 to 13: parties oscillating at the base).
     pub(super) outmatched: bool,
@@ -97,9 +110,22 @@ impl Brain {
     /// at an empty spot for five minutes while the home group was committed to it.
     fn unscouted_box_spots(&self, from: Vec3, frame: i32) -> Vec<Vec3> {
         let mut spots = self.spots_to_look_at(from, frame, 0.0, 1.0);
+        // Not within a small party's death of the commander where it was last seen (its laser reaches 300 and its
+        // D-gun kills a Pawn a shot; rush-16: five of eight first Pawns died within six seconds of sighting it).
+        spots.retain(|s| !self.commander_ground(*s));
         // Round the presumed base first (rush-15: the first Pawn went to a stale spot in the middle of the box).
         spots.sort_by(|a, b| self.spot_likelihood(*b).total_cmp(&self.spot_likelihood(*a)).then(a.dist2d(from).total_cmp(&b.dist2d(from))));
         spots
+    }
+
+    /// Whether `at` lies within the enemy commander's reach where it was last seen, for a party too small for it.
+    fn commander_ground(&self, at: Vec3) -> bool {
+        self.enemy_commander_seen.is_some_and(|(pos, _)| pos.dist2d(at) < COMMANDER_REACH + 300.0)
+    }
+
+    /// Whether `t` is one of the spots nobody has looked at lately (`unscouted_box_spots`).
+    fn is_unscouted(&self, t: Vec3, frame: i32) -> bool {
+        self.spots_to_look_at(t, frame, 0.0, 1.0).iter().any(|s| s.dist2d(t) < 1.0)
     }
 
     /// Where the party goes: the nearest extractor of theirs we know of, else a spot in their box nobody has looked
@@ -117,7 +143,7 @@ impl Brain {
             let any = self.enemy_buildings.values().map(|(_, pos, _)| *pos).min_by(|a, b| a.dist2d(party_at).total_cmp(&b.dist2d(party_at)));
             return commander.or_else(|| lab.min_by(|a, b| a.dist2d(party_at).total_cmp(&b.dist2d(party_at)))).or(any).or(Some(base));
         }
-        if let Some(extractor) = self.raid_targets().first() {
+        if let Some(extractor) = self.raid_targets().iter().find(|t| !self.commander_ground(**t)) {
             return Some(*extractor);
         }
         if self.found_enemy_base().is_none()
@@ -144,10 +170,12 @@ impl Brain {
             .filter(|(def, _, _)| self.world.def(*def).is_some_and(|d| d.extracts_metal > 0.0))
             .map(|(_, pos, _)| *pos)
             .chain(self.unscouted_box_spots(centre, tick.frame))
-            .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && self.reachable_on_foot(*t))
+            .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && !self.commander_ground(*t) && self.reachable_on_foot(*t))
             .collect();
         candidates.sort_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)));
-        candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.assault_verdict(body, *t, TARGET_RADIUS, tick).gain >= GO_GAIN)
+        // Priced as the party's target will be, over the same radius (rush-16: a target priced won at 600 and lost at
+        // 1000 had the party go and retreat every four seconds under a turret).
+        candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.assault_verdict(body, *t, CONTACT_RADIUS, tick).gain >= GO_GAIN)
     }
 
     /// `soldiers`: finished soldiers no squad has claimed. Returns with the party's orders pushed.
@@ -211,7 +239,7 @@ impl Brain {
         // The target is gone when we no longer remember an extractor there (seen destroyed, or found missing), or when
         // the party stands on it and sees nothing. A box spot the party reaches is scouted, whatever it found.
         let arrived = self.raid.target.is_some_and(|t| centre.dist2d(t) < TARGET_RADIUS);
-        let unscouted = self.raid.target.is_some_and(|t| self.unscouted_box_spots(t, tick.frame).first().is_some_and(|s| s.dist2d(t) < 1.0));
+        let unscouted = self.raid.target.is_some_and(|t| self.is_unscouted(t, tick.frame));
         let still_there = self.raid.target.is_some_and(|t| self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(t) < 100.0) || (!arrived && (unscouted || t.dist2d(self.enemy_base(t)) < BASE_RADIUS)));
         let target = if still_there { self.raid.target } else { self.pressure_target(centre, tick) };
         // Priced every few seconds against what is in sight of the party and what is known at the target, and every
@@ -222,7 +250,8 @@ impl Brain {
         let armed_in_sight = in_sight.iter().any(|e| armed(e) && !is_commander(e));
         let commander_at = in_sight.iter().find(|e| is_commander(e)).map(|e| e.pos);
         let armed_in_sight_at: Vec<Vec3> = in_sight.iter().filter(|e| armed(e)).map(|e| e.pos).collect();
-        let commander_near = commander_at.is_some_and(|at| at.dist2d(centre) < COMMANDER_REACH);
+        // In sight at all is near enough: the first sighting comes at 200-300 elmos (rush-16), inside its laser.
+        let commander_near = commander_at.is_some();
         let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES;
         let party_metal: f32 = body.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
         let too_small_for_commander = commander_near && party_metal < COMMANDER_PARTY_METAL;
@@ -232,12 +261,22 @@ impl Brain {
             self.raid.outmatched = verdict.gain < GO_GAIN;
         }
         let outmatched = self.raid.outmatched && !too_small_for_commander;
+        let mode = match target {
+            Some(_) if too_small_for_commander && party.len() >= PARTY => Mode::TooSmall,
+            Some(_) if !outmatched && party.len() >= PARTY => Mode::Going,
+            Some(_) if party.len() >= PARTY => if self.raid.waiting { Mode::Waiting } else { Mode::Elsewhere },
+            _ => Mode::Idle,
+        };
+        if mode != self.raid.mode {
+            self.raid.mode = mode;
+            self.raid.last_order_frame = 0;
+        }
         match target {
             Some(target) if too_small_for_commander && party.len() >= PARTY => {
                 // Too few for the commander: wait for the rest out of its reach, as a player gathers at the edge of a
                 // base, rather than walk home and lose the ground already covered.
                 self.raid.target = Some(target);
-                let Some(commander) = commander_at else { return };
+                let Some(commander) = commander_at.or(self.enemy_commander_seen.map(|(pos, _)| pos)) else { return };
                 let (dx, dz) = (centre.x - commander.x, centre.z - commander.z);
                 let len = dx.hypot(dz).max(1.0);
                 let wait = Vec3 { x: commander.x + dx / len * (COMMANDER_REACH + 300.0), y: 0.0, z: commander.z + dz / len * (COMMANDER_REACH + 300.0) };
@@ -273,7 +312,10 @@ impl Brain {
                 // Outmatched here: an extractor of theirs elsewhere, or wait out of reach of the nearest threat for
                 // the Pawns still coming. Home is for a party with nobody left.
                 if let Some(next) = self.harass_elsewhere(&body, target, centre, tick) {
-                    eprintln!("[ai {}] f={} pressure: party of {} outmatched at ({:.0}, {:.0}), goes for ({:.0}, {:.0}) instead", self.ai(), tick.frame, body.len(), target.x, target.z, next.x, next.z);
+                    if self.raid.target.is_none_or(|t| t.dist2d(next) > 1.0) {
+                        eprintln!("[ai {}] f={} pressure: party of {} outmatched at ({:.0}, {:.0}), goes for ({:.0}, {:.0}) instead", self.ai(), tick.frame, body.len(), target.x, target.z, next.x, next.z);
+                    }
+                    self.raid.mode = Mode::Elsewhere;
                     self.raid.target = Some(next);
                     self.raid.last_order_frame = tick.frame;
                     self.raid.waiting = false;
@@ -291,6 +333,8 @@ impl Brain {
                     if !self.raid.waiting {
                         eprintln!("[ai {}] f={} pressure: party of {} outmatched at ({:.0}, {:.0}), waits at ({:.0}, {:.0}) for more", self.ai(), tick.frame, body.len(), target.x, target.z, wait.x, wait.z);
                         self.raid.waiting = true;
+                        self.raid.mode = Mode::Waiting;
+                        self.raid.last_order_frame = 0;
                     }
                     if tick.frame - self.raid.last_order_frame >= REPRICE_FRAMES {
                         self.raid.last_order_frame = tick.frame;
@@ -306,6 +350,7 @@ impl Brain {
                 self.raid.held.clear();
                 self.raid.waiting = false;
                 self.raid.outmatched = false;
+                self.raid.mode = Mode::Idle;
                 self.raid.target = None;
                 self.raid.rest_until = tick.frame + REST_FRAMES;
             }
