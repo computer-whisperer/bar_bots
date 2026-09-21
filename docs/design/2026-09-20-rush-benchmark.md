@@ -127,3 +127,10 @@ and its rows in `docs/heuristics.md`, `docs/knowledge/` and `docs/experiments.md
   BARb's block came at 15-22 minutes. The harness carried the new lines and levers well (the transcripts reason
   from them); what the commanders lack is the same thing the heuristic lacks, army behind the opening, and they
   add a second: holding ground with small posted squads that BARb's raiders wear down.
+- 2026-09-20, late: rush-17 to 26 (raid fixes, turret rules, queued orders, exact extractor placement, the wind
+  price, the party round the base with posted scouts) all 0-1 wins in 12 an arm. The opening is at the players'
+  level (lab nanoframe 27-29 s, 7 extractors by 3:00, Pawn at 1:20, base seen at 2:05) and the party behaves as the
+  user described; the raid economy does not move (Pawns built 19, lost 18, BARb's buildings killed 3, ours lost 10
+  by minute 10). Nothing round BARb's base is priced winnable for two to eight Pawns. The series ends here; the
+  next lever is production behind the opening (Pawns without a gap to the kill), which needs the user's ruling on
+  its shape, and the home answer to Fleas (the contact response's floor of two).
