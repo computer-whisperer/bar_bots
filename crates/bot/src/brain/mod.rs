@@ -371,7 +371,16 @@ impl Brain {
                 let percent = commander.health / commander.max_health * 100.0;
                 self.trigger("commander", tick.frame, format!("Our commander is under fire away from home ({percent:.0}% health)."));
                 self.jobs.remove(&commander.id);
-                commands.push(Command::Move { unit: commander.id, to: self.home, queue: false });
+                // Round known threats (routing design, the one waypoint case): the safe way's midpoint first when
+                // the safe way home parts from the straight one, home queued after it.
+                match self.commander_waypoint_home(commander.pos) {
+                    Some(waypoint) => {
+                        eprintln!("[ai {}] f={} commander retreats round known threats by ({:.0}, {:.0})", self.ai(), tick.frame, waypoint.x, waypoint.z);
+                        commands.push(Command::Move { unit: commander.id, to: waypoint, queue: false });
+                        commands.push(Command::Move { unit: commander.id, to: self.home, queue: true });
+                    }
+                    None => commands.push(Command::Move { unit: commander.id, to: self.home, queue: false }),
+                }
             }
         }
     }

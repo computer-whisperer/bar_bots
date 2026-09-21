@@ -114,7 +114,7 @@ pub(super) fn to_segment(p: Vec3, a: Vec3, b: Vec3) -> f32 {
 }
 
 /// A turret has this much beyond its range for the approach: a unit walking past at the edge of its range is shot.
-const TURRET_MARGIN: f32 = 100.0;
+pub(super) const TURRET_MARGIN: f32 = 100.0;
 
 impl Brain {
     pub(super) fn survey_sim_defs(&mut self) {
@@ -322,7 +322,9 @@ impl Brain {
         for index in due.into_iter().take(PRICED_PER_TICK) {
             let party = &parties[index];
             let taken: HashSet<UnitId> = responses.iter().enumerate().filter(|(i, _)| *i != index).flat_map(|(_, r)| r.members.iter().copied()).collect();
-            let eta = |u: &OwnUnit| u.pos.dist2d(party.at) / self.world.def(u.def).map_or(1.0, |d| d.speed.max(1.0));
+            // Arrival by travel time over the ground (routing design): the party is usually at an extractor, so
+            // the spot's field prices the walk; the straight line otherwise.
+            let eta = |u: &OwnUnit| self.seconds_to_site(u.def, u.pos, party.at);
             let members = &responses[index].members;
             let mut pool: Vec<&OwnUnit> = free.iter().copied().filter(|u| members.contains(&u.id)).collect();
             let mut others: Vec<&OwnUnit> =

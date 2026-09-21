@@ -10,6 +10,7 @@ Per batch (mean per game, by --until, default 10 game minutes):
   deaths        soldiers of ours lost inside a turret's or the commander's reach, and elsewhere
   wounded       damage taken by soldiers that lived to the end of the window, against by those that died
   late ticks    the worst `late` seen, and the share of samples with one
+  commander     elmos the commander walked in the window, trips over 400 elmos, the longest (routing design)
 With --arms H-ID the batch is split into the arm with the heuristic on and the arm with it off (`--ab-disable`).
 
 Reaches come from the simulator's unit table (crates/combatsim/data/units.json) by unit name.
@@ -59,6 +60,10 @@ def read(path, until_frame):
     header = None
     # Which heuristics the game ran without, from the banner the bot says at its first orders.
     disabled = None
+    com_last = None
+    com_walked = 0.0
+    com_trip = 0.0
+    com_trips = []
     for line in open(path):
         try:
             r = json.loads(line)
@@ -97,6 +102,18 @@ def read(path, until_frame):
                 killed += d["metal"]
         elif t == "s":
             samples += 1
+            for u in r["own"]:
+                if defs[u[1]]["class"] == "commander":
+                    if com_last is not None:
+                        step = ((u[2] - com_last[0]) ** 2 + (u[3] - com_last[1]) ** 2) ** 0.5
+                        com_walked += step
+                        if step > 20:
+                            com_trip += step
+                        elif com_trip > 0:
+                            com_trips.append(com_trip)
+                            com_trip = 0.0
+                    com_last = (u[2], u[3])
+                    break
             late = r.get("late", 0)
             worst_late = max(worst_late, late)
             late_samples += late > 0
@@ -126,6 +143,7 @@ def read(path, until_frame):
         "wounded_lived": wounded_lived, "wounded_died": wounded_died,
         "worst_late": worst_late, "late_share": late_samples / max(samples, 1),
         "disabled": disabled or "",
+        "com_walked": com_walked, "com_trips": sum(1 for x in com_trips if x > 400), "com_longest": max(com_trips, default=0.0),
     }
 
 
@@ -142,6 +160,7 @@ def summarise(label, games):
     print(f"  deaths       {mean('deaths_in_reach'):5.1f} to turrets or the commander, {mean('deaths_elsewhere'):5.1f} elsewhere")
     print(f"  wounded      {mean('wounded_lived'):6.0f} damage on soldiers that lived, {mean('wounded_died'):6.0f} on those that died")
     print(f"  late ticks   worst {max(g['worst_late'] for g in games)} frames, {100 * mean('late_share'):.1f} % of samples")
+    print(f"  commander    {mean('com_walked'):6.0f} elmos walked, {mean('com_trips'):4.1f} trips over 400, longest {mean('com_longest'):5.0f}")
 
 
 def main():

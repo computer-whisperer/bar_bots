@@ -55,6 +55,8 @@ const BASE_RADIUS: f32 = 1400.0;
 /// it in six seconds); a second player's twelve Pawns killed BARb's.
 pub(super) const COMMANDER_PARTY_METAL: f32 = 450.0;
 const COMMANDER_REACH: f32 = 700.0;
+/// The commander's ground: nothing of ours walks within this of where it was last seen unless priced to.
+pub(super) const COMMANDER_GROUND: f32 = COMMANDER_REACH + 300.0;
 /// The commander counts as near for this long after it was last seen near the party.
 const COMMANDER_MEMORY_FRAMES: i32 = 10 * FRAMES_PER_SECOND;
 /// The party's body: members within this of the one nearest the target. Raiders still on their way from home are
@@ -165,6 +167,19 @@ impl Brain {
     /// ground: an alternative or a ring point on the far side of the base is reached through the base (tick-smoke:
     /// a party sent to the ring point behind the base walked under a tower nobody had seen yet and lost four Pawns).
     fn approach_is_clear(&self, from: Vec3, to: Vec3) -> bool {
+        // The way the party would walk, when a field gives it (routing design: a straight segment misses the walk
+        // round a cliff that passes the base); else the straight segment.
+        if let Some(route) = self.route_to(from, to) {
+            let commander_ground = |p: Vec3| self.enemy_commander_seen.is_some_and(|(pos, _)| pos.dist2d(p) < COMMANDER_REACH + 300.0);
+            let rules = &self.contacts.rules;
+            let turret_reach = |p: Vec3| {
+                self.enemy_buildings.iter().any(|(_, (def, pos, _))| {
+                    self.world.def(*def).is_some_and(|d| d.weapon_count > 0)
+                        && self.contacts.sim_defs.get(def).is_some_and(|i| pos.dist2d(p) < rules.units.list[*i].reach() + super::contact::TURRET_MARGIN)
+                })
+            };
+            return !route.iter().any(|p| commander_ground(*p) || turret_reach(*p));
+        }
         let commander_clear = self.enemy_commander_seen.is_none_or(|(pos, _)| super::contact::to_segment(pos, from, to) >= COMMANDER_REACH + 300.0);
         commander_clear && self.turrets_bearing(from, to, 0.0).is_empty()
     }

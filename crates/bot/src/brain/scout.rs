@@ -104,6 +104,9 @@ impl Brain {
             .filter(|(index, _)| self.spot_staleness(*index, frame) >= FRESH_FRAMES)
             .map(|(index, spot)| (index, Vec3 { y: 0.0, ..*spot }))
             .filter(|(_, spot)| self.reachable_on_foot(*spot) && !armed.iter().any(|a| a.dist2d(*spot) < berth))
+            // Nor a spot the walk to passes a known armed building this close (routing design: a straight line
+            // said nothing about the way round the cliff past the base).
+            .filter(|(_, spot)| berth <= 0.0 || self.route_to(from, *spot).is_none_or(|route| !route.iter().any(|p| armed.iter().any(|a| a.dist2d(*p) < berth))))
             .filter_map(|(index, spot)| {
                 let likelihood = self.spot_likelihood(spot);
                 (likelihood >= at_least).then(|| (self.spot_staleness(index, frame) as f32 / FRAMES_PER_SECOND as f32 * likelihood / self.walk_to_spot(index, from).max(MIN_WALK), spot))

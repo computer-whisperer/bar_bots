@@ -781,9 +781,11 @@ impl Brain {
         Some(Vec3 { y: 0.0, ..*spot })
     }
 
-    /// H-COM-TRIP: whether a finished constructor of ours exists to take the far jobs.
+    /// H-COM-TRIP: whether a finished constructor of ours exists to take the far jobs. Not while the opening plan
+    /// runs: its extractor steps are the search's, walks priced (com-trip-ab: the cap on the plan's own steps from
+    /// the first constructor at 41 s cost two extractors by 3:00).
     fn commander_has_help(&self, own: &[OwnUnit], kit: &Kit) -> bool {
-        self.enabled("H-COM-TRIP") && own.iter().any(|u| u.def == kit.constructor && !u.being_built)
+        self.enabled("H-COM-TRIP") && self.opening.is_none() && own.iter().any(|u| u.def == kit.constructor && !u.being_built)
     }
 
     /// What this constructor should mend: the commander first (the game ends with it), then the nearest damaged
