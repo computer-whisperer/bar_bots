@@ -164,3 +164,9 @@ Each step is a commit.
   Hammers in the smoke), and walking fields per metal spot built on a thread at the survey (44 in 0.4 s), used by
   the spot claim, the scouts' routes and the party's spot candidates. Smoke: micro-focus-debug. Measured next by the
   second A/B (micro-ab2).
+- 2026-09-20, the second A/B (micro-ab2, ledger): with the lane 3-7-2 against 0-12; by minute 20 the exchange 0.78
+  against 1.27 (5341 killed against 4332, 4171 lost against 5492), deaths to turrets and the commander 4.9 against
+  10.9 a game. The lane stands. Open: kiting fires only for Rocketeers against Hammers so far; the wounded rule is
+  local odds at 1.2, untuned; constructors are outside the lane; the search and the simulator still run on the tick
+  thread (`late` says nothing is late in lockstep; a human's game is unmeasured); target priority (Fight against
+  Raid) stays with the pricing.
