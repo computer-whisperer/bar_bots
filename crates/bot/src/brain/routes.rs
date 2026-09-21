@@ -124,6 +124,11 @@ impl Brain {
         self.routes.as_ref().and_then(|r| r.from_enemy.as_ref().map(|enemy| terrain::passages(&r.from_home, enemy))).unwrap_or_default()
     }
 
+    /// Where our soldiers can stand, one flag per terrain cell (`Terrain` order); `None` without terrain data.
+    pub(super) fn passable(&self) -> Option<&[bool]> {
+        self.routes.as_ref().map(|r| r.passable.as_slice())
+    }
+
     /// The reachable ground nearest `pos`; `pos` itself when we cannot tell.
     pub(super) fn snap_to_reachable(&self, pos: Vec3) -> Vec3 {
         self.routes.as_ref().and_then(|r| r.from_home.snap(pos)).unwrap_or(pos)

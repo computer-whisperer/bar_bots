@@ -290,8 +290,10 @@ repaired at home, which would move the true measure from margin towards metal.
 roughly the nearest. Simulating the command we do not have says not to add it — a side that all shoots the enemy with
 the fewest hit points left scores 0.165 of margin *worse* than the engine's own targeting over 135 cells, because
 nothing stops a salvo already in the air and the overkill is most of a Rocketeer's 3.8-second volley.
-**Status.** conjectured (2026-09-20) — simulator only. The absence of the command is `supported`
-(`crates/bot-protocol/src/messages.rs`).
+**Status.** conjectured (2026-09-20) — simulator only. The absence of the command was `supported` until 2026-09-20
+evening: `Command::Attack` exists now (added for deliberate turret kills, 8ffc510), so the claim is only the second
+half, that naive lowest-health focus would not pay; a focus rule that counts damage in the air is H-MICRO-FOCUS's
+business (`docs/design/2026-09-20-micro-lane.md`).
 **Evidence.** `combatsim micro --reps 16`; `finishing_the_weakest_target_wastes_shots_on_the_dead` in
 `crates/combatsim/tests/mechanics.rs`.
 **Would be wrong if.** A focus rule that avoided overkill (counting damage already in the air towards a target)
@@ -337,4 +339,19 @@ Extractor losses in these episodes are not a fair test of the model: an episode 
 different rates by distance.
 **Used by.** H-ARMY-CONTACT (`docs/design/2026-09-20-army-response.md`): answer from near or not
 at all, guard where parties go, and price the answer's own losses higher than the model says.
+
+### K-micro-a-tick-is-a-tower-margin
+**Claim.** At the 2 Hz tick a Pawn (87 elmos a second) walks 43 elmos between decisions, most of the 90-elmo margin
+between "outside a light laser tower's reach" and "dying in it" (reach 430, 160 damage a second against 370 health;
+the commander 300 and about 390 a second); at 10 Hz it walks 9. So no rule at 2 Hz can keep a Pawn out of a defence it
+did not mean to enter, and the four raid faults found on 2026-09-20 (the dive at the commander after sighting it, the
+fight under a tower with no flee, the leader waiting for joiners under fire, the party walked through the base on a
+Move) are all decisions taken too late at the unit level.
+**Status.** conjectured (2026-09-20). The arithmetic is from the unit table; the effect on the exchange is unmeasured.
+**Evidence.** `crates/combatsim/data/units.json` (armpw, armllt, armcom); rush-26 records: 17.8 Pawns lost to 3.0
+buildings killed by minute 10; micro-flee-debug (one game, the first lane): every Pawn death traced to a decision the
+lane made or failed to make (`docs/design/2026-09-20-micro-lane.md`, status).
+**Would be wrong if.** The lane's A/B (`--ab-disable H-MICRO-LANE`, 24 games) showed no fall in soldiers lost to
+turrets and the commander, or in soldier-seconds under fire (`run/micro_ledger.py`).
+**Used by.** H-MICRO-LANE, H-MICRO-FLEE.
 

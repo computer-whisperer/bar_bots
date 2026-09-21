@@ -152,6 +152,16 @@ impl Unit {
     pub fn reach(&self) -> f32 {
         self.weapons.iter().filter(|w| w.hits_ground()).map(|w| w.range).fold(0.0, f32::max)
     }
+
+    /// Damage a second against a standard-armour ground unit with every ground weapon firing as fast as it reloads,
+    /// every shot landing: the weight a threat map gives this unit.
+    pub fn dps(&self) -> f32 {
+        self.weapons
+            .iter()
+            .filter(|w| w.hits_ground() && w.reload > 0.0)
+            .map(|w| w.damage_to("standard") * w.burst.max(1) as f32 * w.projectiles.max(1) as f32 / w.reload)
+            .sum()
+    }
 }
 
 #[derive(Deserialize)]

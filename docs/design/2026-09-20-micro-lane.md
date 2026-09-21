@@ -143,3 +143,15 @@ Each step is a commit.
   (tick-smoke, tick-cost-3/15 in the ledger): nothing the brain does changed, lockstep cost nil (20.1 against 20.3
   game minutes a wall second). Narrowing for part 2: constructors stay out of the lane in its first version (giving a
   Build order back after a flee would cross the economy's order tracking); soldiers only.
+- 2026-09-20, part 2 built: `threat.rs` (the grid on the terrain's 16-elmo cells, stamps sloping inside the reach and
+  over a 90 tail), `micro.rs` (standing orders, commitments from the raid, the answers, the waves and the squads;
+  H-MICRO-FLEE; claims held across identical re-issued orders and for a second at least; faint memories move nobody),
+  `run/micro_ledger.py`. Four instrumented games, each death traced (ledger rows micro-flee-debug to -debug4): deaths
+  to turrets and the commander by 12:00 went 11, 1, 7, 1 as the traces found and fixed an answer committed to the
+  commander by its forced clause, a release the tick after a step, a committed dive fled too late, the commander
+  stepped out of sight and re-ordered, a flat grid inside a tower's reach, the raid's re-issue cancelling a hold, and
+  faded memories. What remains in the traces: Pawns dying to Pawns, three of them fleeing a fight they could not
+  outrun at under 130 health (K-army-withdrawing-a-hurt-soldier-saves-metal-and-loses-the-fight says as much); that is
+  part 3's ground (focus fire, kiting) and the contact answer's. Not measured yet beyond single games: the A/B batch
+  is next. The record's `dmg` field carries a killing blow's full damage (a D-gun's tens of thousands); the ledger caps
+  a unit's damage at its health.

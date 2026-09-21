@@ -20,6 +20,7 @@ mod scout;
 mod reclaim;
 mod squads;
 mod territory;
+mod threat;
 mod tier2;
 mod wake;
 mod roster;
@@ -143,6 +144,8 @@ pub struct Brain {
     last_trigger_frame: HashMap<&'static str, i32>,
     /// Decisions since `main` last collected them for the match record.
     journal: journal::Journal,
+    /// The control lane's state (`micro.rs`): standing orders, commitments, claims, the threat grid.
+    lane: micro::Lane,
     /// Events from the ticks since `think` last ran, in order, for its next run.
     carried_events: Vec<Event>,
     /// Ticks that came late (`Tick::late`) and the most frames one waited, since the last per-minute line.
@@ -215,6 +218,7 @@ impl Brain {
             disabled: std::env::var("WITHIN_REASON_DISABLE").map_or_else(|_| Vec::new(), |ids| ids.split(',').map(str::to_string).collect()),
             last_trigger_frame: HashMap::new(),
             journal: Default::default(),
+            lane: Default::default(),
             carried_events: Vec::new(),
             late_ticks: (0, 0),
         }
@@ -238,6 +242,8 @@ impl Brain {
             let whole = Tick { frame: tick.frame, late: tick.late, events, snapshot: tick.snapshot.clone() };
             self.think(&whole)
         };
+        self.note_standing_orders(&commands, tick.frame);
+        self.note_commitments();
         commands.extend(self.micro(tick));
         commands
     }

@@ -53,8 +53,10 @@ const BASE_RADIUS: f32 = 1400.0;
 /// The enemy commander's D-gun is not in the simulator (nobody presses the button there) and it kills a Pawn a shot:
 /// a party smaller than this much metal does not fight within reach of the commander (rush-smoke2: four Pawns dead to
 /// it in six seconds); a second player's twelve Pawns killed BARb's.
-const COMMANDER_PARTY_METAL: f32 = 450.0;
+pub(super) const COMMANDER_PARTY_METAL: f32 = 450.0;
 const COMMANDER_REACH: f32 = 700.0;
+/// The commander counts as near for this long after it was last seen near the party.
+const COMMANDER_MEMORY_FRAMES: i32 = 10 * FRAMES_PER_SECOND;
 /// The party's body: members within this of the one nearest the target. Raiders still on their way from home are
 /// members too, but the march holds the leaders for the body only, and the body is what stands at the target, sees
 /// and is priced (rush-8: the front crawled at a third of a Pawn's speed for four minutes waiting for joiners
@@ -92,7 +94,9 @@ pub struct Raid {
     /// the first Pawn kept its fight order for 3 s after sighting the commander and died).
     mode: Mode,
     /// Their turrets the last pricing included, nearest first: the party kills them first, deliberately.
-    turrets: Vec<UnitId>,
+    pub(super) turrets: Vec<UnitId>,
+    /// The party is big enough to fight the commander (`COMMANDER_PARTY_METAL`), so the control lane lets it.
+    pub(super) fights_commander: bool,
     /// Armed buildings of theirs known to bear on the target at the last pricing: a new one means a price now.
     turrets_known: usize,
     /// Perimeter points the party has stood at, with when (`perimeter_probe`).
@@ -109,6 +113,11 @@ pub struct Raid {
 impl Raid {
     pub fn contains(&self, unit: UnitId) -> bool {
         self.members.contains(&unit)
+    }
+
+    /// The party is on its way to fight at its target, priced to win there.
+    pub(super) fn going(&self) -> bool {
+        self.mode == Mode::Going
     }
 }
 
@@ -316,7 +325,10 @@ impl Brain {
         let is_commander = |e: &bot_protocol::EnemyUnit| e.def.is_some_and(|d| self.world.def(d).is_some_and(|d| d.name.ends_with("com") && d.build_speed > 0.0));
         let in_sight: Vec<&bot_protocol::EnemyUnit> = tick.snapshot.enemies.iter().filter(|e| e.pos.dist2d(centre) < CONTACT_RADIUS).collect();
         let armed_in_sight = in_sight.iter().any(|e| armed(e) && !is_commander(e));
-        let commander_at = in_sight.iter().find(|e| is_commander(e)).map(|e| e.pos);
+        // In sight, or seen within ten seconds this close (micro-flee-debug: the first Pawn stepped out of sight of
+        // the commander, was sent back at its target, and stepped out again, every seven seconds for a minute).
+        let commander_at = in_sight.iter().find(|e| is_commander(e)).map(|e| e.pos)
+            .or(self.enemy_commander_seen.filter(|(pos, at)| tick.frame - at < COMMANDER_MEMORY_FRAMES && pos.dist2d(centre) < CONTACT_RADIUS).map(|(pos, _)| pos));
         let armed_in_sight_at: Vec<Vec3> = in_sight.iter().filter(|e| armed(e)).map(|e| e.pos).collect();
         // In sight at all is near enough: the first sighting comes at 200-300 elmos (rush-16), inside its laser.
         let commander_near = commander_at.is_some();
@@ -324,6 +336,7 @@ impl Brain {
         let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES || turrets_known != self.raid.turrets_known;
         let party_metal: f32 = body.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
         let too_small_for_commander = commander_near && party_metal < COMMANDER_PARTY_METAL;
+        self.raid.fights_commander = party_metal >= COMMANDER_PARTY_METAL;
         if reprice {
             self.raid.priced_at = tick.frame;
             let verdict = self.assault_verdict(&body, target.unwrap_or(centre), CONTACT_RADIUS, tick);

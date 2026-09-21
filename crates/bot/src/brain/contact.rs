@@ -266,6 +266,12 @@ impl Brain {
         Assault { gain, turrets: bearing.into_iter().map(|(id, _, _)| id).collect(), verdict }
     }
 
+    /// Per contact answer: its members and the turrets of theirs it was priced against (the control lane's
+    /// commitments, `micro.rs`).
+    pub(super) fn response_commitments(&self) -> Vec<(Vec<UnitId>, Vec<UnitId>)> {
+        self.contacts.responses.iter().map(|r| (r.members.clone(), r.turrets.clone())).collect()
+    }
+
     /// Answers every party on our ground from `free` (the home group) and returns who is answering one.
     pub(super) fn run_contacts(&mut self, tick: &Tick, kit: &Kit, free: &[&OwnUnit], commands: &mut Vec<Command>) -> HashSet<UnitId> {
         if !self.enabled("H-ARMY-CONTACT") {
