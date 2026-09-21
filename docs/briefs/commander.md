@@ -110,6 +110,21 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   minutes 5 and 10 and the economy is at three or four when the block comes. Until the bot's outpost answer is
   better, expansion past the near spots needs a turret requested at each new extractor as it is taken, and a squad
   of two or three line units posted on the approach the raids use (D4/E5 from the plateau, D4/C4 from the west).
+- cmd-opus-low-5 (2026-09-20 night, Opus at low effort, the E3 plateau start, WON at 37 minutes, the first win of
+  the low-effort series): it followed every lesson above (pressure off at 3:17 when the party stood outmatched,
+  turrets at the forward extractors, a six-Pawn squad posted on the D4/E5 approach) and lost the outposts anyway: a
+  Mace block was at E5 by 6:07, and by minute 10 it held five extractors with the trade 2,000 to 2,700 against it,
+  "losing badly". What it did next is the difference: at 9:23 it fell back onto the E2/F2 plateau ("high ground,
+  cliff-ringed"), put the station at its southern lip and turrets there, expanded only to the plateau spots (5, 6, 7,
+  9), set `max_converters` 0 and `min_constructors` 3, and by 12:00 held eleven extractors with the trade in its
+  favour. Then sixteen minutes of stalemate on ten to twelve extractors and income 23-28 while the opponent's block
+  sat at D5-E5 (a forward push at 20:53 cost 1,400 and was reversed at 22:03; tier 2 was started for the yield); at
+  28:33, with the army at 8,700 against 5,100 seen and growing faster, it read that "turtling is trading 25k:14k
+  against us" and committed the whole home group at D5, judged by the traded line in three minutes; the ground fell,
+  extractors went to fifteen then nineteen, income from 55 to 127 in six minutes, and at 35:01 everything (123
+  units, 22 rockets) went for the base. The pattern of game 6 again: hold ground that can be held, judge the curve,
+  then the whole army together. The cost: the win took 37 minutes on a start where the player's Pawns end the game at
+  4:45, and the mid-game stalemate was sixteen minutes of the opponent's income growing beside ours.
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.
