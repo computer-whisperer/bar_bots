@@ -155,6 +155,13 @@ pub struct Lane {
     counts: (u32, u32),
 }
 
+impl Lane {
+    /// Whether the lane has this soldier stepping out of a threat's reach, or holding at its edge, this tick (H-MICRO-FLEE).
+    pub(super) fn fleeing(&self, unit: UnitId) -> bool {
+        self.claims.get(&unit).is_some_and(|c| c.rule == Rule::Flee)
+    }
+}
+
 /// The brain gave the same order again (it re-issues standing orders every few seconds): no reason to let go.
 fn same_order(a: &Command, b: &Command) -> bool {
     match (a, b) {

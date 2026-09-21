@@ -89,3 +89,10 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   constructor died: an attack needs a home guard on the passage the raids use, and constructors told to rebuild
   behind it. The ball also chased single Flashes when told to engage parties it outweighs: name a small raider-hunting
   group for that and keep the ball's instruction to holding and advancing.
+- pianist-player-3 (2026-09-21, Opus at low effort, WON at 11 minutes, the series' first win): the same opening,
+  and the packet rewritten four times against what the hands did (the commander looping generators into an energy
+  stall, the commander walking 2,700 to a far spot, the ball chasing a lone Flash 2,000 away, lone Maces sent as
+  scouts and lost); at 8:51, with the army at 3,200 against 870 seen and 17 extractors, "committing the whole block to
+  attack via spot_36 toward the presumed enemy base", and the ball of 25 Maces walked through fourteen artillery
+  pieces and seven towers to the commander. The pattern: expand hard, one ball, read the army lead off the score line,
+  and one `fight_to` with everything.

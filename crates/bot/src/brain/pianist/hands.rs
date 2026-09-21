@@ -1,7 +1,7 @@
 //! The hands: an answer becomes orders through the existing actuators (build sites, walking, the march, fight
 //! orders), a task is remembered, and the decision goes into the record.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use bot_protocol::{Command, OwnUnit, Tick, UnitId};
 use jev::Answer;
@@ -178,8 +178,7 @@ impl Brain {
                 if group.task.busy() {
                     commands.extend(ids.iter().map(|id| Command::Stop { unit: *id }));
                 }
-                group.task = GroupTask::Hold { since: frame };
-                group.held.clear();
+                group.set_task(GroupTask::Hold { since: frame }, frame);
                 did = Some("hold".into());
             }
             Pick::MoveTo { fight } => {
@@ -187,8 +186,7 @@ impl Brain {
                     let to = self.snap_to_reachable(p.at);
                     let group = &mut pianist.groups[index];
                     commands.extend(ids.iter().map(|id| if fight { Command::Fight { unit: *id, to, queue: false } } else { Command::Move { unit: *id, to, queue: false } }));
-                    group.task = GroupTask::Move { to, place: p.name.clone(), fight, since: frame };
-                    group.held.clear();
+                    group.set_task(GroupTask::Move { to, place: p.name.clone(), fight, since: frame }, frame);
                     group.last_order = frame;
                     did = Some(format!("{} to {}", if fight { "advance" } else { "walk" }, p.name));
                 }
@@ -197,8 +195,7 @@ impl Brain {
                 if let Some(party) = whom.as_ref().and_then(|n| picture.parties.iter().find(|p| p.name == *n)) {
                     let group = &mut pianist.groups[index];
                     commands.extend(ids.iter().map(|id| Command::Fight { unit: *id, to: party.at, queue: false }));
-                    group.task = GroupTask::Engage { party: party.ids.clone(), at: party.at, since: frame, last_seen: frame };
-                    group.held.clear();
+                    group.set_task(GroupTask::Engage { party: party.ids.clone(), at: party.at, since: frame, last_seen: frame }, frame);
                     group.last_order = frame;
                     did = Some(format!("attack {} ({})", party.name, party.composition));
                 }
@@ -206,8 +203,7 @@ impl Brain {
             Pick::Retreat => {
                 let group = &mut pianist.groups[index];
                 commands.extend(ids.iter().map(|id| Command::Move { unit: *id, to: home, queue: false }));
-                group.task = GroupTask::Move { to: home, place: "home".into(), fight: false, since: frame };
-                group.held.clear();
+                group.set_task(GroupTask::Move { to: home, place: "home".into(), fight: false, since: frame }, frame);
                 group.last_order = frame;
                 did = Some("fall back home".into());
             }
@@ -226,7 +222,7 @@ impl Brain {
                     commands.extend(detached.iter().map(|id| Command::Fight { unit: *id, to, queue: false }));
                     let name = pianist.new_group_name();
                     did = Some(format!("send {} soldiers as group_{name} to {}", detached.len(), p.name));
-                    pianist.groups.push(Group { name, members: detached, task: GroupTask::Move { to, place: p.name.clone(), fight: true, since: frame }, held: HashSet::new(), last_order: frame, enemies_near: false });
+                    pianist.groups.push(Group::new(name, detached, GroupTask::Move { to, place: p.name.clone(), fight: true, since: frame }, frame));
                 }
             }
             Pick::Scout => {
@@ -239,7 +235,7 @@ impl Brain {
                         commands.push(Command::Move { unit: scout.id, to, queue: false });
                         let name = pianist.new_group_name();
                         did = Some(format!("send a {} as group_{name} to look at {}", self.name(scout.def), p.name));
-                        pianist.groups.push(Group { name, members: vec![scout.id], task: GroupTask::Move { to, place: p.name.clone(), fight: false, since: frame }, held: HashSet::new(), last_order: frame, enemies_near: false });
+                        pianist.groups.push(Group::new(name, vec![scout.id], GroupTask::Move { to, place: p.name.clone(), fight: false, since: frame }, frame));
                     }
                 }
             }

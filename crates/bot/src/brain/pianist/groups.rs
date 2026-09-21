@@ -20,6 +20,11 @@ const FOLLOW_DISTANCE: f32 = 150.0;
 const FOLLOW_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
 /// A party nobody has seen for this long is gone; the group holds where it stands.
 const LOST_FRAMES: i32 = 6 * FRAMES_PER_SECOND;
+/// H-HANDS-STALL: a moving group whose centre has not come this much closer to its goal in this long is stalled; the
+/// picture says so, and an advancing one wakes the player once (pianist-player-2: the ball stood five minutes short
+/// of the enemy base with the player reading "under fire" and nothing about the hands).
+const PROGRESS_STEP: f32 = 60.0;
+const STALL_FRAMES: i32 = 45 * FRAMES_PER_SECOND;
 
 #[derive(Clone, Debug)]
 pub(crate) enum GroupTask {
@@ -44,11 +49,35 @@ pub(crate) struct Group {
     pub last_order: i32,
     /// Whether an enemy party stood within reach at the last look: a new one is a reason to ask at once.
     pub enemies_near: bool,
+    /// The nearest the centre has been to a moving task's goal, and when it last got nearer (H-HANDS-STALL).
+    pub best_to_go: f32,
+    pub progressed: i32,
+    pub stall_warned: bool,
 }
 
 impl Group {
+    pub(crate) fn new(name: String, members: Vec<UnitId>, task: GroupTask, frame: i32) -> Group {
+        Group { name, members, task, held: HashSet::new(), last_order: frame, enemies_near: false, best_to_go: f32::INFINITY, progressed: frame, stall_warned: false }
+    }
+
+    /// Game seconds since a moving group last got nearer its goal; `None` when it is not moving.
+    pub(crate) fn stalled_seconds(&self, frame: i32) -> Option<i32> {
+        matches!(self.task, GroupTask::Move { .. }).then(|| (frame - self.progressed) / FRAMES_PER_SECOND)
+    }
+
     pub(crate) fn units<'a>(&self, own: &'a [OwnUnit]) -> Vec<&'a OwnUnit> {
         own.iter().filter(|u| self.members.contains(&u.id)).collect()
+    }
+}
+
+impl Group {
+    /// A new task starts the progress clock afresh.
+    pub(crate) fn set_task(&mut self, task: GroupTask, frame: i32) {
+        self.task = task;
+        self.held.clear();
+        self.best_to_go = f32::INFINITY;
+        self.progressed = frame;
+        self.stall_warned = false;
     }
 }
 
@@ -88,7 +117,7 @@ impl Brain {
                 Some((_, group)) => group.members.push(unit.id),
                 None => {
                     let name = pianist.new_group_name();
-                    pianist.groups.push(Group { name, members: vec![unit.id], task: GroupTask::Hold { since: frame }, held: HashSet::new(), last_order: frame, enemies_near: false });
+                    pianist.groups.push(Group::new(name, vec![unit.id], GroupTask::Hold { since: frame }, frame));
                 }
             }
         }
@@ -113,16 +142,25 @@ impl Brain {
         }
         // Standing orders.
         let mut marches: Vec<(usize, Vec3)> = Vec::new();
+        let mut stalled: Vec<String> = Vec::new();
         for (index, group) in pianist.groups.iter_mut().enumerate() {
             let units = group.units(own);
             let Some(centre) = centre_of(&units) else { continue };
             match &mut group.task {
                 GroupTask::Hold { .. } => {}
-                GroupTask::Move { to, fight, .. } => {
-                    if centre.dist2d(*to) < ARRIVED {
+                GroupTask::Move { to, fight, place, .. } => {
+                    let to_go = centre.dist2d(*to);
+                    if to_go < group.best_to_go - PROGRESS_STEP {
+                        (group.best_to_go, group.progressed) = (to_go, frame);
+                    }
+                    if to_go < ARRIVED {
                         group.task = GroupTask::Hold { since: frame };
                         group.held.clear();
                     } else if *fight {
+                        if frame - group.progressed >= STALL_FRAMES && !group.stall_warned {
+                            group.stall_warned = true;
+                            stalled.push(format!("group_{} was told to advance to {place} and has not got nearer for {} s, {to_go:.0} short of it", group.name, (frame - group.progressed) / FRAMES_PER_SECOND));
+                        }
                         marches.push((index, *to));
                     }
                 }
@@ -141,6 +179,13 @@ impl Brain {
                 }
             }
             let _ = home;
+        }
+        for text in stalled {
+            pianist.note(frame, text.clone());
+            pianist.done.push(format!("{} {text}", super::picture::clock(frame)));
+            if let Some(shared) = &self.strategist {
+                shared.trigger(text);
+            }
         }
         self.pianist = Some(pianist);
         for (index, to) in marches {

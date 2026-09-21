@@ -306,6 +306,8 @@ impl Brain {
         let frame = tick.frame;
         let names: Vec<(UnitId, String, Vec3)> = own.iter().map(|u| (u.id, self.name(u.def).to_string(), u.pos)).collect();
         let mut notes: Vec<String> = Vec::new();
+        // What did not happen, for the player's report as well as the picture.
+        let mut done: Vec<String> = Vec::new();
         let mut refused: Vec<(UnitId, UnitDefId, Vec3)> = Vec::new();
         let Some(mut pianist) = self.pianist.take() else { return };
         pianist.tasks.retain(|id, _| own.iter().any(|u| u.id == *id));
@@ -337,7 +339,9 @@ impl Brain {
                     if let Some((def, pos)) = self.known_units.get(&unit) {
                         let building = self.world.def(*def).is_some_and(|d| d.speed == 0.0 || *def == kit.commander || d.build_speed > 0.0);
                         if let Some(share) = self.abandoned(unit, attacker) {
-                            notes.push(format!("abandoned an unfinished {} at {} ({:.0}% built): its builder was sent elsewhere and the frame decayed", self.name(*def), self.world.grid(*pos), share * 100.0));
+                            let text = format!("abandoned an unfinished {} at {} ({:.0}% built): its builder was sent elsewhere and the frame decayed", self.name(*def), self.world.grid(*pos), share * 100.0);
+                            done.push(format!("{} {text}", picture::clock(frame)));
+                            notes.push(text);
                         } else if building {
                             let killer = attacker.and_then(|id| self.enemy_defs.get(&id)).map_or("something unseen".to_string(), |d| self.name(*d).to_string());
                             notes.push(format!("lost our {} at {} to {killer}", self.name(*def), self.world.grid(*pos)));
@@ -373,6 +377,7 @@ impl Brain {
         for text in notes {
             pianist.note(frame, text);
         }
+        pianist.done.append(&mut done);
         self.pianist = Some(pianist);
         for (unit, def, near) in refused {
             self.dropped_orders += 1;
@@ -389,7 +394,11 @@ impl Brain {
             if let Some(i) = refused_spot {
                 pianist.refused_spots.insert(i, frame + REFUSED_FRAMES);
             }
-            pianist.note(frame, format!("the engine refused a {name} at {}: the site was bad", self.world.grid(near)));
+            let text = format!("the engine refused a {name} at {}: the site was bad", self.world.grid(near));
+            let actor = self.actor_name(unit, kit);
+            let pianist = self.pianist.as_mut().expect("pianist mode");
+            pianist.done.push(format!("{} {actor}: {text}", picture::clock(frame)));
+            pianist.note(frame, text);
             eprintln!("[ai {}] f={frame} pianist: {name} order for unit {} near ({:.0}, {:.0}) never started", self.world.hello.ai_id, unit.0, near.x, near.z);
         }
     }

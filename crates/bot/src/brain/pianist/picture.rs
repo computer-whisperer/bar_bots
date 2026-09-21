@@ -598,6 +598,13 @@ impl Brain {
                 "health": format!("{} on average", health_words(health)),
                 "doing": doing,
             });
+            if let Some(seconds) = group.stalled_seconds(frame).filter(|s| *s >= 20) {
+                entry["progress"] = json!(format!("has not got nearer its goal for {seconds} s: stalled"));
+            }
+            let fleeing = units.iter().filter(|u| self.lane.fleeing(u.id)).count();
+            if fleeing > 0 {
+                entry["footwork"] = json!(format!("{fleeing} of its {} soldiers are being held back by their own footwork this second: stepping out of a turret's reach they were not sent against, or out of a fight they would die in", units.len()));
+            }
             if let Some(words) = self.party_words(&parties, centre) {
                 entry["enemies_near"] = json!(words);
             }
