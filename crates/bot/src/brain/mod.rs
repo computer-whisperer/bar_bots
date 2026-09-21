@@ -254,6 +254,7 @@ impl Brain {
         }
         let Some(kit) = self.kit else { return Vec::new() };
         self.read_directives(tick.frame);
+        self.receive_spot_fields();
         self.note_allies(tick);
         self.track_enemy_buildings(tick);
         self.survey_spots(tick);

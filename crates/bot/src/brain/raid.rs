@@ -151,7 +151,8 @@ impl Brain {
         // D-gun kills a Pawn a shot; rush-16: five of eight first Pawns died within six seconds of sighting it).
         spots.retain(|s| !self.commander_ground(*s));
         // Round the presumed base first (rush-15: the first Pawn went to a stale spot in the middle of the box).
-        spots.sort_by(|a, b| self.spot_likelihood(*b).total_cmp(&self.spot_likelihood(*a)).then(a.dist2d(from).total_cmp(&b.dist2d(from))));
+        let walk = |s: Vec3| self.spot_index(s).map_or_else(|| s.dist2d(from), |i| self.walk_to_spot(i, from));
+        spots.sort_by(|a, b| self.spot_likelihood(*b).total_cmp(&self.spot_likelihood(*a)).then(walk(*a).total_cmp(&walk(*b))));
         spots
     }
 

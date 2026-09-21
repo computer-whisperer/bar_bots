@@ -155,3 +155,12 @@ Each step is a commit.
   part 3's ground (focus fire, kiting) and the contact answer's. Not measured yet beyond single games: the A/B batch
   is next. The record's `dmg` field carries a killing blow's full damage (a D-gun's tens of thousands); the ledger caps
   a unit's damage at its health.
+- 2026-09-20, the first A/B (micro-flee-ab, ledger): the flee alone halves deaths and halves kills; wounded units
+  left unit fights their side was winning. The lethal branch now fires only when their fire on the unit beats ours
+  round it by 1.2 (`ODDS_TO_STAY`).
+- 2026-09-20, parts 3 and 4 built: H-MICRO-FOCUS (groups within 300 shoot the dearest target per second of their
+  fire, shooters until a second of fire covers it, Attack with the standing order queued, never on a target out of
+  reach), H-MICRO-KITE (out-reaching and no slower: step back while reloading, shoot when ready; Rocketeers against
+  Hammers in the smoke), and walking fields per metal spot built on a thread at the survey (44 in 0.4 s), used by
+  the spot claim, the scouts' routes and the party's spot candidates. Smoke: micro-focus-debug. Measured next by the
+  second A/B (micro-ab2).

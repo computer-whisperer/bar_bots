@@ -347,7 +347,11 @@ the commander 300 and about 390 a second); at 10 Hz it walks 9. So no rule at 2 
 did not mean to enter, and the four raid faults found on 2026-09-20 (the dive at the commander after sighting it, the
 fight under a tower with no flee, the leader waiting for joiners under fire, the party walked through the base on a
 Move) are all decisions taken too late at the unit level.
-**Status.** conjectured (2026-09-20). The arithmetic is from the unit table; the effect on the exchange is unmeasured.
+**Status.** conjectured (2026-09-20). The arithmetic is from the unit table. First A/B (micro-flee-ab, 12 games an
+arm): the flee alone cut deaths to turrets and the commander from 4.2 to 3.2 a game by minute 10 and soldier-seconds
+under fire from 328 to 216, but also halved what the army killed (648 against 1174) because wounded units left unit
+fights their side was winning; wins 1 against 3. The claim stands for static defences; for unit fights it is
+K-army-withdrawing-a-hurt-soldier-saves-metal-and-loses-the-fight that holds, and the rule now leaves only losing fights.
 **Evidence.** `crates/combatsim/data/units.json` (armpw, armllt, armcom); rush-26 records: 17.8 Pawns lost to 3.0
 buildings killed by minute 10; micro-flee-debug (one game, the first lane): every Pawn death traced to a decision the
 lane made or failed to make (`docs/design/2026-09-20-micro-lane.md`, status).

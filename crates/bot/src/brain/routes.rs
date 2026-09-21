@@ -16,6 +16,11 @@ pub struct Routes {
     from_enemy: Option<Field>,
     enemy_origins: Vec<Vec3>,
     passable: Vec<bool>,
+    /// One field per metal spot (the map's order), so that "nearest spot" means walking distance from wherever a
+    /// unit stands (the user, 2026-09-20: the commander walked the cliffs behind the Quicksilver base to spots a
+    /// straight line called near). Built on a thread at the survey (10 ms a spot); empty until it arrives.
+    spot_fields: Vec<Option<Field>>,
+    spot_fields_pending: Option<std::sync::mpsc::Receiver<Vec<Option<Field>>>>,
 }
 
 impl Brain {
@@ -48,7 +53,17 @@ impl Brain {
         let cut_off: Vec<String> =
             spots.iter().filter(|s| from_home.distance(**s).is_none()).map(|s| format!("({:.0}, {:.0})", s.x, s.z)).collect();
         eprintln!("[ai {}] terrain: spots we cannot walk to: {}", self.ai(), cut_off.join(" "));
-        self.routes = Some(Routes { from_home, from_enemy, enemy_origins, passable });
+        let (sender, receiver) = std::sync::mpsc::channel();
+        {
+            let terrain = terrain.clone();
+            let passable = passable.clone();
+            let spots = spots.clone();
+            std::thread::spawn(move || {
+                let fields = spots.iter().map(|spot| Field::from(&terrain, &passable, *spot)).collect();
+                let _ = sender.send(fields);
+            });
+        }
+        self.routes = Some(Routes { from_home, from_enemy, enemy_origins, passable, spot_fields: Vec::new(), spot_fields_pending: Some(receiver) });
         for p in self.passages() {
             eprintln!("[ai {}] terrain: passage at {} ({:.0}, {:.0}), {:.0} wide, {:.0} % of the way to the enemy", self.ai(), self.world.grid(p.at), p.at.x, p.at.z, p.width, p.along * 100.0);
         }
@@ -69,6 +84,29 @@ impl Brain {
             routes.from_enemy = Field::from_many(terrain, &routes.passable, &origins);
             routes.enemy_origins = origins;
         }
+    }
+
+    /// Takes the spot fields once the thread has built them; call every think tick.
+    pub(super) fn receive_spot_fields(&mut self) {
+        let Some(routes) = &mut self.routes else { return };
+        if let Some(receiver) = &routes.spot_fields_pending
+            && let Ok(fields) = receiver.try_recv()
+        {
+            routes.spot_fields = fields;
+            routes.spot_fields_pending = None;
+        }
+    }
+
+    /// Walking distance from `from` to the metal spot with this index; the straight line until the fields are
+    /// built or where the spot cannot be walked to.
+    pub(super) fn walk_to_spot(&self, index: usize, from: Vec3) -> f32 {
+        let spot = self.world.hello.metal_spots.get(index).copied().unwrap_or(from);
+        self.routes.as_ref().and_then(|r| r.spot_fields.get(index)?.as_ref()?.distance(from)).unwrap_or_else(|| spot.dist2d(from))
+    }
+
+    /// The index of the metal spot at `pos`, if one lies there.
+    pub(super) fn spot_index(&self, pos: Vec3) -> Option<usize> {
+        self.world.hello.metal_spots.iter().position(|s| s.dist2d(pos) < 1.0)
     }
 
     /// Whether our soldiers can walk from home to (next to) `pos`. True when we cannot tell.

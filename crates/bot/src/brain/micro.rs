@@ -31,8 +31,22 @@ const MEMORY_FRAMES: i32 = 10 * FRAMES_PER_SECOND;
 const DEFAULT_CELL: f32 = 16.0;
 /// A source fainter than this (a memory nearly faded) stamps the grid but moves nobody.
 const FAINT: f32 = 10.0;
+/// A wounded unit leaves a unit fight only when their fire on it beats our fire round it by this factor.
+const ODDS_TO_STAY: f32 = 1.2;
 /// A claim stands at least this long: a step's reversed velocity cleared the unit's predicted place at once.
 const CLAIM_FRAMES: i32 = 30;
+/// A target this far beyond a shooter's reach still counts as in it (the engine closes the last few elmos).
+const FOCUS_SLACK: f32 = 20.0;
+/// Shooters this close together choose targets together.
+const FOCUS_GROUP: f32 = 300.0;
+/// Shooters are put on a target until their fire would kill it within this long; the rest take the next.
+const OVERKILL_SECONDS: f32 = 1.0;
+/// A unit kites what it out-reaches by this much or more.
+const KITE_MARGIN: f32 = 20.0;
+/// Where a kiting unit keeps its enemy: this far inside its reach.
+const KITE_EDGE: f32 = 15.0;
+/// How far a kiting unit steps back while reloading, beyond what restores the edge.
+const KITE_STEP: f32 = 40.0;
 
 /// What a unit's group was priced against, so the lane knows which threats the brain meant it to face.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -78,13 +92,27 @@ struct Source {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Rule {
     Flee,
+    Focus,
+    Kite,
 }
 
 impl Rule {
     fn id(self) -> &'static str {
         match self {
             Rule::Flee => "H-MICRO-FLEE",
+            Rule::Focus => "H-MICRO-FOCUS",
+            Rule::Kite => "H-MICRO-KITE",
         }
+    }
+}
+
+/// A standing order as the thing to do after a shot: the same order, queued.
+fn queued(order: &Command) -> Command {
+    match order.clone() {
+        Command::Move { unit, to, .. } => Command::Move { unit, to, queue: true },
+        Command::Fight { unit, to, .. } => Command::Fight { unit, to, queue: true },
+        Command::Attack { unit, target, .. } => Command::Attack { unit, target, queue: true },
+        other => other,
     }
 }
 
@@ -92,6 +120,8 @@ impl Rule {
 struct Claim {
     rule: Rule,
     sent_to: Vec3,
+    /// What it was told to shoot (focus, or a kite's shot).
+    target: Option<UnitId>,
     frame: i32,
 }
 
@@ -171,7 +201,8 @@ impl Brain {
         self.lane.commitment = commitment;
     }
 
-    /// Every tick: the threat grid, then each soldier near an enemy through the behaviours.
+    /// Every tick: the threat grid, then each soldier near an enemy through the behaviours, in order: flee, focus,
+    /// kite, the standing order.
     pub(super) fn micro(&mut self, tick: &Tick) -> Vec<Command> {
         let Some(kit) = self.kit else { return Vec::new() };
         if !self.enabled("H-MICRO-LANE") {
@@ -179,86 +210,253 @@ impl Brain {
         }
         let frame = tick.frame;
         let snapshot = &tick.snapshot;
-        let alive = |lane: &mut Lane| {
-            lane.standing.retain(|id, _| snapshot.own_units.iter().any(|u| u.id == *id));
-            lane.claims.retain(|id, _| snapshot.own_units.iter().any(|u| u.id == *id));
-        };
-        alive(&mut self.lane);
+        self.lane.standing.retain(|id, _| snapshot.own_units.iter().any(|u| u.id == *id));
+        self.lane.claims.retain(|id, _| snapshot.own_units.iter().any(|u| u.id == *id));
         let sources = self.threat_sources(snapshot.enemies.as_slice(), frame);
         self.rebuild_grid(&sources);
         let mut commands = Vec::new();
         let debug = std::env::var_os("WITHIN_REASON_MICRO_DEBUG").is_some();
 
         let soldiers: Vec<&OwnUnit> = snapshot.own_units.iter().filter(|u| !u.being_built && self.is_army(u, &kit)).collect();
-        for unit in soldiers {
+        let mut owned: HashMap<UnitId, Rule> = HashMap::new();
+        let mut free: Vec<&OwnUnit> = Vec::new();
+        for unit in &soldiers {
             let near = sources.iter().any(|s| s.pos.dist2d(unit.pos) < HORIZON + s.reach);
             if !near {
                 self.release(unit.id, frame, &mut commands, debug);
                 continue;
             }
-            let next = Vec3 { x: unit.pos.x + unit.vel.x * LOOKAHEAD_FRAMES, y: 0.0, z: unit.pos.z + unit.vel.z * LOOKAHEAD_FRAMES };
-            let commitment = self.lane.commitment.get(&unit.id).cloned().unwrap_or_default();
-            let covers = |s: &Source, p: Vec3| s.pos.dist2d(p) < s.reach + TAIL;
-            let unpriced_at = |p: Vec3| sources.iter().find(|s| !commitment.covers(s) && s.weight >= FAINT && covers(s, p));
-            // Damage a second from soldiers of theirs at `p`: a committed unit leaves a unit fight it would die in,
-            // but never a turret dive its group was priced for (a Pawn cannot get out of a tower's reach in time
-            // whatever it does, and the dive needs its gun; micro-flee-debug).
-            let mobile_threat_at = |p: Vec3| -> f32 {
-                sources.iter().filter(|s| s.mobile && covers(s, p)).map(|s| {
-                    let d = s.pos.dist2d(p);
-                    s.weight * if d <= s.reach { 1.0 } else { (s.reach + TAIL - d) / TAIL }
-                }).sum()
-            };
-            // H-MICRO-FLEE: a threat the brain did not price this unit against, where it is heading (or where it
-            // stands, while it has not got out yet); or soldiers of theirs that would kill it before the brain looks again.
-            let claimed = self.lane.claims.get(&unit.id).is_some_and(|c| c.rule == Rule::Flee);
-            let unpriced = unpriced_at(next).or_else(|| if claimed { unpriced_at(unit.pos) } else { None });
-            let lethal = mobile_threat_at(next) * EXPOSURE_SECONDS >= unit.health;
-            if let Some(why) = unpriced.map(|s| ("unpriced", s.id)).or(lethal.then_some(("lethal", UnitId(-1)))) {
-                let goal = self.standing_goal(unit.id, snapshot.enemies.as_slice()).unwrap_or(self.home);
-                let passable = self.passable();
-                let Some(step) = self.lane.grid.as_ref().and_then(|g| g.lowest_within(unit.pos, STEP_RADIUS, passable, goal)) else { continue };
-                let claim = self.lane.claims.get(&unit.id);
-                let fresh = claim.is_none_or(|c| c.rule != Rule::Flee);
-                let reorder = claim.is_none_or(|c| c.sent_to.dist2d(step) > REORDER_DISTANCE && frame - c.frame >= REORDER_FRAMES);
-                if fresh {
-                    self.fire(Rule::Flee.id());
-                    self.lane.counts.0 += 1;
-                    if debug {
-                        eprintln!(
-                            "[ai {}] f={frame} micro: {}#{} flees ({why:?}) from ({:.0}, {:.0}) to ({:.0}, {:.0}), threat there {:.0}/s, health {:.0}",
-                            self.ai(), self.name(unit.def), unit.id.0, unit.pos.x, unit.pos.z, step.x, step.z,
-                            self.lane.grid.as_ref().map_or(0.0, |g| g.at(next)), unit.health
-                        );
-                    }
+            // Our fire round the unit, this one's included: what a unit fight there is worth staying in.
+            let friends_dps: f32 = soldiers.iter().filter(|f| f.pos.dist2d(unit.pos) < FOCUS_GROUP).filter_map(|f| self.sim_stats(f.def)).map(|(_, dps, _)| dps).sum();
+            match self.flee(unit, &sources, friends_dps, frame, &mut commands, debug) {
+                Some(rule) => {
+                    owned.insert(unit.id, rule);
                 }
-                if fresh || reorder {
-                    self.lane.counts.1 += 1;
-                    self.lane.claims.insert(unit.id, Claim { rule: Rule::Flee, sent_to: step, frame });
-                    commands.push(Command::Move { unit: unit.id, to: step, queue: false });
-                }
-                continue;
+                None => free.push(unit),
             }
-            // Out of danger, but its order leads straight back in (the goal, or the way to it): it stands where it
-            // is until the brain orders otherwise, rather than walking in and out of the tail every few seconds
-            // (micro-flee-debug2: a Pawn released at the tail's edge walked back into a tower's reach three times).
-            if claimed
-                && let Some(goal) = self.standing_goal(unit.id, snapshot.enemies.as_slice())
-                && (sources.iter().any(|s| !commitment.covers(s) && s.weight >= FAINT && super::contact::to_segment(s.pos, unit.pos, goal) < s.reach + TAIL)
-                    || mobile_threat_at(goal) * EXPOSURE_SECONDS >= unit.health)
-            {
-                continue;
+        }
+        let focused = self.focus(&free, snapshot.enemies.as_slice(), frame, &mut commands, debug);
+        owned.extend(focused.iter().map(|id| (*id, Rule::Focus)));
+        free.retain(|u| !focused.contains(&u.id));
+        for unit in &free {
+            if self.kite(unit, snapshot.enemies.as_slice(), frame, &mut commands, debug) {
+                owned.insert(unit.id, Rule::Kite);
+            } else if self.lane.claims.get(&unit.id).is_some_and(|c| frame - c.frame < CLAIM_FRAMES) {
+                // A claim stands at least this long.
+            } else {
+                self.release(unit.id, frame, &mut commands, debug);
             }
-            if self.lane.claims.get(&unit.id).is_some_and(|c| frame - c.frame < CLAIM_FRAMES) {
-                continue;
-            }
-            self.release(unit.id, frame, &mut commands, debug);
         }
         if tick.due() % (60 * FRAMES_PER_SECOND) == 0 && self.lane.counts != (0, 0) {
             let (claims, orders) = std::mem::take(&mut self.lane.counts);
-            eprintln!("[ai {}] f={frame} micro this minute: {claims} units took over, {orders} steps", self.ai());
+            eprintln!("[ai {}] f={frame} micro this minute: {claims} units took over, {orders} orders", self.ai());
         }
         commands
+    }
+
+    /// H-MICRO-FLEE for one unit: `Some` when it owns the unit this tick (a step, or a hold at the edge).
+    fn flee(&mut self, unit: &OwnUnit, sources: &[Source], friends_dps: f32, frame: i32, commands: &mut Vec<Command>, debug: bool) -> Option<Rule> {
+        let next = Vec3 { x: unit.pos.x + unit.vel.x * LOOKAHEAD_FRAMES, y: 0.0, z: unit.pos.z + unit.vel.z * LOOKAHEAD_FRAMES };
+        let commitment = self.lane.commitment.get(&unit.id).cloned().unwrap_or_default();
+        let covers = |s: &Source, p: Vec3| s.pos.dist2d(p) < s.reach + TAIL;
+        let unpriced_at = |p: Vec3| sources.iter().find(|s| !commitment.covers(s) && s.weight >= FAINT && covers(s, p));
+        // Damage a second from soldiers of theirs at `p`: a committed unit leaves a unit fight it would die in,
+        // but never a turret dive its group was priced for (a Pawn cannot get out of a tower's reach in time
+        // whatever it does, and the dive needs its gun; micro-flee-debug).
+        let mobile_threat_at = |p: Vec3| -> f32 {
+            sources.iter().filter(|s| s.mobile && covers(s, p)).map(|s| {
+                let d = s.pos.dist2d(p);
+                s.weight * if d <= s.reach { 1.0 } else { (s.reach + TAIL - d) / TAIL }
+            }).sum()
+        };
+        // A threat the brain did not price this unit against, where it is heading (or where it stands, while it has
+        // not got out yet); or soldiers of theirs that would kill it before the brain looks again.
+        let claimed = self.lane.claims.get(&unit.id).is_some_and(|c| c.rule == Rule::Flee);
+        let unpriced = unpriced_at(next).or_else(|| if claimed { unpriced_at(unit.pos) } else { None });
+        // A unit fight it would die in, and one its side is losing where it stands: with friends' fire around it
+        // beating theirs, a wounded unit stays and shoots (micro-flee-ab: fleeing every fight three Pawns could win
+        // halved what the army killed by minute 10 and won a game fewer; K-army-withdrawing-a-hurt-soldier-...).
+        let theirs = mobile_threat_at(next);
+        let outgunned = theirs > friends_dps * ODDS_TO_STAY;
+        let lethal = theirs * EXPOSURE_SECONDS >= unit.health && outgunned;
+        let enemies: Vec<EnemyUnit> = Vec::new();
+        if let Some(why) = unpriced.map(|s| ("unpriced", s.id)).or(lethal.then_some(("lethal", UnitId(-1)))) {
+            let goal = self.standing_goal(unit.id, &enemies).unwrap_or(self.home);
+            let passable = self.passable();
+            let step = self.lane.grid.as_ref().and_then(|g| g.lowest_within(unit.pos, STEP_RADIUS, passable, goal))?;
+            let claim = self.lane.claims.get(&unit.id);
+            let fresh = !claimed;
+            let reorder = claim.is_none_or(|c| c.sent_to.dist2d(step) > REORDER_DISTANCE && frame - c.frame >= REORDER_FRAMES);
+            if fresh {
+                self.fire(Rule::Flee.id());
+                self.lane.counts.0 += 1;
+                if debug {
+                    eprintln!(
+                        "[ai {}] f={frame} micro: {}#{} flees ({why:?}) from ({:.0}, {:.0}) to ({:.0}, {:.0}), threat there {:.0}/s, health {:.0}",
+                        self.ai(), self.name(unit.def), unit.id.0, unit.pos.x, unit.pos.z, step.x, step.z,
+                        self.lane.grid.as_ref().map_or(0.0, |g| g.at(next)), unit.health
+                    );
+                }
+            }
+            if fresh || reorder {
+                self.lane.counts.1 += 1;
+                self.lane.claims.insert(unit.id, Claim { rule: Rule::Flee, sent_to: step, target: None, frame });
+                commands.push(Command::Move { unit: unit.id, to: step, queue: false });
+            }
+            return Some(Rule::Flee);
+        }
+        // Out of danger, but its order leads straight back in (the goal, or the way to it), or back into a fight it
+        // would die in: it stands where it is until the brain orders otherwise, rather than walking in and out of
+        // the tail every few seconds (micro-flee-debug2, -debug3).
+        if claimed
+            && let Some(goal) = self.standing_goal(unit.id, &enemies)
+            && (sources.iter().any(|s| !commitment.covers(s) && s.weight >= FAINT && super::contact::to_segment(s.pos, unit.pos, goal) < s.reach + TAIL)
+                || (mobile_threat_at(goal) * EXPOSURE_SECONDS >= unit.health && mobile_threat_at(goal) > friends_dps * ODDS_TO_STAY))
+        {
+            return Some(Rule::Flee);
+        }
+        None
+    }
+
+    /// H-MICRO-FOCUS: soldiers standing together with enemies inside their reach shoot one target at a time, the
+    /// dearest for the time it takes, as many of them as it takes to kill it in a second, the rest the next. Returns
+    /// who was given a target. Only targets already in a shooter's reach: an Attack order on anything else is a chase.
+    fn focus(&mut self, free: &[&OwnUnit], enemies: &[EnemyUnit], frame: i32, commands: &mut Vec<Command>, debug: bool) -> Vec<UnitId> {
+        let mut given = Vec::new();
+        let shooters: Vec<(&OwnUnit, f32, f32)> = free.iter().filter_map(|u| {
+            let (reach, dps, _) = self.sim_stats(u.def)?;
+            (reach > 0.0 && dps > 0.0).then_some((*u, reach, dps))
+        }).collect();
+        // Targets: enemies of known type and worth inside some shooter's reach.
+        let targets: Vec<(&EnemyUnit, f32)> = enemies.iter().filter_map(|e| {
+            let def = e.def?;
+            let metal = self.world.def(def)?.metal_cost;
+            shooters.iter().any(|(u, reach, _)| u.pos.dist2d(e.pos) < reach + FOCUS_SLACK).then_some((e, metal))
+        }).collect();
+        if targets.is_empty() {
+            return given;
+        }
+        // Groups: shooters with a target in reach, chained within the group radius.
+        let mut engaged: Vec<usize> = (0..shooters.len()).filter(|i| targets.iter().any(|(e, _)| shooters[*i].0.pos.dist2d(e.pos) < shooters[*i].1 + FOCUS_SLACK)).collect();
+        let mut assignment: HashMap<UnitId, UnitId> = HashMap::new();
+        while let Some(seed) = engaged.pop() {
+            let mut group = vec![seed];
+            let mut i = 0;
+            while i < group.len() {
+                let at = shooters[group[i]].0.pos;
+                let (near, far): (Vec<usize>, Vec<usize>) = engaged.drain(..).partition(|j| shooters[*j].0.pos.dist2d(at) < FOCUS_GROUP);
+                group.extend(near);
+                engaged = far;
+                i += 1;
+            }
+            // Dearest target per second of the group's fire on it, until each is covered; a shooter goes to the
+            // first target it can reach in that order.
+            let mut unassigned: Vec<usize> = group.clone();
+            let mut order: Vec<(&EnemyUnit, f32, f32)> = targets.iter().map(|(e, metal)| {
+                let dps: f32 = group.iter().filter(|j| shooters[**j].0.pos.dist2d(e.pos) < shooters[**j].1 + FOCUS_SLACK).map(|j| shooters[*j].2).sum();
+                (*e, *metal, if dps > 0.0 { metal / (e.health / dps).max(0.1) } else { 0.0 })
+            }).collect();
+            order.retain(|(_, _, score)| *score > 0.0);
+            order.sort_by(|a, b| b.2.total_cmp(&a.2));
+            for (target, _, _) in order {
+                if unassigned.is_empty() {
+                    break;
+                }
+                let mut covered = 0.0;
+                let mut i = 0;
+                while i < unassigned.len() && covered < target.health / OVERKILL_SECONDS {
+                    let j = unassigned[i];
+                    if shooters[j].0.pos.dist2d(target.pos) < shooters[j].1 + FOCUS_SLACK {
+                        assignment.insert(shooters[j].0.id, target.id);
+                        covered += shooters[j].2;
+                        unassigned.remove(i);
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+        }
+        for (unit, target) in assignment {
+            given.push(unit);
+            let claim = self.lane.claims.get(&unit);
+            if claim.is_some_and(|c| c.rule == Rule::Focus && c.target == Some(target)) {
+                continue;
+            }
+            if claim.is_none_or(|c| c.rule != Rule::Focus) {
+                self.fire(Rule::Focus.id());
+                self.lane.counts.0 += 1;
+            }
+            self.lane.counts.1 += 1;
+            if debug {
+                eprintln!("[ai {}] f={frame} micro: unit {} focuses enemy {}", self.ai(), unit.0, target.0);
+            }
+            let pos = free.iter().find(|u| u.id == unit).map_or(Vec3::default(), |u| u.pos);
+            self.lane.claims.insert(unit, Claim { rule: Rule::Focus, sent_to: pos, target: Some(target), frame });
+            commands.push(Command::Attack { unit, target, queue: false });
+            if let Some((order, _)) = self.lane.standing.get(&unit) {
+                commands.push(queued(order));
+            }
+        }
+        given
+    }
+
+    /// H-MICRO-KITE for one unit: the nearest soldier of theirs that can hurt it is one it outranges and is no
+    /// slower than, inside its reach: while its weapon reloads it steps back to keep the enemy at the edge of its
+    /// reach; when the weapon is ready it shoots it. True when it owns the unit.
+    fn kite(&mut self, unit: &OwnUnit, enemies: &[EnemyUnit], frame: i32, commands: &mut Vec<Command>, debug: bool) -> bool {
+        let Some((reach, dps, speed)) = self.sim_stats(unit.def) else { return false };
+        if reach <= 0.0 || dps <= 0.0 {
+            return false;
+        }
+        let nearest = enemies.iter().filter_map(|e| {
+            let def = e.def?;
+            let d = self.world.def(def)?;
+            let (their_reach, their_dps, their_speed) = self.sim_stats(def)?;
+            (d.speed > 0.0 && their_dps > 0.0 && d.build_speed == 0.0).then_some((e, their_reach, their_speed))
+        }).min_by(|a, b| a.0.pos.dist2d(unit.pos).total_cmp(&b.0.pos.dist2d(unit.pos)));
+        let Some((enemy, their_reach, their_speed)) = nearest else { return false };
+        let distance = enemy.pos.dist2d(unit.pos);
+        if !(reach >= their_reach + KITE_MARGIN && speed >= their_speed && distance < reach + FOCUS_SLACK) {
+            return false;
+        }
+        // What the claim says now, copied out: the unit is claimed again below whatever it was.
+        let claim: Option<(Rule, Vec3, Option<UnitId>, i32)> = self.lane.claims.get(&unit.id).map(|c| (c.rule, c.sent_to, c.target, c.frame));
+        let fresh = claim.is_none_or(|c| c.0 != Rule::Kite);
+        if fresh {
+            self.fire(Rule::Kite.id());
+            self.lane.counts.0 += 1;
+            if debug {
+                eprintln!("[ai {}] f={frame} micro: {}#{} kites enemy {} ({:.0} away, reach {reach:.0} against {their_reach:.0})", self.ai(), self.name(unit.def), unit.id.0, enemy.id.0, distance);
+            }
+        }
+        let ready = unit.reload_frame <= frame + 1;
+        if ready {
+            if claim.is_some_and(|c| c.0 == Rule::Kite && c.2 == Some(enemy.id)) {
+                return true;
+            }
+            self.lane.counts.1 += 1;
+            self.lane.claims.insert(unit.id, Claim { rule: Rule::Kite, sent_to: unit.pos, target: Some(enemy.id), frame });
+            commands.push(Command::Attack { unit: unit.id, target: enemy.id, queue: false });
+            return true;
+        }
+        // Reloading: back to the edge of the reach, away from the enemy.
+        let (dx, dz) = (unit.pos.x - enemy.pos.x, unit.pos.z - enemy.pos.z);
+        let len = dx.hypot(dz).max(1.0);
+        let back = (reach - KITE_EDGE - distance).max(0.0) + KITE_STEP;
+        let step = self.snap_to_reachable(Vec3 { x: unit.pos.x + dx / len * back, y: 0.0, z: unit.pos.z + dz / len * back });
+        if claim.is_some_and(|c| c.0 == Rule::Kite && c.2.is_none() && c.1.dist2d(step) < REORDER_DISTANCE && frame - c.3 < REORDER_FRAMES) {
+            return true;
+        }
+        self.lane.counts.1 += 1;
+        self.lane.claims.insert(unit.id, Claim { rule: Rule::Kite, sent_to: step, target: None, frame });
+        commands.push(Command::Move { unit: unit.id, to: step, queue: false });
+        true
+    }
+
+    /// Reach, damage a second and speed (elmos a second) of a unit type from the simulator's table.
+    fn sim_stats(&self, def: UnitDefId) -> Option<(f32, f32, f32)> {
+        let unit = &self.contacts.rules.units.list[*self.contacts.sim_defs.get(&def)?];
+        Some((unit.reach(), unit.dps(), unit.speed))
     }
 
     /// A claimed unit no behaviour wants any more gets its standing order back, once.

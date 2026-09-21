@@ -754,7 +754,9 @@ impl Brain {
             .enumerate()
             .filter(|(i, s)| !self.spot_claims.contains_key(i) && !self.team_mates.spot_claims.contains(i) && reachable(**s) && !self.is_unreachable(**s) && !self.spot_avoid.contains(i) && self.spot_open_to_us(*i, **s, frame))
             .filter(|(_, s)| !self.spot_taken(**s, own, kit))
-            .min_by(|(_, a), (_, b)| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))?;
+            // On foot from where the builder stands (the user, 2026-09-20: the commander walked the cliffs behind the
+            // base for spots a straight line called near).
+            .min_by(|(i, _), (j, _)| self.walk_to_spot(*i, builder.pos).total_cmp(&self.walk_to_spot(*j, builder.pos)))?;
         self.spot_claims.insert(index, frame);
         // The engine stores the spot's metal value in `y`.
         Some(Vec3 { y: 0.0, ..*spot })

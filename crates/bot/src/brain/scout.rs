@@ -106,7 +106,7 @@ impl Brain {
             .filter(|(_, spot)| self.reachable_on_foot(*spot) && !armed.iter().any(|a| a.dist2d(*spot) < berth))
             .filter_map(|(index, spot)| {
                 let likelihood = self.spot_likelihood(spot);
-                (likelihood >= at_least).then(|| (self.spot_staleness(index, frame) as f32 / FRAMES_PER_SECOND as f32 * likelihood / spot.dist2d(from).max(MIN_WALK), spot))
+                (likelihood >= at_least).then(|| (self.spot_staleness(index, frame) as f32 / FRAMES_PER_SECOND as f32 * likelihood / self.walk_to_spot(index, from).max(MIN_WALK), spot))
             })
             .collect();
         scored.sort_by(|a, b| b.0.total_cmp(&a.0));

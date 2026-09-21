@@ -275,3 +275,24 @@ pub fn sketch(terrain: &Terrain, passable: &[bool], field: &Field, size: usize) 
         .collect()
 }
 
+
+#[cfg(test)]
+mod field_timing {
+    use super::*;
+
+    /// How long a field over a Quicksilver-sized grid takes: one per metal spot is the plan
+    /// (`docs/design/2026-09-20-micro-lane.md`, section 4).
+    #[test]
+    #[ignore]
+    fn a_field_over_a_quicksilver_sized_grid() {
+        let (width, height) = (448u32, 448u32);
+        let terrain = Terrain { cell: 16.0, width, height, heights: vec![50; (width * height) as usize], slopes: vec![0; (width * height) as usize] };
+        let passable = vec![true; (width * height) as usize];
+        let started = std::time::Instant::now();
+        for i in 0..44 {
+            let origin = Vec3 { x: (i * 150) as f32, y: 0.0, z: (i * 100) as f32 };
+            assert!(Field::from(&terrain, &passable, origin).is_some());
+        }
+        eprintln!("44 fields: {:.0} ms", started.elapsed().as_secs_f64() * 1000.0);
+    }
+}
