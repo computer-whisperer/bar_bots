@@ -602,11 +602,16 @@ briefing. Integration proposal in the study.
 and the laser the rest, and the fight simulator, which has no D-gun, prices the party's attack as a win. Four Pawns
 died in six seconds in rush-smoke2; eleven Pawns committed on "the kill is open" lost seven in under a minute in
 cmd-opus-low-3; the cmd-opus-1 pair's kill windows "closed on laser towers" at 4:40 in every game.
-**Status.** conjectured (2026-09-20 night); three games' worth of deaths, no controlled test. A second player's twelve
-Pawns did kill BARb's commander (the players' replays), with a player's micro.
+**Status.** supported (2026-09-20 night, the D-gun count in matt-plan and matt-raidprice, twelve games each on Matt's
+order): the D-gun killed 14 and 10 of ours by 10:00 against 22 and 23 to the commander's lasers and about 250 army
+deaths in all, so by count it is small; but the shot passes through everything on its line, and all but one of
+those deaths came in shots of three to seven Pawns dead within 6 to 18 frames inside a box 40 by 70 elmos (matt-plan
+07 at 3:21 and 08 at 4:53, seven each, ending the game's first dive both times; matt-raidprice 09 at 7:15, five).
+A D-gun death is a commander's kill whose killing blow is more than three times the unit's health (`run/micro_ledger.py`).
+A second player's twelve Pawns did kill BARb's commander (the players' replays), with a player's micro.
 **Evidence.** rush-smoke2, cmd-opus-low-3 (`run/commander_turns.py --notes`), cmd-opus-1.
 **Would be wrong if.** A party of eleven to fifteen Pawns under the control lane killed the commander in a duel-harness
 scene, or the simulator with a D-gun model priced such fights won.
 **Used by.** H-ARMY-KILL (no kill offered with the commander there under 900 metal of party; the wake names it),
-H-ARMY-PRESSURE (`COMMANDER_PARTY_METAL`), the brief.
+H-ARMY-PRESSURE (`COMMANDER_PARTY_METAL`), H-MICRO-FAN (spacing across the shot's line), the brief.
 

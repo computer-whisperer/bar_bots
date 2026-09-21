@@ -47,6 +47,19 @@ const KITE_MARGIN: f32 = 20.0;
 const KITE_EDGE: f32 = 15.0;
 /// How far a kiting unit steps back while reloading, beyond what restores the edge.
 const KITE_STEP: f32 = 40.0;
+/// A commander's D-gun line is spaced out to this far beyond its reach: three seconds of a Pawn's approach. The
+/// shot comes as the party enters the reach (matt-raidprice and matt-fan: every D-gun death was a unit closing at
+/// full speed, dead at 240 to 280 from the commander, in a file with the rest), so a zone the size of the reach
+/// itself catches a unit half a second before it dies (matt-fan: the rule fired ten times in twelve games).
+const DGUN_MARGIN: f32 = 260.0;
+/// The width of a D-gun shot: units of ours killed by one shot lay within 20 elmos either side of its line
+/// (matt-plan, matt-raidprice, matt-fan2: six shots of two to six). Two lines to the commander that pass closer than
+/// this at the edge of its reach are one line to the shot.
+const DGUN_SHADOW: f32 = 48.0;
+/// The gap a shadowed unit opens between its line and its friend's, at the edge of the reach.
+const FAN_CLEAR: f32 = 64.0;
+/// The most a fan step is, however far out the unit is.
+const FAN_STEP_MAX: f32 = 150.0;
 
 /// What a unit's group was priced against, so the lane knows which threats the brain meant it to face.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -87,11 +100,14 @@ struct Source {
     weight: f32,
     mobile: bool,
     commander: bool,
+    /// The reach of its D-gun (a `command_fire` weapon); 0 for everything but a commander.
+    dgun: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Rule {
     Flee,
+    Fan,
     Focus,
     Kite,
 }
@@ -100,6 +116,7 @@ impl Rule {
     fn id(self) -> &'static str {
         match self {
             Rule::Flee => "H-MICRO-FLEE",
+            Rule::Fan => "H-MICRO-FAN",
             Rule::Focus => "H-MICRO-FOCUS",
             Rule::Kite => "H-MICRO-KITE",
         }
@@ -201,8 +218,8 @@ impl Brain {
         self.lane.commitment = commitment;
     }
 
-    /// Every tick: the threat grid, then each soldier near an enemy through the behaviours, in order: flee, focus,
-    /// kite, the standing order.
+    /// Every tick: the threat grid, then each soldier near an enemy through the behaviours, in order: flee, fan,
+    /// focus, kite, the standing order.
     pub(super) fn micro(&mut self, tick: &Tick) -> Vec<Command> {
         let Some(kit) = self.kit else { return Vec::new() };
         if !self.enabled("H-MICRO-LANE") {
@@ -235,6 +252,9 @@ impl Brain {
                 None => free.push(unit),
             }
         }
+        let fanned = self.fan(&free, &soldiers, &sources, frame, &mut commands, debug);
+        owned.extend(fanned.iter().map(|id| (*id, Rule::Fan)));
+        free.retain(|u| !fanned.contains(&u.id));
         let focused = self.focus(&free, snapshot.enemies.as_slice(), frame, &mut commands, debug);
         owned.extend(focused.iter().map(|id| (*id, Rule::Focus)));
         free.retain(|u| !focused.contains(&u.id));
@@ -316,6 +336,64 @@ impl Brain {
             return Some(Rule::Flee);
         }
         None
+    }
+
+    /// H-MICRO-FAN: inside a commander's D-gun reach plus three seconds of approach, a unit whose line to the
+    /// commander would pass within a shot's width of a nearer friend's line at the edge of the reach steps across
+    /// its line, to the side with fewer of ours, far enough to open a gap there: the D-gun's shot passes through
+    /// everything on its line (matt-plan 07 and 08: seven Pawns to one shot, twice), and lines to one point
+    /// converge, so a gap here is a smaller one at the reach (matt-fan2: 48 elmos of sidestep at 500 out left the
+    /// party 24 apart where the shot came, and one shot still took three). The unit nearest the commander on a line
+    /// never steps, so the party fans out rather than withdrawing; commitment is not consulted, a sidestep leaves no
+    /// fight. Returns who stepped or holds a fan claim inside the zone.
+    fn fan(&mut self, free: &[&OwnUnit], soldiers: &[&OwnUnit], sources: &[Source], frame: i32, commands: &mut Vec<Command>, debug: bool) -> Vec<UnitId> {
+        let mut owned = Vec::new();
+        for commander in sources.iter().filter(|s| s.dgun > 0.0 && s.weight >= FAINT) {
+            let zone = commander.dgun + DGUN_MARGIN;
+            let inside: Vec<&OwnUnit> = soldiers.iter().copied().filter(|u| u.pos.dist2d(commander.pos) < zone).collect();
+            for unit in free.iter().filter(|u| inside.iter().any(|i| i.id == u.id)) {
+                let (dx, dz) = (unit.pos.x - commander.pos.x, unit.pos.z - commander.pos.z);
+                let along = dx.hypot(dz).max(1.0);
+                let (ux, uz) = (dx / along, dz / along);
+                // Signed distance across the line; and what a gap here between two lines to the commander is at the
+                // edge of its reach (the same when the unit is inside it).
+                let across = |f: &OwnUnit| -> f32 { (f.pos.x - commander.pos.x) * -uz + (f.pos.z - commander.pos.z) * ux };
+                let at_edge = |f: &OwnUnit| -> f32 { (commander.dgun / f.pos.dist2d(commander.pos).max(1.0)).min(1.0) };
+                let shadowed = inside.iter().any(|f| f.id != unit.id && f.pos.dist2d(commander.pos) < along && across(f).abs() * at_edge(f) < DGUN_SHADOW);
+                let claim = self.lane.claims.get(&unit.id);
+                if !shadowed {
+                    if claim.is_some_and(|c| c.rule == Rule::Fan && frame - c.frame < CLAIM_FRAMES) {
+                        owned.push(unit.id);
+                    }
+                    continue;
+                }
+                // Across by enough to open the gap at the reach, to the side with fewer of ours within that.
+                let step_len = (FAN_CLEAR / at_edge(unit)).min(FAN_STEP_MAX);
+                let left = inside.iter().filter(|f| f.id != unit.id && f.pos.dist2d(unit.pos) < 2.0 * step_len && across(f) > across(unit)).count();
+                let right = inside.iter().filter(|f| f.id != unit.id && f.pos.dist2d(unit.pos) < 2.0 * step_len && across(f) < across(unit)).count();
+                let side = if left <= right { 1.0 } else { -1.0 };
+                let step = self.snap_to_reachable(Vec3 { x: unit.pos.x + -uz * step_len * side, y: 0.0, z: unit.pos.z + ux * step_len * side });
+                let fresh = claim.is_none_or(|c| c.rule != Rule::Fan);
+                let reorder = claim.is_none_or(|c| c.sent_to.dist2d(step) > REORDER_DISTANCE && frame - c.frame >= REORDER_FRAMES);
+                if fresh {
+                    self.fire(Rule::Fan.id());
+                    self.lane.counts.0 += 1;
+                    if debug {
+                        eprintln!(
+                            "[ai {}] f={frame} micro: {}#{} fans out of the D-gun line of commander {} ({:.0} away) from ({:.0}, {:.0}) to ({:.0}, {:.0})",
+                            self.ai(), self.name(unit.def), unit.id.0, commander.id.0, along, unit.pos.x, unit.pos.z, step.x, step.z
+                        );
+                    }
+                }
+                if fresh || reorder {
+                    self.lane.counts.1 += 1;
+                    self.lane.claims.insert(unit.id, Claim { rule: Rule::Fan, sent_to: step, target: None, frame });
+                    commands.push(Command::Move { unit: unit.id, to: step, queue: false });
+                }
+                owned.push(unit.id);
+            }
+        }
+        owned
     }
 
     /// H-MICRO-FOCUS: soldiers standing together with enemies inside their reach shoot one target at a time, the
@@ -495,9 +573,10 @@ impl Brain {
             self.survey_sim_defs();
         }
         let rules = self.contacts.rules.clone();
-        let stats = |def: UnitDefId| -> Option<(f32, f32)> {
+        let stats = |def: UnitDefId| -> Option<(f32, f32, f32)> {
             let unit = &rules.units.list[*self.contacts.sim_defs.get(&def)?];
-            (unit.reach() > 0.0).then(|| (unit.reach(), unit.dps()))
+            let dgun = unit.weapons.iter().filter(|w| w.command_fire && !w.paralyzer).map(|w| w.range).fold(0.0, f32::max);
+            (unit.reach() > 0.0).then(|| (unit.reach(), unit.dps(), dgun))
         };
         // A radar contact is taken for the soldier of theirs we have seen most, as the pricing does.
         let mut counted: HashMap<UnitDefId, usize> = HashMap::new();
@@ -511,28 +590,28 @@ impl Brain {
             if d.weapon_count == 0 {
                 continue;
             }
-            let Some((reach, dps)) = stats(def) else { continue };
+            let Some((reach, dps, dgun)) = stats(def) else { continue };
             let mobile = d.speed > 0.0;
             if mobile {
                 self.lane.seen.insert(enemy.id, (def, enemy.pos, frame));
             }
-            sources.push(Source { id: enemy.id, pos: enemy.pos, reach, weight: dps, mobile, commander: is_commander(def) });
+            sources.push(Source { id: enemy.id, pos: enemy.pos, reach, weight: dps, mobile, commander: is_commander(def), dgun });
         }
         for (id, (def, pos, _)) in &self.enemy_buildings {
             if sources.iter().any(|s| s.id == *id) {
                 continue;
             }
-            let Some((reach, dps)) = stats(*def) else { continue };
-            sources.push(Source { id: *id, pos: *pos, reach, weight: dps, mobile: false, commander: false });
+            let Some((reach, dps, _)) = stats(*def) else { continue };
+            sources.push(Source { id: *id, pos: *pos, reach, weight: dps, mobile: false, commander: false, dgun: 0.0 });
         }
         self.lane.seen.retain(|id, (_, _, at)| frame - *at < MEMORY_FRAMES && self.enemy_soldiers.contains_key(id));
         for (id, (def, pos, at)) in &self.lane.seen {
             if sources.iter().any(|s| s.id == *id) {
                 continue;
             }
-            let Some((reach, dps)) = stats(*def) else { continue };
+            let Some((reach, dps, dgun)) = stats(*def) else { continue };
             let fade = 1.0 - (frame - at) as f32 / MEMORY_FRAMES as f32;
-            sources.push(Source { id: *id, pos: *pos, reach, weight: dps * fade, mobile: true, commander: is_commander(*def) });
+            sources.push(Source { id: *id, pos: *pos, reach, weight: dps * fade, mobile: true, commander: is_commander(*def), dgun });
         }
         sources
     }

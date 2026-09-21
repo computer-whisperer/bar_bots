@@ -64,6 +64,9 @@ def read(path, until_frame):
     com_walked = 0.0
     com_trip = 0.0
     com_trips = []
+    # A commander's kills wait for the next sample's damage: a D-gun's killing blow is tens of thousands.
+    commander_kills = {}   # own unit id -> frame killed by a commander
+    dgun_frames = []       # frames of deaths to the D-gun
     for line in open(path):
         try:
             r = json.loads(line)
@@ -98,6 +101,8 @@ def read(path, until_frame):
                     deaths_in_reach += 1
                 else:
                     deaths_elsewhere += 1
+                if commander:
+                    commander_kills[r["u"]] = r["f"]
             elif r["k"] == "enemy_destroyed" and d:
                 killed += d["metal"]
         elif t == "s":
@@ -120,6 +125,9 @@ def read(path, until_frame):
             for unit, dmg in r.get("dmg", []):
                 if unit in own_soldier:
                     damage[unit] += dmg
+                if unit in commander_kills and dmg > 3 * HEALTH.get(defs[own_soldier[unit]]["name"], 1e9):
+                    dgun_frames.append(commander_kills[unit])
+            commander_kills = {u: f for u, f in commander_kills.items() if r["f"] - f < 60}
             threats = []
             for e in r["en"]:
                 if e[1] < 0:
@@ -137,7 +145,10 @@ def read(path, until_frame):
     cap = lambda k, v: min(v, HEALTH.get(defs[own_soldier[k]]["name"], v))
     wounded_lived = sum(cap(k, v) for k, v in damage.items() if k not in died)
     wounded_died = sum(cap(k, v) for k, v in damage.items() if k in died)
+    # Shots: D-gun deaths within a second of the last count as one.
+    dgun_shots = sum(1 for i, f in enumerate(sorted(dgun_frames)) if i == 0 or f - sorted(dgun_frames)[i - 1] > 30)
     return {
+        "dgun_deaths": len(dgun_frames), "dgun_shots": dgun_shots,
         "lost": lost, "raider_lost": raider_lost, "killed": killed, "under_fire": under_fire,
         "deaths_in_reach": deaths_in_reach, "deaths_elsewhere": deaths_elsewhere,
         "wounded_lived": wounded_lived, "wounded_died": wounded_died,
@@ -158,6 +169,7 @@ def summarise(label, games):
     print(f"  exchange     {mean('lost'):6.0f} lost / {mean('killed'):6.0f} killed = {exchange:.2f}   (raiders lost {mean('raider_lost'):.0f})")
     print(f"  under fire   {mean('under_fire'):6.0f} soldier-seconds")
     print(f"  deaths       {mean('deaths_in_reach'):5.1f} to turrets or the commander, {mean('deaths_elsewhere'):5.1f} elsewhere")
+    print(f"  D-gun        {sum(g['dgun_deaths'] for g in games):3d} deaths in {sum(g['dgun_shots'] for g in games)} shots over the {n} games")
     print(f"  wounded      {mean('wounded_lived'):6.0f} damage on soldiers that lived, {mean('wounded_died'):6.0f} on those that died")
     print(f"  late ticks   worst {max(g['worst_late'] for g in games)} frames, {100 * mean('late_share'):.1f} % of samples")
     print(f"  commander    {mean('com_walked'):6.0f} elmos walked, {mean('com_trips'):4.1f} trips over 400, longest {mean('com_longest'):5.0f}")
