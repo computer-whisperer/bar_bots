@@ -409,6 +409,19 @@ impl Default for Wake {
     }
 }
 
+/// The pianist's side of the player's report (`docs/design/2026-09-21-pianist.md`, "The player"): the picture Jev
+/// was last shown (without the instructions and rules), what the hands did since the player's last turn, the groups
+/// that began an engagement in the last call, and Jev's global judgements.
+#[derive(Clone, Debug, Default)]
+pub struct Hands {
+    pub picture: serde_json::Value,
+    /// "m:ss actor: what", oldest first; drained by the driver at each turn.
+    pub done: Vec<String>,
+    pub engaged: Vec<String>,
+    /// Question id (without `global.`) to the yes-probability of the last call.
+    pub globals: BTreeMap<String, f64>,
+}
+
 /// Lockstep turns: the brain asks for a turn and holds the game (its reply to the engine) until the turn is over.
 #[derive(Default)]
 pub struct Gate {
@@ -444,6 +457,8 @@ pub struct Shared {
     pub notes: Mutex<Vec<String>>,
     /// The player's standing instructions to the pianist (`instruct` tool), the whole packet, replaced each time.
     pub instructions: Mutex<String>,
+    /// What the pianist publishes for the player (`brain/pianist`), read into its turn report.
+    pub hands: Mutex<Hands>,
     pub wake: Mutex<Wake>,
     /// True when turns are taken in lockstep with the game (the field commander).
     pub lockstep: std::sync::atomic::AtomicBool,

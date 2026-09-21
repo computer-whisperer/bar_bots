@@ -210,6 +210,16 @@ LLM levers belong. BARb is the reference for economy and army hoarding, not for 
 - **Reading a run.** Fight ledger exchange ratio in our half, extractors alive at minute 12 against the observed
   heuristic games, and the transcript: where it posts defenders, with what, and what it changes after a loss.
 
+## The pianist and the player (2026-09-21)
+
+`bot --pianist`: Jev (TypeSafe's System One model) plays every unit from a prose packet of standing instructions, one
+call a game second over a picture of the game and a menu per free actor; no decision heuristic runs beneath it (the
+control lane and the tracking do). `bot --pianist --player`: an Opus session (`strategist` mode `Player`) writes the
+packet; its turns hold the game as the commander's do, its one lever is `instruct`, its `situation` is the picture the
+hands read, and the pianist wakes it when Jev judges the situation needs it. Design, rulings and the series:
+`docs/design/2026-09-21-pianist.md`; the hands' rules are `H-HANDS-*` in `docs/heuristics.md`; what Jev needs is
+`docs/knowledge/jev.md`.
+
 ## Terrain (2026-09-19)
 
 The shim sends the ground once, in `Hello`: heights and slopes at the engine's slope-map resolution (16 elmos), and

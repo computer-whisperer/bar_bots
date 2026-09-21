@@ -90,6 +90,11 @@ impl Brain {
             reasons.push(format!("squad engaged: {}", engaged.join(", ")));
         }
         self.wake.squads_engaged = engaged.len();
+        // The pianist's groups: an engagement is news when the hands begin it.
+        let began: Vec<String> = std::mem::take(&mut shared.hands.lock().unwrap().engaged);
+        if wake.squad_engaged && !began.is_empty() {
+            reasons.push(format!("your hands sent {} to attack an enemy party", began.join(", ")));
+        }
         if wake.extractor_lost && self.extractor_losses.back() == Some(&tick.frame) {
             reasons.push("an extractor was destroyed".into());
         }

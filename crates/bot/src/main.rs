@@ -15,11 +15,12 @@ use brain::Brain;
 use strategist::{Mode, Strategist};
 use world::World;
 
-/// usage: bot [--strategist | --commander | --commander-each] [--pianist]
-/// A Claude Code session beside the brains (see `DESIGN.md`): the Opus strategist with standing directives, or the
-/// Sonnet field commander with squads and the unit mix. One session serves every seat we play on a team
-/// (`strategist/seats.rs`); `--commander-each` gives each seat a commander of its own. `--pianist`: Jev plays every
-/// unit from the player's instructions in place of the decision heuristics (`docs/design/2026-09-21-pianist.md`).
+/// usage: bot [--strategist | --commander | --commander-each | --player] [--pianist]
+/// A Claude Code session beside the brains (see `DESIGN.md`): the Opus strategist with standing directives, the
+/// Sonnet field commander with squads and the unit mix, or the Opus player whose lever is the pianist's instructions.
+/// One session serves every seat we play on a team (`strategist/seats.rs`); `--commander-each` gives each seat a
+/// commander of its own. `--pianist`: Jev plays every unit from the player's instructions in place of the decision
+/// heuristics (`docs/design/2026-09-21-pianist.md`); `--player` needs it.
 /// Transcripts go to `$WITHIN_REASON_LOG_DIR`, else the current directory.
 fn main() -> io::Result<()> {
     let mut mode = None;
@@ -29,9 +30,13 @@ fn main() -> io::Result<()> {
             "--strategist" => mode = Some((Mode::Strategist, false)),
             "--commander" => mode = Some((Mode::Commander, false)),
             "--commander-each" => mode = Some((Mode::Commander, true)),
+            "--player" => mode = Some((Mode::Player, false)),
             "--pianist" => pianist = true,
-            other => return Err(io::Error::other(format!("unknown argument {other}; usage: bot [--strategist | --commander | --commander-each] [--pianist]"))),
+            other => return Err(io::Error::other(format!("unknown argument {other}; usage: bot [--strategist | --commander | --commander-each | --player] [--pianist]"))),
         }
+    }
+    if mode.is_some_and(|(m, _)| m == Mode::Player) && !pianist {
+        return Err(io::Error::other("--player is the pianist's player: give --pianist too"));
     }
     let path = socket_path();
     // A previous run may have left its socket file behind; nothing can be listening on it.
@@ -73,6 +78,7 @@ fn session(mut stream: UnixStream, mode: Option<(Mode, bool)>, pianist: bool) ->
         })
         .and_then(|started| started.inspect_err(|e| eprintln!("strategist failed to start: {e}")).ok());
     let mode_name = match (mode, pianist) {
+        (Some((Mode::Player, _)), _) => "player",
         (_, true) => "pianist",
         (None, _) => "heuristic",
         (Some((Mode::Strategist, _)), _) => "strategist",
@@ -90,7 +96,7 @@ fn session(mut stream: UnixStream, mode: Option<(Mode, bool)>, pianist: bool) ->
             Err(e) => return Err(io::Error::other(format!("pianist mode asked for but {e}"))),
         },
     };
-    let mut recorder = recorder::Recorder::from_env(&log_dir(), &hello, mode_name);
+    let mut recorder = recorder::Recorder::from_env(&log_dir(), &hello, mode_name, strategist.is_some(), pianist.is_some());
     let setting = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
     let mut banner = format!("Within Reason {} | {mode_name}", env!("WITHIN_REASON_COMMIT"));
     if strategist.is_some() {

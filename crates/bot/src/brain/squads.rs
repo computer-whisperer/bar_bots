@@ -205,7 +205,9 @@ impl Brain {
         Ok((snapped, remark))
     }
 
-    fn publish_field(&self, tick: &Tick, kit: &Kit, soldiers: &[&OwnUnit], shared: &crate::strategist::shared::Shared) {
+    /// The field the commander and the player read, and the wake conditions watch; published by the army rules here
+    /// and by the pianist in its mode.
+    pub(super) fn publish_field(&self, tick: &Tick, kit: &Kit, soldiers: &[&OwnUnit], shared: &crate::strategist::shared::Shared) {
         let own = &tick.snapshot.own_units;
         let composition = |units: &[&&OwnUnit]| {
             let mut counts: BTreeMap<String, usize> = BTreeMap::new();

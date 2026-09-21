@@ -115,6 +115,12 @@ pub struct Brain {
     recent_events: VecDeque<String>,
     /// Our units as last seen, to name what a destroyed-unit event refers to.
     known_units: HashMap<UnitId, (UnitDefId, Vec3)>,
+    /// Our units still being built at the last look, with how far along they were (health share): a `UnitDestroyed`
+    /// for one of these with no attacker is a nanoframe its builder abandoned, not a loss to the enemy.
+    unfinished: HashMap<UnitId, f32>,
+    /// The abandoned frames among this think's `UnitDestroyed` events (`track_losses` fills it; the pianist's
+    /// housekeeping runs after and asks).
+    abandoned_now: HashMap<UnitId, f32>,
     /// Every enemy unit's type once seen, so a killer that has left sight still has a name.
     enemy_defs: HashMap<UnitId, UnitDefId>,
     /// This minute's fight ledger for the log: "lost X to Y near home" and "killed Y", with counts.
@@ -205,6 +211,8 @@ impl Brain {
             enemy_commander_seen: None,
             recent_events: VecDeque::new(),
             known_units: HashMap::new(),
+            unfinished: HashMap::new(),
+            abandoned_now: HashMap::new(),
             enemy_defs: HashMap::new(),
             fight_ledger: Default::default(),
             trade_log: Vec::new(),

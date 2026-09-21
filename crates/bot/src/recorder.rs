@@ -45,7 +45,8 @@ pub struct Recorder {
 
 impl Recorder {
     /// `None` unless `WITHIN_REASON_RECORD` is set to something other than `0`.
-    pub fn from_env(dir: &Path, hello: &Hello, mode: &str) -> Option<Recorder> {
+    /// `session`: a Claude Code session writes `strategist-<ai>.jsonl` beside the record; `pianist`: `jev-<ai>.jsonl`.
+    pub fn from_env(dir: &Path, hello: &Hello, mode: &str, session: bool, pianist: bool) -> Option<Recorder> {
         if std::env::var("WITHIN_REASON_RECORD").map_or(true, |v| v.is_empty() || v == "0") {
             return None;
         }
@@ -59,7 +60,7 @@ impl Recorder {
                 out,
                 buffer: String::new(),
                 def_index: hello.unit_defs.iter().enumerate().map(|(i, d)| (d.id, i)).collect(),
-                header: Some(header(hello, mode)),
+                header: Some(header(hello, mode, session, pianist)),
                 known: HashMap::new(),
                 next_sample: 0,
                 rules: BTreeMap::new(),
@@ -270,7 +271,7 @@ fn move_classes(hello: &Hello) -> Vec<Value> {
     classes.into_iter().map(|(_, mut class, units)| { class["units"] = json!(units); class }).collect()
 }
 
-fn header(hello: &Hello, mode: &str) -> Value {
+fn header(hello: &Hello, mode: &str, session: bool, pianist: bool) -> Value {
     let defs: Vec<Value> = hello
         .unit_defs
         .iter()
@@ -293,8 +294,8 @@ fn header(hello: &Hello, mode: &str) -> Value {
     let map = &hello.map;
     // The Claude Code session beside the brain keeps its own transcript (`strategist/transcript.rs`); the pianist its
     // own log of every call (`brain/pianist/mod.rs`).
-    let mut decision_logs: Vec<String> = (mode != "heuristic").then(|| format!("strategist-{}.jsonl", hello.ai_id)).into_iter().collect();
-    if mode == "pianist" {
+    let mut decision_logs: Vec<String> = session.then(|| format!("strategist-{}.jsonl", hello.ai_id)).into_iter().collect();
+    if pianist {
         decision_logs.push(format!("jev-{}.jsonl", hello.ai_id));
     }
     json!({

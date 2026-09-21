@@ -37,7 +37,8 @@ const RECENT_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 /// H-HANDS-REFUSED: a spot where the engine refused an extractor is left off every menu for this long (smoke-4: the
 /// commander asked for the same refused spot thirty times running beside the enemy base, and died there).
 const REFUSED_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
-/// The player is woken when Jev says the game needs it for this many calls running, at most this often.
+/// H-HANDS-PLAYER-WAKE: the player is woken when Jev says the game needs it for this many calls running, at most this
+/// often.
 const NEEDS_PLAYER_PROBABILITY: f64 = 0.8;
 const NEEDS_PLAYER_CALLS: u32 = 3;
 const NEEDS_PLAYER_COOLDOWN: i32 = 60 * FRAMES_PER_SECOND;
@@ -93,7 +94,7 @@ pub struct Pianist {
     pub(super) parties: Vec<Party>,
     /// Things worth telling: (frame, text).
     recent: VecDeque<(i32, String)>,
-    /// What the pianist did since the player's last turn, for its report.
+    /// What the hands did this call, for the player's report (`Shared.hands`).
     pub(super) done: Vec<String>,
     needs_player_run: u32,
     last_player_wake: i32,
@@ -182,6 +183,13 @@ impl Brain {
     pub(super) fn run_pianist(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
         self.pianist_housekeeping(tick, kit);
         self.keep_groups(tick, kit, commands);
+        // The growth history (the curves and the stagnation wake) and the field the player's report and wake
+        // conditions read; the heuristic brain keeps them inside its army rules.
+        self.track_growth(tick, kit);
+        if let Some(shared) = self.strategist.clone() {
+            let soldiers: Vec<&bot_protocol::OwnUnit> = tick.snapshot.own_units.iter().filter(|u| !u.being_built && self.is_army(u, kit)).collect();
+            self.publish_field(tick, kit, &soldiers, &shared);
+        }
         if tick.frame < FIRST_ORDER_FRAME {
             return;
         }
@@ -227,6 +235,7 @@ impl Brain {
                 }
                 self.play(tick, kit, &picture, menus, &response.answers, commands);
                 self.pianist_globals(tick, &response.answers);
+                self.publish_hands(&picture, &response.answers);
                 self.log_call(tick, &request, &response);
             }
             Err(e) => {
@@ -326,9 +335,11 @@ impl Brain {
                 }
                 Event::UnitDestroyed { unit, attacker } => {
                     if let Some((def, pos)) = self.known_units.get(&unit) {
-                        let killer = attacker.and_then(|id| self.enemy_defs.get(&id)).map_or("something unseen".to_string(), |d| self.name(*d).to_string());
                         let building = self.world.def(*def).is_some_and(|d| d.speed == 0.0 || *def == kit.commander || d.build_speed > 0.0);
-                        if building {
+                        if let Some(share) = self.abandoned(unit, attacker) {
+                            notes.push(format!("abandoned an unfinished {} at {} ({:.0}% built): its builder was sent elsewhere and the frame decayed", self.name(*def), self.world.grid(*pos), share * 100.0));
+                        } else if building {
+                            let killer = attacker.and_then(|id| self.enemy_defs.get(&id)).map_or("something unseen".to_string(), |d| self.name(*d).to_string());
                             notes.push(format!("lost our {} at {} to {killer}", self.name(*def), self.world.grid(*pos)));
                         }
                     }
@@ -383,7 +394,24 @@ impl Brain {
         }
     }
 
-    /// The global answers: the player's wake.
+    /// What the player's session reads (`Shared.hands`): the picture without the instructions and rules, the `did`
+    /// lines since its last turn, the groups that began an engagement this call, the global probabilities.
+    fn publish_hands(&mut self, picture: &picture::Picture, answers: &BTreeMap<String, jev::Answer>) {
+        let Some(shared) = &self.strategist else { return };
+        let pianist = self.pianist.as_mut().expect("pianist mode");
+        let mut state = picture.state.clone();
+        if let Some(fields) = state.as_object_mut() {
+            fields.remove("instructions");
+            fields.remove("rules");
+        }
+        let mut hands = shared.hands.lock().unwrap();
+        hands.picture = state;
+        hands.done.append(&mut pianist.done);
+        hands.engaged = pianist.played.iter().filter(|p| p["did"].as_str().is_some_and(|d| d.starts_with("attack "))).filter_map(|p| p["actor"].as_str().map(str::to_string)).collect();
+        hands.globals = answers.iter().filter_map(|(id, a)| id.strip_prefix("global.").map(|q| (q.to_string(), a.probability_of("yes")))).collect();
+    }
+
+    /// The global answers: the player's wake (H-HANDS-PLAYER-WAKE).
     fn pianist_globals(&mut self, tick: &Tick, answers: &BTreeMap<String, jev::Answer>) {
         let needs = answers.get("global.needs_player").map_or(0.0, |a| a.probability_of("yes"));
         let pianist = self.pianist.as_mut().expect("pianist mode");

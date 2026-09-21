@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use bot_protocol::{Event, OwnUnit, Tick, UnitDefId, Vec3};
+use bot_protocol::{UnitId, Event, OwnUnit, Tick, UnitDefId, Vec3};
 use serde_json::json;
 
 use super::roster::Kit;
@@ -62,6 +62,7 @@ impl Brain {
     /// Notes our own losses by name, and wakes the strategist when extractors go down in numbers.
     pub(super) fn track_losses(&mut self, tick: &Tick, kit: &Kit) {
         const LOSSES_WORTH_WAKING_FOR: usize = 2;
+        self.abandoned_now.clear();
         for enemy in &tick.snapshot.enemies {
             if let Some(def) = enemy.def {
                 self.enemy_defs.insert(enemy.id, def);
@@ -81,7 +82,22 @@ impl Brain {
             }
             let Event::UnitDestroyed { unit, attacker } = event else { continue };
             let Some((def, pos)) = self.known_units.remove(unit) else { continue };
-            self.trade_log.push((tick.frame, self.world.def(def).map_or(0.0, |d| d.metal_cost), 0.0));
+            let cost = self.world.def(def).map_or(0.0, |d| d.metal_cost);
+            // A nanoframe its builder walked away from decays: what was put in is lost, and nothing killed it
+            // (pianist-player-1: two labs and fourteen generators "lost to something unseen at home", read as air).
+            if let Some(share) = self.abandoned(*unit, *attacker) {
+                self.abandoned_now.insert(*unit, share);
+                self.trade_log.push((tick.frame, cost * share, 0.0));
+                let line = format!("abandoned an unfinished {} ({:.0}% built)", self.name(def), share * 100.0);
+                if let Some(shared) = &self.strategist {
+                    *shared.fights.lock().unwrap().entry(line.clone()).or_default() += 1;
+                }
+                *self.fight_ledger.entry(line).or_default() += 1;
+                let (name, grid) = (self.name(def).to_string(), self.world.grid(pos));
+                self.event(tick.frame, format!("abandoned an unfinished {name} at {grid}"));
+                continue;
+            }
+            self.trade_log.push((tick.frame, cost, 0.0));
             if kit.is_extractor(def)
                 && let Some(index) = self.world.hello.metal_spots.iter().position(|s| s.dist2d(pos) < 100.0)
             {
@@ -116,6 +132,16 @@ impl Brain {
         for unit in &tick.snapshot.own_units {
             self.known_units.insert(unit.id, (unit.def, unit.pos));
         }
+        self.unfinished = tick.snapshot.own_units.iter().filter(|u| u.being_built).map(|u| (u.id, (u.health / u.max_health.max(1.0)).clamp(0.0, 1.0))).collect();
+    }
+
+    /// How far along a destroyed unit of ours was if it was an unfinished nanoframe nobody attacked: the builder left
+    /// it and it decayed. `None` for a finished unit or one with a known attacker.
+    pub(super) fn abandoned(&self, unit: UnitId, attacker: Option<UnitId>) -> Option<f32> {
+        if attacker.is_some() {
+            return None;
+        }
+        self.abandoned_now.get(&unit).or_else(|| self.unfinished.get(&unit)).copied()
     }
 
     pub(super) fn track_enemy_buildings(&mut self, tick: &Tick) {

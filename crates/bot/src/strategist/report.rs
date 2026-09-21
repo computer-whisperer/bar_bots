@@ -1,8 +1,12 @@
-//! The commander's turn reports: terse text, and after the first only what changed. A full game of identical
-//! JSON dumps teaches a model to answer "no change" by rote; a report that is short when nothing happened keeps
-//! its attention on what did.
+//! The turn reports: terse text, and after the first only what changed. A full game of identical JSON dumps
+//! teaches a model to answer "no change" by rote; a report that is short when nothing happened keeps its attention
+//! on what did. The front of the report describes the game (the score, the trade, the economy, the ground, the
+//! opponent) and is the same for the commander and the player; the tail is what each one commands.
 
-use super::shared::{Briefing, Field, SquadStatus};
+use super::shared::{Briefing, Field, Hands, Place, SquadStatus};
+
+/// The hands' `did` lines a player's report carries at most.
+const DONE_LINES: usize = 40;
 
 /// What the last report showed, to say only what differs.
 #[derive(Default)]
@@ -15,6 +19,7 @@ pub struct Seen {
     spot_plan: String,
     pressure: String,
     scouting: String,
+    hands: Vec<String>,
 }
 
 fn counted(items: &[(String, usize)]) -> String {
@@ -22,6 +27,10 @@ fn counted(items: &[(String, usize)]) -> String {
         return "none".into();
     }
     items.iter().map(|(name, n)| format!("{name} {n}")).collect::<Vec<_>>().join(", ")
+}
+
+fn clock(seconds: i32) -> String {
+    format!("{}:{:02}", seconds / 60, seconds % 60)
 }
 
 fn squad_line(s: &SquadStatus) -> String {
@@ -33,12 +42,11 @@ fn squad_line(s: &SquadStatus) -> String {
     format!("{} [{}] {}% at {at}, {post}{wanted}{engaged}{remark}", s.name, counted(&s.composition), s.health_percent)
 }
 
-pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[String], full: bool) -> String {
+/// The lines every report opens with, changed or not: what is not shown is not weighed.
+fn front(briefing: &Briefing, field: &Field, fights: &[String]) -> Vec<String> {
     let mut lines = Vec::new();
     let c = &briefing.counts;
-    // In every report, changed or not: what is not shown is not weighed.
     let s = &field.score;
-    let clock = |seconds: i32| format!("{}:{:02}", seconds / 60, seconds % 60);
     lines.push(format!(
         "score: extractors {} (most held {}, no new high for {}; free spots we can walk to {}, nearest on foot: {}; the opponent is known to hold {}) | army {} soldiers worth {} metal, {} of them within 800 of our start | opponent: we see only what our units see. Its soldiers seen in the last 3 min and not seen to die: {} worth {} metal; its army is at least that and may be much more",
         s.extractors,
@@ -64,10 +72,11 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         briefing.energy.income - briefing.energy.usage, c.extractors, c.constructors, c.labs, c.turrets, c.converters
     ));
     let g = &field.ground;
-    let listed = |places: &[super::shared::Place]| if places.is_empty() { "none".to_string() } else { places.iter().map(|p| p.grid.clone()).collect::<Vec<_>>().join(", ") };
+    let listed = |places: &[Place]| if places.is_empty() { "none".to_string() } else { places.iter().map(|p| p.grid.clone()).collect::<Vec<_>>().join(", ") };
+    let posts = if g.posts.is_empty() { String::new() } else { format!(" | unclaimed soldiers stand at: {}", listed(&g.posts)) };
     lines.push(format!(
-        "ground: free spots on held ground {}, contested {}, theirs {} | our extractors on ground we do not hold: {} | unclaimed soldiers stand at: {} | raided lately: {}",
-        g.free_spots.0, g.free_spots.1, g.free_spots.2, listed(&g.extractors_exposed), listed(&g.posts),
+        "ground: free spots on held ground {}, contested {}, theirs {} | our extractors on ground we do not hold: {}{posts} | raided lately: {}",
+        g.free_spots.0, g.free_spots.1, g.free_spots.2, listed(&g.extractors_exposed),
         if g.raided.is_empty() { "nowhere".to_string() } else { g.raided.iter().map(|(p, metal)| format!("{} ({metal})", p.grid)).collect::<Vec<_>>().join(", ") }
     ));
     if !field.wreck_fields.is_empty() || field.resurrection_bots > 0 {
@@ -94,7 +103,7 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
             .collect();
         lines.push(format!("opponents: {}", bases.join(" | ")));
     }
-    let places = |list: &[super::shared::Place]| list.iter().map(|p| format!("{} ({}, {})", p.grid, p.x, p.z)).collect::<Vec<_>>().join("; ");
+    let places = |list: &[Place]| list.iter().map(|p| format!("{} ({}, {})", p.grid, p.x, p.z)).collect::<Vec<_>>().join("; ");
     lines.push(format!(
         "to win: its commander {}; its factories seen: {}",
         s.enemy_commander.as_ref().map_or("has never been seen".to_string(), |(p, ago)| format!("was last seen at {} ({}, {}) {} ago", p.grid, p.x, p.z, clock(*ago))),
@@ -128,14 +137,12 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     if !fights.is_empty() {
         lines.push(format!("fights since last turn: {}", fights.join(", ")));
     }
-    if full || briefing.pressure != seen.pressure {
-        lines.push(format!("pressure: {}", briefing.pressure));
-    }
-    seen.pressure = briefing.pressure.clone();
-    if full || briefing.scouting != seen.scouting {
-        lines.push(format!("scouted: {}", briefing.scouting));
-    }
-    seen.scouting = briefing.scouting.clone();
+    lines
+}
+
+/// Enemies in sight and our extractors with enemies near them.
+fn contact(briefing: &Briefing, field: &Field) -> Vec<String> {
+    let mut lines = Vec::new();
     for cluster in &briefing.enemies_visible {
         lines.push(format!(
             "enemy in sight: {} at {} ({}, {}), {} from home: {}",
@@ -151,6 +158,21 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     if !threatened.is_empty() {
         lines.push(format!("extractors under threat: {}", threatened.join("; ")));
     }
+    lines
+}
+
+/// The commander's report: the front, then its squads, the pool, the extractors, the plan and the mix.
+pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[String], full: bool) -> String {
+    let mut lines = front(briefing, field, fights);
+    if full || briefing.pressure != seen.pressure {
+        lines.push(format!("pressure: {}", briefing.pressure));
+    }
+    seen.pressure = briefing.pressure.clone();
+    if full || briefing.scouting != seen.scouting {
+        lines.push(format!("scouted: {}", briefing.scouting));
+    }
+    seen.scouting = briefing.scouting.clone();
+    lines.extend(contact(briefing, field));
 
     let pool = format!("{} around {}", counted(&field.unassigned), field.unassigned_centre.as_ref().map_or("-", |p| p.grid.as_str()));
     if full || pool != seen.pool {
@@ -173,24 +195,7 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
     }
     seen.squads = squads;
 
-    let extractors: Vec<String> = field
-        .extractors
-        .iter()
-        .map(|x| format!("{}{} ({}, {}){}", x.spot.map_or(String::new(), |n| format!("#{n} ")), x.at.grid, x.at.x, x.at.z, if x.turret_within_300 { " T" } else { "" }))
-        .collect();
-    if full {
-        lines.push(format!("our extractors (T = turret within 300): {}", extractors.join("; ")));
-    } else {
-        let gained: Vec<&String> = extractors.iter().filter(|x| !seen.extractors.contains(x)).collect();
-        let lost: Vec<&String> = seen.extractors.iter().filter(|x| !extractors.contains(x)).collect();
-        if !gained.is_empty() {
-            lines.push(format!("extractors new or changed: {}", gained.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("; ")));
-        }
-        if !lost.is_empty() {
-            lines.push(format!("extractors gone or changed: {}", lost.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("; ")));
-        }
-    }
-    seen.extractors = extractors;
+    extractor_lines(seen, field, full, &mut lines);
     if !field.spot_plan.is_empty() && (full || field.spot_plan != seen.spot_plan) {
         lines.push(format!("expansion plan: {}", field.spot_plan));
     }
@@ -216,6 +221,91 @@ pub fn report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[Str
         if !briefing.directives_in_force.is_empty() {
             lines.push(format!("directives in force: {}", briefing.directives_in_force.join("; ")));
         }
+    }
+    lines.join("\n")
+}
+
+/// Our extractors, in full at first and then as gains and losses.
+fn extractor_lines(seen: &mut Seen, field: &Field, full: bool, lines: &mut Vec<String>) {
+    let extractors: Vec<String> = field
+        .extractors
+        .iter()
+        .map(|x| format!("{}{} ({}, {}){}", x.spot.map_or(String::new(), |n| format!("#{n} ")), x.at.grid, x.at.x, x.at.z, if x.turret_within_300 { " T" } else { "" }))
+        .collect();
+    if full {
+        lines.push(format!("our extractors (T = turret within 300): {}", extractors.join("; ")));
+    } else {
+        let gained: Vec<&String> = extractors.iter().filter(|x| !seen.extractors.contains(x)).collect();
+        let lost: Vec<&String> = seen.extractors.iter().filter(|x| !extractors.contains(x)).collect();
+        if !gained.is_empty() {
+            lines.push(format!("extractors new or changed: {}", gained.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("; ")));
+        }
+        if !lost.is_empty() {
+            lines.push(format!("extractors gone or changed: {}", lost.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("; ")));
+        }
+    }
+    seen.extractors = extractors;
+}
+
+/// The player's report: the front, then its hands: every actor as the picture has it (in full at first, then the
+/// ones whose entry changed), Jev's judgements when they are high, and what the hands did since the last turn.
+pub fn player_report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[String], hands: &Hands, full: bool) -> String {
+    let mut lines = front(briefing, field, fights);
+    lines.extend(contact(briefing, field));
+    extractor_lines(seen, field, full, &mut lines);
+    if full {
+        let buildable: Vec<String> = field.buildable.iter().map(|(n, m)| format!("{n} {m}m")).collect();
+        lines.push(format!("the lab can build: {}", buildable.join(", ")));
+    }
+    // Each actor on one line, as the hands see it: the words the instructions have to speak to.
+    let mut actors: Vec<String> = Vec::new();
+    if let Some(entries) = hands.picture["actors"].as_object() {
+        for (name, entry) in entries {
+            let field = |key: &str| entry[key].as_str().map(str::to_string);
+            let mut parts: Vec<String> = Vec::new();
+            if let Some(units) = field("units") {
+                parts.push(units);
+            }
+            if let Some(at) = field("at") {
+                parts.push(format!("at {at}"));
+            }
+            if let Some(doing) = field("doing") {
+                parts.push(doing);
+            }
+            if let Some(health) = field("health").filter(|h| !h.starts_with("full")) {
+                parts.push(format!("health {health}"));
+            }
+            for key in ["enemies_near", "enemies_at_our_extractors", "under_fire", "scouts_out"] {
+                match &entry[key] {
+                    serde_json::Value::String(text) => parts.push(format!("{key}: {text}")),
+                    serde_json::Value::Array(items) => parts.push(format!("{key}: {}", items.iter().filter_map(|i| i.as_str()).collect::<Vec<_>>().join("; "))),
+                    _ => {}
+                }
+            }
+            actors.push(format!("{name}: {}", parts.join("; ")));
+        }
+    }
+    let changed: Vec<&String> = actors.iter().filter(|a| full || !seen.hands.contains(a)).collect();
+    if !changed.is_empty() {
+        lines.push(format!("your hands' actors{}:", if full { "" } else { " (those whose entry changed)" }));
+        lines.extend(changed.iter().map(|a| format!("  {a}")));
+    }
+    let name = |line: &String| line.split(':').next().unwrap_or_default().to_string();
+    let gone: Vec<String> = seen.hands.iter().map(name).filter(|n| !actors.iter().any(|a| name(a) == *n)).collect();
+    if !gone.is_empty() {
+        lines.push(format!("actors gone (dead, merged or split): {}", gone.join(", ")));
+    }
+    seen.hands = actors;
+    let high: Vec<String> = hands.globals.iter().filter(|(_, p)| **p >= 0.5).map(|(q, p)| format!("{q} {p:.2}")).collect();
+    if !high.is_empty() {
+        lines.push(format!("your hands judge (yes-probability): {}", high.join(", ")));
+    }
+    if !hands.done.is_empty() {
+        let skipped = hands.done.len().saturating_sub(DONE_LINES);
+        lines.push(format!("what your hands did since your last turn{}:", if skipped > 0 { format!(" (the last {DONE_LINES} of {})", hands.done.len()) } else { String::new() }));
+        lines.extend(hands.done.iter().skip(skipped).map(|d| format!("  {d}")));
+    } else if !full {
+        lines.push("your hands played nothing new since your last turn (every actor carried on)".into());
     }
     lines.join("\n")
 }

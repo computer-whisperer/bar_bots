@@ -48,3 +48,24 @@ home, forty one-unit groups. TypeSafe's own fan-out pattern says to state each s
 **Would be wrong if.** The per-premise questions still answered the same fallback whatever the chosen action.
 **Used by.** H-HANDS-MENU.
 
+### K-jev-instructions-are-standing
+**Claim.** The hands read the whole packet afresh at every ask with no memory of the last: a time-bound command in it
+("go home now, then build a lab") is matched again each time, so two steps that both fit the moment alternate, and an
+instruction written as a state ("the commander stays at home and builds the lab there") holds.
+**Status.** supported (2026-09-21)
+**Evidence.** pianist-player-1: under "commander: go home now and build a lab at home" the commander, asked every ten
+seconds, chose `retreat_home` at 0.76 and 0.81 and `lab` at 0.52 and 0.65 in turn (2:20, 2:30, 2:40, 2:50), abandoning
+the started lab each time; the decayed frames were reported as losses and the player diagnosed aircraft.
+**Would be wrong if.** The same packet, re-asked, kept the commander on the started lab once it stood at home.
+**Used by.** H-HANDS-STARTED; the player's role prompt (`strategist/player.md`: write states, not commands).
+
+### K-hands-abandoned-frames-read-as-losses
+**Claim.** A nanoframe its builder walks away from decays and arrives as `UnitDestroyed` with no attacker; counted as a
+loss it misleads every reader (the traded line, the fights line, the territory's raided memory, the picture's notes).
+**Status.** demonstrated (2026-09-21)
+**Evidence.** pianist-player-1: "lost armlab to unseen at home x2", "lost armwin to unseen at home x7" and 500 metal
+traded with no enemy within 1,800 of home before 6:04 (the truth file); the player's turns 4 and 5 diagnosed an air
+raider and ordered anti-air. Fixed the same day: `Brain::abandoned` (a destroyed unit that was being built at the
+last look, with no attacker) is accounted as abandoned everywhere.
+**Would be wrong if.** The engine reported an attacker for decayed frames, or never destroyed them.
+**Used by.** `brain/briefing.rs` `track_losses`, `territory.rs`, `pianist/mod.rs`.

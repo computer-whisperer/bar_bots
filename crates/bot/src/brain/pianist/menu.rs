@@ -26,6 +26,8 @@ const REPAIR_WITHIN: f32 = 1200.0;
 const AWAY: f32 = 400.0;
 /// An enemy party this close to a group is news that gets it asked at once.
 const ALARM: f32 = 600.0;
+/// A builder on a started build is asked again only with an enemy party this close (H-HANDS-STARTED).
+const STARTED_ALARM: f32 = 800.0;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Pick {
@@ -108,12 +110,22 @@ impl Brain {
         let _ = (e, m);
 
         // Builders.
+        let under_fire: Vec<UnitId> = tick.events.iter().filter_map(|e| if let bot_protocol::Event::UnitDamaged { unit, .. } = e { Some(*unit) } else { None }).collect();
         for unit in own.iter().filter(|u| !u.being_built && (u.def == kit.commander || u.def == kit.constructor)) {
             let name = self.actor_name(unit.id, kit);
             let task = pianist.tasks.get(&unit.id).cloned();
             let last = pianist.last_asked.get(&name).copied().unwrap_or(i32::MIN / 2);
+            // H-HANDS-STARTED: a build the engine has started (a nanoframe stands) is not put to the question until it
+            // is done, unless the builder is under fire or an enemy party is within reach; a builder re-asked every ten
+            // seconds walked away from two labs and fourteen generators in pianist-player-1, and each frame decayed.
+            let started = match &task {
+                Some(Task::Build { def, near, started: true, .. }) => own.iter().find(|u| u.being_built && u.def == *def && u.pos.dist2d(*near) < 200.0).map(|u| (self.short_words(*def, kit), u.health / u.max_health.max(1.0))),
+                _ => None,
+            };
+            let threatened = under_fire.contains(&unit.id) || picture.parties.iter().any(|p| p.at.dist2d(unit.pos) < STARTED_ALARM);
             let (free, due) = match &task {
                 None => (unit.idle || frame - last >= LAB_REVIEW_FRAMES, true),
+                Some(_) if started.is_some() && !threatened => (false, false),
                 Some(task) => (false, frame - last >= REVIEW_FRAMES && frame - task.since() >= LAB_REVIEW_FRAMES),
             };
             if !(free || due) {
@@ -126,7 +138,9 @@ impl Brain {
                 options.insert(key.to_string(), pick);
                 criteria.insert(key.to_string(), json!(words));
             };
-            if busy {
+            if let Some((what, share)) = &started {
+                offer("continue", Pick::Continue, format!("Finish the {what} it has started here ({:.0}% built). Leaving it now wastes the metal already put in; the frame decays.", share * 100.0));
+            } else if busy {
                 offer("continue", Pick::Continue, "Carry on with what it is doing now.".into());
             } else {
                 offer("wait", Pick::Wait, "Do nothing for now (only when nothing on this list is worth doing).".into());

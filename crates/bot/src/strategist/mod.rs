@@ -3,6 +3,8 @@
 //!
 //! - **Strategist**: Opus, a turn every 45 s of game time or on a trigger, standing directives only.
 //! - **Commander**: Sonnet, turns back to back at game speed 1, with squads, the unit mix and turret requests.
+//! - **Player**: Opus over the pianist (`docs/design/2026-09-21-pianist.md`): turns when woken, the game held
+//!   still meanwhile, and one lever, the standing instructions in prose that Jev reads every second.
 
 mod mcp;
 mod report;
@@ -38,6 +40,7 @@ const ROUTINE_INTERVAL_FRAMES: i32 = 45 * 30;
 pub enum Mode {
     Strategist,
     Commander,
+    Player,
 }
 
 impl Mode {
@@ -45,7 +48,7 @@ impl Mode {
     fn model(self) -> String {
         std::env::var("WITHIN_REASON_MODEL").ok().filter(|m| !m.is_empty()).unwrap_or_else(|| {
             match self {
-                Mode::Strategist => "claude-opus-5",
+                Mode::Strategist | Mode::Player => "claude-opus-5",
                 Mode::Commander => "claude-sonnet-5",
             }
             .into()
@@ -57,14 +60,20 @@ impl Mode {
             Mode::Strategist => include_str!("prompt.md"),
             // The role, then what the project knows (`docs/README.md`: the brief is rewritten from the knowledge base).
             Mode::Commander => concat!(include_str!("commander.md"), include_str!("../../../../docs/briefs/commander.md")),
+            Mode::Player => concat!(include_str!("player.md"), include_str!("../../../../docs/briefs/player.md")),
         }
+    }
+
+    /// Turns are taken with the game held still (the brain asks for them, `brain/wake.rs`).
+    fn lockstep(self) -> bool {
+        matches!(self, Mode::Commander | Mode::Player)
     }
 
     /// Turns after which the session is replaced by a fresh one that is handed the notes, to bound its context.
     fn turns_per_session(self) -> usize {
         match self {
             Mode::Strategist => usize::MAX,
-            Mode::Commander => 40,
+            Mode::Commander | Mode::Player => 40,
         }
     }
 }
@@ -96,11 +105,11 @@ impl Strategist {
     /// Starts the MCP server and the Claude Code session. `dir` receives `strategist-N.jsonl`.
     pub fn start(dir: &Path, ai_id: i32, mode: Mode) -> std::io::Result<Self> {
         let shared = Arc::new(Shared::default());
-        shared.lockstep.store(mode == Mode::Commander, Ordering::Relaxed);
+        shared.lockstep.store(mode.lockstep(), Ordering::Relaxed);
         // How late the commander's orders land, in game seconds per wall second of thought (arena `--think-penalty`).
         *shared.think_penalty.lock().unwrap() = std::env::var("WITHIN_REASON_THINK_PENALTY").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0);
         let transcript = Arc::new(Transcript::create(&dir.join(format!("strategist-{ai_id}.jsonl")))?);
-        let server = McpServer::start(shared.clone(), transcript.clone())?;
+        let server = McpServer::start(shared.clone(), transcript.clone(), mode)?;
         // An empty working directory: nothing for the session to discover.
         let cwd = dir.join(format!("strategist-{ai_id}-cwd"));
         std::fs::create_dir_all(&cwd)?;
@@ -190,7 +199,7 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
     let mut owed_result = false;
     while !stop.load(Ordering::Relaxed) {
         let headline = match mode {
-            Mode::Commander => match shared.next_turn_request(stop) {
+            Mode::Commander | Mode::Player => match shared.next_turn_request(stop) {
                 Some(reason) => reason,
                 None => break,
             },
@@ -240,6 +249,7 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
         let prompt = match mode {
             Mode::Strategist => format!("Game time {game_time}. {headline}"),
             Mode::Commander => commander_prompt(&game_time, &headline, shared, &mut seen, turns_this_session == 0),
+            Mode::Player => player_prompt(&game_time, &headline, shared, &mut seen, turns_this_session == 0),
         };
         last_turn_frame = frame;
         turns_this_session += 1;
@@ -253,7 +263,7 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
                 match session.turn_done.recv_timeout(Duration::from_millis(50)) {
                     Ok(()) => break true,
                     // The commander called `wait`: the game is running again, the response's tail is owed.
-                    Err(RecvTimeoutError::Timeout) if mode == Mode::Commander && !shared.turn_in_progress() => {
+                    Err(RecvTimeoutError::Timeout) if mode.lockstep() && !shared.turn_in_progress() => {
                         owed_result = true;
                         break true;
                     }
@@ -293,6 +303,39 @@ fn commander_prompt(game_time: &str, headline: &str, shared: &Shared, seen: &mut
     prompt += &format!(
         "[{game_time}] Woken because: {headline}\n{}\nwake conditions in force: {wake}",
         report::report(seen, &briefing, &field, &fights, fresh_session)
+    );
+    prompt
+}
+
+/// The player is shown the game as the commander is, then its hands: what they did since the last turn, the actors
+/// as the picture has them. A fresh session is handed the notes and the instructions in force as well as the map.
+fn player_prompt(game_time: &str, headline: &str, shared: &Shared, seen: &mut report::Seen, fresh_session: bool) -> String {
+    let briefing = shared.briefing();
+    let field = shared.field();
+    let fights: Vec<String> =
+        std::mem::take(&mut *shared.fights.lock().unwrap()).into_iter().map(|(what, n)| format!("{what} x{n}")).collect();
+    let hands = {
+        let mut hands = shared.hands.lock().unwrap();
+        let snapshot = hands.clone();
+        hands.done.clear();
+        snapshot
+    };
+    let mut prompt = String::new();
+    if fresh_session {
+        let notes = shared.notes.lock().unwrap();
+        if !notes.is_empty() {
+            prompt += &format!("You are taking over mid-game from an earlier session of yourself. Its notes:\n{}\n\n", notes.join("\n"));
+        }
+        let instructions = shared.instructions.lock().unwrap();
+        if !instructions.trim().is_empty() {
+            prompt += &format!("The instructions in force, as your earlier session last wrote them:\n{instructions}\n\n");
+        }
+        prompt += &format!("Map: {}\n\n", shared.map.lock().unwrap());
+    }
+    let wake = serde_json::to_string(&*shared.wake.lock().unwrap()).unwrap_or_default();
+    prompt += &format!(
+        "[{game_time}] Woken because: {headline}\n{}\nwake conditions in force: {wake}",
+        report::player_report(seen, &briefing, &field, &fights, &hands, fresh_session)
     );
     prompt
 }

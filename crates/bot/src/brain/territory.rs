@@ -157,8 +157,11 @@ impl Brain {
                 Event::EnemyDestroyed { enemy } => {
                     self.territory.enemy_soldiers.remove(&enemy);
                 }
-                Event::UnitDestroyed { unit, .. } => {
-                    if let Some((def, pos)) = self.known_units.get(&unit) {
+                Event::UnitDestroyed { unit, attacker } => {
+                    // An abandoned nanoframe is not a raid.
+                    if self.abandoned(unit, attacker).is_none()
+                        && let Some((def, pos)) = self.known_units.get(&unit)
+                    {
                         let metal = self.world.def(*def).map_or(0.0, |d| d.metal_cost).max(LOSS_MARK);
                         self.territory.losses.push(Sighting { at: *pos, frame: tick.frame, metal, speed: 0.0 });
                     }
