@@ -291,8 +291,12 @@ fn header(hello: &Hello, mode: &str) -> Value {
         .collect();
     let spots: Vec<Value> = hello.metal_spots.iter().map(|s| json!([s.x as i32, s.z as i32, s.y])).collect();
     let map = &hello.map;
-    // The Claude Code session beside the brain keeps its own transcript (`strategist/transcript.rs`).
-    let decision_logs: Vec<String> = (mode != "heuristic").then(|| format!("strategist-{}.jsonl", hello.ai_id)).into_iter().collect();
+    // The Claude Code session beside the brain keeps its own transcript (`strategist/transcript.rs`); the pianist its
+    // own log of every call (`brain/pianist/mod.rs`).
+    let mut decision_logs: Vec<String> = (mode != "heuristic").then(|| format!("strategist-{}.jsonl", hello.ai_id)).into_iter().collect();
+    if mode == "pianist" {
+        decision_logs.push(format!("jev-{}.jsonl", hello.ai_id));
+    }
     json!({
         "t": "header", "format": "within-reason-record", "version": FORMAT_VERSION,
         "ai_id": hello.ai_id, "team": hello.team, "ally_team": hello.ally_team, "start_frame": hello.frame,

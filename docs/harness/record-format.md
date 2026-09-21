@@ -48,11 +48,28 @@ One shape for every decision source, so a new layer slots in without a format ch
 | `heuristic` | `assault` | inputs {`gathered`, `attackers`} |
 | `heuristic` | `event` | outputs: the text the brain notes for the strategist ("lost armmex at C3", trigger texts) |
 | `llm:strategist`, `llm:commander` | `turn` | not in the record file: the viewer builds these from the sibling `strategist-<ai_id>.jsonl` (inputs {`wake`, `prompt`}; outputs {`calls` [{tool, arguments, result}], `said`, `thinking`}; `latency_ms` from `turn_end`) |
-| `jev` (planned) | per decision head | inputs: a summary of the features; outputs: the typed decision; `latency_ms` |
+| `jev` | `builder`, `lab`, `group`, `global` | the pianist (`docs/design/2026-09-21-pianist.md`), one per menu answered. inputs {`actor` (its name in the picture: `commander`, `constructor_<id>`, `lab_<id>`, `group_<name>`), `options` (the menu's keys), `busy`}; outputs {`choice` (what Jev picked), `played` (what the hands did: `continue` when a busy actor's pick did not beat continue by the margin), `probability`, `confidence`, `where`, `where_extractor`, `where_scout`, `whom`, `how_many`, `did` (a sentence, or null)}. `global`: outputs {question id: probability of yes}. The whole call is in the pianist's log (below) |
 
 The brain's side is `crates/bot/src/brain/journal.rs`: `self.journal.note(frame, kind, inputs, outputs)` at the decision,
 `self.fire(...)` for rule counts. `main` drains the journal every tick whether or not a record is written. A Jev layer
 should write through the same journal with its own `source` (`Note::source`; `Journal::note` is the heuristic brain's).
+
+## The pianist's log
+`jev-<ai_id>.jsonl` beside the record, written when the bot runs `--pianist` with `WITHIN_REASON_JEV_LOG=1` (the arena
+sets it); the record header names it under `siblings.decision_logs`. JSON Lines; readers skip a torn last line.
+- `{"t":"header","format":"within-reason-jev","version":1,"ai_id","model","interval_frames","rules"}` first: `rules` is
+  the standing text every call's picture carried (it is left out of the calls).
+- `{"t":"call","f","ms","model","usage":{input_tokens,...},"retries","state","questions","answers","played","groups","places","parties"}`
+  per request: `state` is the picture without `instructions` and `rules`; `instructions` (the player's packet) is a
+  field of the call only when it changed since the last logged call, so a reader carries it forward; `questions` and
+  `answers` are the API's own shapes (`docs/harness/jev.md`); `played` is one entry per menu answered, the decision
+  record's fields plus `kept` (a busy actor held its course); `groups` [{`name`, `members` [unit ids], `at` [x, z],
+  `task` {`kind` hold/move_to/fight_to/engage, `place`, `to` [x, z]}}], `places` [{`name`, `x`, `z`, `spot`}] and
+  `parties` [{`name`, `ids`, `x`, `z`, `metal`, `composition`}] are what the picture named, so a reader can draw them.
+- `{"t":"error","f","error"}` for a call that failed (every actor kept its task).
+Size: 15-30 KB a call (3-6k tokens of state and questions), 20-60 calls a minute: 25 MB for a 20-minute game. Logs from
+the first morning (2026-09-21, before the header line) carry `instructions` and `rules` in every state and no `played`;
+the viewer reads those too, taking the decisions from the answers.
 
 ## Size (measured 2026-09-19, Quicksilver, speed 50)
 | Match | Game minutes | Units at the end (ours + seen) | File | Per game minute |
@@ -81,8 +98,16 @@ file's new bytes (`<file>?from=<byte offset>`, answered by `run/view_match.py` w
 sends the whole file and the page copes), parses up to the last complete line, and with "follow live" ticked stays on the
 newest sample. Scrubbing, stepping or playing unticks it; ticking it again jumps to the newest sample. Opened details and
 the scroll position of the decision list survive each refresh. Polling stops when the result line arrives.
-Tests: `node viewer/test/smoke.js <match dir>` (model, truncated file) and `node viewer/test/browser.js <url>` (the real
-page in headless Chromium: load, follow a live match if it is one, scrub, play, hover, toggles; fails on any page error).
+The pianist (a match with a `jev-<ai_id>.jsonl`): the side pane widens; "each actor now" lists every actor of the call at
+the playhead with what it was doing and its last decision (click one to narrow the decision list to it); "the call at the
+playhead" opens to every question with its answer as bars (the played option marked, a kept course said), the options as
+worded, and the picture by section; "pianist per minute" is calls, latency, tokens, questions, changes, kept and failures;
+the timeline gains lanes for the pianist's builders, labs and army (a change of course solid, a continue faint); the map
+draws the named places, the parties and the groups with a line to where each is going (the `pianist` layer); the decision
+list takes "pianist" and "changes only" filters and an actor select, and shows at most 4,000 rows.
+Tests: `node viewer/test/smoke.js <match dir>` (model, truncated file) and `node viewer/test/browser.js <url> [shot.png]`
+(the real page in headless Chromium: load, follow a live match if it is one, scrub, play, hover, toggles, the pianist's
+panels when the match has a log; fails on any page error; saves a screenshot when asked).
 
 ## Terrain
 

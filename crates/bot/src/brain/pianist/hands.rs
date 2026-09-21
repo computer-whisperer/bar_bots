@@ -152,6 +152,7 @@ impl Brain {
         };
         let inputs = json!({ "actor": name, "options": menu.options.keys().collect::<Vec<_>>(), "busy": menu.busy });
         let outputs = json!({ "choice": choice, "played": chosen, "probability": p(choice), "confidence": confidence, "where": where_, "where_extractor": where_extractor, "where_scout": where_scout, "whom": whom, "how_many": how_many, "did": did });
+        self.pianist.as_mut().expect("pianist mode").played.push(json!({ "actor": inputs["actor"], "kind": kind, "busy": menu.busy, "options": inputs["options"], "choice": choice, "played": chosen, "kept": kept, "probability": p(choice), "confidence": confidence, "did": did }));
         self.journal.note_from("jev", frame, kind, inputs, outputs);
     }
 

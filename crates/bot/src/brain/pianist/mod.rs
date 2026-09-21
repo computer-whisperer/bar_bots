@@ -97,10 +97,18 @@ pub struct Pianist {
     pub(super) done: Vec<String>,
     needs_player_run: u32,
     last_player_wake: i32,
-    /// The whole request and answer per call, when `WITHIN_REASON_JEV_LOG` is set.
+    /// The whole request and answer per call, when `WITHIN_REASON_JEV_LOG` is set (`docs/harness/record-format.md`,
+    /// "The pianist's log").
     log: Option<File>,
+    /// The instructions as last written to the log: a call carries them only when they changed.
+    logged_instructions: String,
+    /// What the hands did with this call's answers (`hands.rs`), for the log line.
+    pub(super) played: Vec<serde_json::Value>,
     stats: Stats,
 }
+
+/// The pianist's log format version (`docs/harness/record-format.md`).
+const LOG_VERSION: u32 = 1;
 
 impl Pianist {
     /// The client from the environment (the key file or `TYPESAFE_API_KEY`); `Err` says why there is none.
@@ -128,8 +136,21 @@ impl Pianist {
             needs_player_run: 0,
             last_player_wake: i32::MIN / 2,
             log,
+            logged_instructions: String::new(),
+            played: Vec::new(),
             stats: Stats::default(),
         })
+    }
+
+    /// The log's first line: what every call shares.
+    pub fn log_header(&mut self, ai_id: i32, rules: &str) {
+        if let Some(log) = &mut self.log {
+            let line = json!({
+                "t": "header", "format": "within-reason-jev", "version": LOG_VERSION, "ai_id": ai_id, "model": self.client.model(),
+                "interval_frames": self.interval_frames, "rules": rules,
+            });
+            let _ = writeln!(log, "{line}");
+        }
     }
 
     pub fn model(&self) -> &str {
@@ -186,35 +207,87 @@ impl Brain {
         let request = jev::Request { state: picture.state.clone(), questions };
         let (response, ai) = {
             let pianist = self.pianist.as_mut().expect("pianist mode");
+            if pianist.stats.calls == 0 && pianist.logged_instructions.is_empty() {
+                let rules = picture.state["rules"].as_str().unwrap_or_default().to_string();
+                pianist.log_header(self.world.hello.ai_id, &rules);
+            }
             pianist.places = picture.places.clone();
             pianist.parties = picture.parties.clone();
             pianist.stats.calls += 1;
             pianist.stats.questions += request.questions.len() as u32;
+            pianist.played.clear();
             (pianist.client.ask(&request), self.world.hello.ai_id)
         };
         match response {
             Ok(response) => {
-                let pianist = self.pianist.as_mut().expect("pianist mode");
-                pianist.stats.latencies_ms.push(response.latency.as_secs_f32() * 1000.0);
-                pianist.stats.tokens += response.usage["input_tokens"].as_u64().unwrap_or(0);
-                if let Some(log) = &mut pianist.log {
-                    let line = json!({
-                        "f": tick.frame, "ms": (response.latency.as_secs_f32() * 1000.0) as u32, "model": response.model, "usage": response.usage,
-                        "retries": response.retries, "state": request.state, "questions": request.questions, "answers": response.answers,
-                    });
-                    let _ = writeln!(log, "{line}");
+                {
+                    let pianist = self.pianist.as_mut().expect("pianist mode");
+                    pianist.stats.latencies_ms.push(response.latency.as_secs_f32() * 1000.0);
+                    pianist.stats.tokens += response.usage["input_tokens"].as_u64().unwrap_or(0);
                 }
                 self.play(tick, kit, &picture, menus, &response.answers, commands);
                 self.pianist_globals(tick, &response.answers);
+                self.log_call(tick, &request, &response);
             }
             Err(e) => {
                 let pianist = self.pianist.as_mut().expect("pianist mode");
                 pianist.stats.errors += 1;
+                if let Some(log) = &mut pianist.log {
+                    let _ = writeln!(log, "{}", json!({ "t": "error", "f": tick.frame, "error": e.to_string() }));
+                }
                 eprintln!("[ai {ai}] f={} pianist: {e}; every actor keeps its task", tick.frame);
             }
         }
         if tick.due() % (60 * FRAMES_PER_SECOND) < self.pianist.as_ref().expect("pianist mode").interval_frames {
             self.pianist_status_line(tick.frame);
+        }
+    }
+
+    /// One line of the log per call: the request (the instructions only when they changed, the rules never: they are
+    /// in the header), the answers, what the hands played, and the groups, places and parties by name so a reader can
+    /// draw them.
+    fn log_call(&mut self, tick: &Tick, request: &jev::Request, response: &jev::Response) {
+        let own = &tick.snapshot.own_units;
+        let Some(pianist) = self.pianist.as_mut() else { return };
+        if pianist.log.is_none() {
+            return;
+        }
+        let mut state = request.state.clone();
+        let instructions = state["instructions"].as_str().unwrap_or_default().to_string();
+        if let Some(fields) = state.as_object_mut() {
+            fields.remove("instructions");
+            fields.remove("rules");
+        }
+        let changed = instructions != pianist.logged_instructions;
+        if changed {
+            pianist.logged_instructions = instructions.clone();
+        }
+        let groups: Vec<serde_json::Value> = pianist
+            .groups
+            .iter()
+            .map(|g| {
+                let units = g.units(own);
+                let centre = groups::centre_of(&units);
+                let task = match &g.task {
+                    GroupTask::Hold { .. } => json!({ "kind": "hold" }),
+                    GroupTask::Move { to, place, fight, .. } => json!({ "kind": if *fight { "fight_to" } else { "move_to" }, "place": place, "to": [to.x as i32, to.z as i32] }),
+                    GroupTask::Engage { at, .. } => json!({ "kind": "engage", "to": [at.x as i32, at.z as i32] }),
+                };
+                json!({ "name": g.name, "members": g.members.iter().map(|id| id.0).collect::<Vec<_>>(), "at": centre.map(|c| [c.x as i32, c.z as i32]), "task": task })
+            })
+            .collect();
+        let places: Vec<serde_json::Value> = pianist.places.iter().map(|p| json!({ "name": p.name, "x": p.at.x as i32, "z": p.at.z as i32, "spot": p.spot })).collect();
+        let parties: Vec<serde_json::Value> = pianist.parties.iter().map(|p| json!({ "name": p.name, "ids": p.ids.iter().map(|id| id.0).collect::<Vec<_>>(), "x": p.at.x as i32, "z": p.at.z as i32, "metal": p.metal as i32, "composition": p.composition })).collect();
+        let mut line = json!({
+            "t": "call", "f": tick.frame, "ms": (response.latency.as_secs_f32() * 1000.0) as u32, "model": response.model, "usage": response.usage,
+            "retries": response.retries, "state": state, "questions": request.questions, "answers": response.answers,
+            "played": std::mem::take(&mut pianist.played), "groups": groups, "places": places, "parties": parties,
+        });
+        if changed {
+            line["instructions"] = json!(instructions);
+        }
+        if let Some(log) = &mut pianist.log {
+            let _ = writeln!(log, "{line}");
         }
     }
 

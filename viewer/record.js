@@ -169,6 +169,81 @@ const WR = (() => {
     return out.sort((a, b) => a.f - b.f);
   }
 
+  // The pianist's log, jev-<ai_id>.jsonl (docs/harness/record-format.md, "The pianist's log"): a header line, then one
+  // `call` line per request to Jev with the state, the questions, the answers, what the hands played, and the groups,
+  // places and parties by name; `error` lines for failed calls. Logs from before the header line (2026-09-21 morning)
+  // carry the instructions and rules in every state and are read the same way.
+  function parseJev(text) {
+    const { values, bad } = parseLines(text);
+    const jev = { header: null, calls: [], errors: [], badLines: bad, actors: new Map() };
+    let instructions = "";
+    for (const r of values) {
+      if (r.t === "header") {
+        jev.header = r;
+        continue;
+      }
+      if (r.t === "error") {
+        jev.errors.push(r);
+        continue;
+      }
+      if (r.t && r.t !== "call") continue;
+      if (typeof r.instructions === "string") instructions = r.instructions;
+      else if (r.state && typeof r.state.instructions === "string") instructions = r.state.instructions;
+      const rules = (r.state && r.state.rules) || (jev.header && jev.header.rules) || "";
+      const call = {
+        f: r.f, ms: r.ms, model: r.model, tokens: r.usage ? r.usage.input_tokens || 0 : 0, retries: r.retries || 0,
+        instructions, rules, state: r.state || {}, questions: r.questions || {}, answers: r.answers || {},
+        played: r.played || playedFromAnswers(r), groups: r.groups || [], places: r.places || [], parties: r.parties || [],
+      };
+      jev.calls.push(call);
+      for (const d of call.played) {
+        d.f = call.f;
+        if (!jev.actors.has(d.actor)) jev.actors.set(d.actor, { name: d.actor, kind: d.kind, decisions: [] });
+        jev.actors.get(d.actor).decisions.push(d);
+      }
+    }
+    jev.calls.sort((a, b) => a.f - b.f);
+    return jev;
+  }
+
+  // A log without `played` (the first day's): the decisions as far as the answers tell them.
+  function playedFromAnswers(r) {
+    const out = [];
+    for (const [id, a] of Object.entries(r.answers || {})) {
+      const [actor, what] = id.split(".");
+      if (a.type !== "choice" || !(what === "do" || what === "next")) continue;
+      const kind = actor === "commander" || actor.startsWith("constructor") ? "builder" : actor.startsWith("lab") ? "lab" : actor.startsWith("group") ? "group" : "global";
+      out.push({ actor, kind, busy: "continue" in (a.probabilities || {}), choice: a.choice, played: a.choice, kept: false, probability: a.probabilities ? a.probabilities[a.choice] : null, confidence: a.confidence, did: null });
+    }
+    return out;
+  }
+
+  // Calls per game minute: [{minute, calls, medianMs, maxMs, tokens, questions, changes, kept, errors}].
+  function jevMinutes(jev) {
+    const rows = new Map();
+    const row = (f) => {
+      const minute = Math.floor(f / (60 * FPS));
+      if (!rows.has(minute)) rows.set(minute, { minute, calls: 0, ms: [], tokens: 0, questions: 0, changes: 0, kept: 0, errors: 0 });
+      return rows.get(minute);
+    };
+    for (const c of jev.calls) {
+      const r = row(c.f);
+      r.calls++;
+      r.ms.push(c.ms);
+      r.tokens += c.tokens;
+      r.questions += Object.keys(c.questions).length;
+      for (const d of c.played) {
+        if (d.kept) r.kept++;
+        else if (d.played !== "continue" && d.played !== "nothing" && d.played !== "wait") r.changes++;
+      }
+    }
+    for (const e of jev.errors) row(e.f).errors++;
+    return [...rows.values()].sort((a, b) => a.minute - b.minute).map((r) => {
+      const sorted = [...r.ms].sort((a, b) => a - b);
+      return { ...r, medianMs: sorted.length ? sorted[sorted.length >> 1] : 0, maxMs: sorted.length ? sorted[sorted.length - 1] : 0 };
+    });
+  }
+
   // bot.log lines that carry a frame: [{f, text}].
   function parseBotLog(text) {
     const lines = [];
@@ -236,7 +311,7 @@ const WR = (() => {
   // The timeline's lanes, from events and decisions: {losses, buildingLosses, extractorLosses, kills, waves, turns}.
   function lanes(match) {
     const cls = (def) => (def >= 0 && match.defs[def] ? match.defs[def].class : "other");
-    const out = { losses: [], buildingLosses: [], extractorLosses: [], kills: [], waves: [], turns: [] };
+    const out = { losses: [], buildingLosses: [], extractorLosses: [], kills: [], waves: [], turns: [], jevBuilders: [], jevLabs: [], jevGroups: [] };
     for (const e of match.events) {
       if (e.k === "enemy_destroyed") out.kills.push(e);
       if (e.k !== "destroyed") continue;
@@ -248,6 +323,13 @@ const WR = (() => {
     for (const d of match.decisions) {
       if (d.kind === "wave" || d.kind === "recall" || d.kind === "assault") out.waves.push(d);
       if (d.kind === "turn") out.turns.push(d);
+      // The pianist's decisions: a change of course is a solid mark, a "continue" (or a kept course) a faint one.
+      if (d.source === "jev") {
+        const o = d.outputs || {};
+        const change = o.played !== "continue" && o.played !== "nothing" && o.played !== "wait";
+        const lane = d.kind === "builder" ? out.jevBuilders : d.kind === "lab" ? out.jevLabs : d.kind === "group" ? out.jevGroups : null;
+        if (lane) lane.push({ ...d, faint: !change });
+      }
     }
     return out;
   }
@@ -264,7 +346,7 @@ const WR = (() => {
     return String.fromCharCode(65 + cell(x, match.header.map.width, columns)) + (cell(z, match.header.map.height, rows) + 1);
   }
 
-  return { FPS, FLAG, parseRecord, parseStrategist, parseCensus, parseTruth, parseBotLog, squadPosts, indexAt, range, stateAt, rulesInMinute, lanes, clock, gridName };
+  return { FPS, FLAG, parseRecord, parseStrategist, parseJev, jevMinutes, parseCensus, parseTruth, parseBotLog, squadPosts, indexAt, range, stateAt, rulesInMinute, lanes, clock, gridName };
 })();
 
 if (typeof module !== "undefined") module.exports = WR;

@@ -1,6 +1,7 @@
 // Drives the real page in headless Chromium over the DevTools protocol (node >= 22 for the global WebSocket):
-//   run/view_match.py <match dir> --no-browser &   then   node viewer/test/browser.js http://127.0.0.1:8137/
-// Loads the match, plays, scrubs, hovers and toggles, and fails on any page exception or console error.
+//   run/view_match.py <match dir> --no-browser &   then   node viewer/test/browser.js http://127.0.0.1:8137/ [screenshot.png]
+// Loads the match, plays, scrubs, hovers and toggles, exercises the pianist's panels when the match has a Jev log,
+// and fails on any page exception or console error. With a second argument it saves a screenshot of the page.
 "use strict";
 const { spawn } = require("child_process");
 const fs = require("fs");
@@ -8,6 +9,7 @@ const os = require("os");
 const path = require("path");
 
 const url = process.argv[2] || "http://127.0.0.1:8137/";
+const screenshot = process.argv[3] || null;
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "wr-viewer-"));
 const chrome = spawn(process.env.CHROMIUM || "chromium", [
   "--headless", "--disable-gpu", "--no-sandbox", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--window-size=1600,1000", "about:blank",
@@ -100,6 +102,30 @@ function run(socket) {
     await send("Input.dispatchKeyEvent", { type: "keyDown", key: "ArrowLeft", code: "ArrowLeft" });
     report.panels = await evaluate("({ decisions: document.querySelectorAll('#decisions li').length, llmTurns: document.querySelectorAll('#decisions li.llm').length, rules: document.querySelectorAll('#rules .rule').length, stats: document.querySelectorAll('#now .stat').length, mapPixels: (() => { const c = document.getElementById('map'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 2] > 200 && d[i] < 100) n++; return n; })() })");
     if (!report.panels.stats || !report.panels.mapPixels) fail(`empty panels: ${JSON.stringify(report.panels)}`);
+
+    // The pianist's audit: every actor of the call at the playhead, the call's answers as bars, the per-minute table,
+    // the actor filter on the decision list.
+    if (await evaluate("!!viewer.match.jev")) {
+      await evaluate("document.getElementById('call-panel').open = true; document.getElementById('call-panel').dispatchEvent(new Event('toggle'))");
+      await sleep(200);
+      const pianist = await evaluate("({ actors: document.querySelectorAll('#pianist-actors .actor').length, questions: document.querySelectorAll('#call .q').length, bars: document.querySelectorAll('#call .bar').length, played: document.querySelectorAll('#call .bar.played').length, minutes: document.querySelectorAll('#pianist-minutes tr').length - 1, summary: document.getElementById('call-summary').textContent })");
+      if (!pianist.actors || !pianist.questions || !pianist.bars || !pianist.minutes) fail(`pianist panels empty: ${JSON.stringify(pianist)}`);
+      await evaluate("document.querySelector('#pianist-actors .actor').click()");
+      pianist.narrowedTo = await evaluate("viewer.jevActor");
+      pianist.narrowedDecisions = await evaluate("document.querySelectorAll('#decisions li.jev').length");
+      if (!pianist.narrowedTo) fail("clicking an actor did not narrow the decision list");
+      await evaluate("document.querySelector('#pianist-actors .actor').click()");
+      report.pianist = pianist;
+    }
+    if (screenshot) {
+      // With the layers back on and the map hovered nowhere: the page as a reader sees it.
+      await evaluate("document.querySelectorAll('#layers input').forEach((box) => box.click())");
+      await mouse("mouseMoved", 2, 2);
+      await sleep(100);
+      const shot = await send("Page.captureScreenshot", { format: "png" });
+      fs.writeFileSync(screenshot, Buffer.from(shot.data, "base64"));
+      report.screenshot = screenshot;
+    }
     if (problems.length) fail(`page errors: ${problems.join(" | ")}`);
     console.log(JSON.stringify(report, null, 1));
     console.log("PASS");

@@ -10,7 +10,7 @@
   const $ = (id) => document.getElementById(id);
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const COLOR = {};
-  for (const name of ["surface", "surface-2", "line", "ink", "ink-2", "muted", "ours", "theirs", "good", "critical", "warning", "llm"]) COLOR[name] = css(`--${name}`);
+  for (const name of ["surface", "surface-2", "line", "ink", "ink-2", "muted", "ours", "theirs", "good", "critical", "warning", "llm", "jev"]) COLOR[name] = css(`--${name}`);
   const OWN_ATTACKER = "#86b6ef";
   const ALLY = "#3fae8f";
   const ORDER_COLOR = { build: COLOR.good, fight: COLOR.critical, move: COLOR.muted };
@@ -20,10 +20,12 @@
 
   const view = {
     match: null, lanes: null, posts: [], frame: 0, playing: false, speed: 10, lastTime: 0,
-    layers: { terrain: true, nobots: true, notanks: false, grid: true, spots: true, truth: true, census: true, orders: true, intent: true, deaths: true },
+    layers: { terrain: true, nobots: true, notanks: false, grid: true, spots: true, truth: true, census: true, orders: true, intent: true, deaths: true, pianist: true },
     terrain: null,
     background: null, mapBox: null, hoverFrame: null, decisionItems: [], currentDecision: -2,
-    show: { heuristic: true, llm: true, event: false },
+    show: { heuristic: true, llm: true, event: false, jev: true, jevChangesOnly: true },
+    /// The pianist's actor the decision list is narrowed to ("" for all), and the call drawn last.
+    jevActor: "", callShown: null,
   };
   window.viewer = view;
 
@@ -80,13 +82,18 @@
     const header = JSON.parse(record.slice(0, record.indexOf("\n")));
     const siblings = header.siblings || {};
     // Transcripts the header names, and any other the directory lists (a record and a transcript brought together by hand).
-    const logs = [...new Set([...(siblings.decision_logs || []), ...files.filter((f) => /^strategist-.*\.jsonl$/.test(f))])];
+    const logs = [...new Set([...(siblings.decision_logs || []), ...files.filter((f) => /^(strategist|jev)-.*\.jsonl$/.test(f))])];
     const names = { engineLog: siblings.engine_log || "engine.log", botLog: siblings.bot_log || "bot.log", truth: `truth-${header.ai_id}.jsonl` };
     for (const name of [...logs, ...Object.values(names)]) grew = (await pull(live.base, name)) || grew;
     if (!grew) return null;
     return {
       files,
-      texts: { record, strategist: logs.map(complete).filter(Boolean), engineLog: complete(names.engineLog), botLog: complete(names.botLog), truth: complete(names.truth) },
+      texts: {
+        record,
+        strategist: logs.filter((f) => /^strategist/.test(f)).map(complete).filter(Boolean),
+        jev: logs.filter((f) => /^jev/.test(f)).map(complete).find(Boolean) || null,
+        engineLog: complete(names.engineLog), botLog: complete(names.botLog), truth: complete(names.truth),
+      },
     };
   }
 
@@ -198,6 +205,7 @@
     for (const file of fileList) {
       const text = await file.text();
       if (/^strategist.*\.jsonl$/.test(file.name)) texts.strategist.push(text);
+      else if (/^jev.*\.jsonl$/.test(file.name)) texts.jev = text;
       else if (/\.jsonl$/.test(file.name)) texts.record = text;
       else if (/engine/.test(file.name)) texts.engineLog = text;
       else if (/bot/.test(file.name)) texts.botLog = text;
@@ -223,6 +231,11 @@
     // The opponent's curve: ground truth every two seconds when the match has it, else the once-a-minute census.
     match.theirs = match.truth.length ? match.truth : match.census;
     if (texts.botLog) match.botLog = WR.parseBotLog(texts.botLog);
+    match.jev = texts.jev ? WR.parseJev(texts.jev) : null;
+    document.body.dataset.pianist = match.jev ? "1" : "";
+    $("pianist-panel").hidden = $("call-panel").hidden = $("pianist-stats").hidden = !match.jev;
+    if (match.jev) buildPianistMinutes(match.jev);
+    view.callShown = null;
     view.match = match;
     view.lanes = WR.lanes(match);
     view.posts = WR.squadPosts(match.decisions, match.lastFrame);
@@ -254,6 +267,7 @@
     const notes = [`${samples.length} samples`];
     if (badLines) notes.push(`${badLines} unreadable line(s) skipped`);
     if (restarts.length) notes.push(`bot restarted at ${restarts.map(WR.clock).join(", ")}`);
+    if (view.match.jev) notes.push(`pianist: ${view.match.jev.calls.length} calls to ${view.match.jev.header?.model || view.match.jev.calls[0]?.model || "Jev"}${view.match.jev.errors.length ? `, ${view.match.jev.errors.length} failed` : ""}`);
     notes.push(view.match.truth.length ? "opponent ground truth" : census.length ? `${census.length} census minutes` : "no census (play with WITHIN_REASON_OBSERVE=1 for the opponent's truth)");
     status(notes.join(" · "));
   }
@@ -453,6 +467,45 @@
     view.state = state;
     const byId = new Map(state.own.map((u) => [u.id, u]));
 
+    // The pianist's names at the playhead: places, parties, groups and where each group is going.
+    const call = view.layers.pianist && match.jev ? match.jev.calls[WR.indexAt(match.jev.calls, view.frame)] : null;
+    if (call && view.frame - call.f < 60 * WR.FPS) {
+      ctx.font = "10px system-ui";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = COLOR.muted;
+      for (const p of call.places) {
+        if (p.name === "home" || p.name === "enemy_base") continue;
+        ctx.fillText(p.name.replace("spot_", "#").replace("passage_", "pass "), px(p.x) + 7, pz(p.z) - 7);
+      }
+      ctx.strokeStyle = COLOR.theirs;
+      ctx.fillStyle = COLOR.theirs;
+      for (const p of call.parties) {
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.arc(px(p.x), pz(p.z), 12, 0, 7); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillText(`${p.name} ${p.composition || ""}`, px(p.x) + 14, pz(p.z) - 12);
+      }
+      ctx.font = "bold 11px system-ui";
+      for (const g of call.groups) {
+        const members = g.members.map((id) => byId.get(id)).filter(Boolean);
+        const at = members.length ? [members.reduce((a, u) => a + u.x, 0) / members.length, members.reduce((a, u) => a + u.z, 0) / members.length] : g.at;
+        if (!at) continue;
+        const [x, y] = [px(at[0]), pz(at[1])];
+        const kind = g.task?.kind || "hold";
+        if (g.task?.to && kind !== "hold") {
+          ctx.strokeStyle = kind === "engage" ? COLOR.critical : kind === "fight_to" ? COLOR.warning : COLOR.jev;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash(kind === "move_to" ? [4, 3] : []);
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(px(g.task.to[0]), pz(g.task.to[1])); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.fillStyle = COLOR.jev;
+        ctx.fillText(`${g.name}${members.length > 1 ? ` (${members.length})` : ""} ${kind === "hold" ? "" : kind}`, x + 8, y + 9);
+      }
+      ctx.font = "11px system-ui";
+    }
+
     if (view.layers.orders) {
       ctx.lineWidth = 1;
       ctx.globalAlpha = 0.6;
@@ -562,6 +615,7 @@
   const LANES = [
     ["losses", "unit losses", "ours"], ["buildingLosses", "building losses", "ours"], ["extractorLosses", "extractor losses", "ours"],
     ["kills", "kills", "theirs"], ["waves", "waves / recalls", "ink"], ["turns", "LLM turns", "llm"],
+    ["jevBuilders", "pianist: builders", "jev"], ["jevLabs", "pianist: labs", "jev"], ["jevGroups", "pianist: army", "jev"],
   ];
   // Every chart has its own zero-based axis; "theirs" comes from the census and exists once a minute at most.
   const CHARTS = [
@@ -587,14 +641,18 @@
 
     for (const [key, label, color] of LANES) {
       const items = view.lanes[key];
-      if (key === "turns" && !items.length) continue;
+      if ((key === "turns" || key.startsWith("jev")) && !items.length) continue;
       ctx.fillStyle = COLOR["ink-2"];
       ctx.textAlign = "right";
       ctx.fillText(`${label} (${items.length})`, GUTTER - 8, y + LANE_H / 2);
       ctx.fillStyle = COLOR["surface-2"];
       ctx.fillRect(g.x0, y + 1, g.x1 - g.x0, LANE_H - 2);
       ctx.fillStyle = COLOR[color];
-      for (const item of items) ctx.fillRect(Math.round(g.fx(item.f)) - 1, y + 2, 2, LANE_H - 4);
+      for (const item of items) {
+        ctx.globalAlpha = item.faint ? 0.25 : 1;
+        ctx.fillRect(Math.round(g.fx(item.f)) - 1, y + 2, 2, LANE_H - 4);
+      }
+      ctx.globalAlpha = 1;
       y += LANE_H;
     }
     y += 4;
@@ -804,6 +862,12 @@
       case "assault": return `assault: ${d.inputs.gathered} of ${d.inputs.attackers} gathered, going in`;
       case "event": return String(o);
       case "turn": return d.inputs.wake ? `woken: ${d.inputs.wake}` : "turn";
+      case "builder": case "lab": case "group": {
+        const kept = o.played !== o.choice;
+        const params = [o.where_extractor && o.played === "extractor" ? o.where_extractor : null, o.where && /_to|_at|walk|split/.test(o.played) ? o.where : null, o.whom && o.played === "engage" ? o.whom : null, o.where_scout && o.played === "scout" ? o.where_scout : null].filter(Boolean);
+        return `${d.inputs.actor}: ${o.played}${params.length ? ` ${params.join(" ")}` : ""}${kept ? ` (kept; it chose ${o.choice})` : ""}`;
+      }
+      case "global": return `global: ${Object.entries(o).map(([k, v]) => `${k.replace("global.", "")} ${Number(v).toFixed(2)}`).join(", ")}`;
       default: return `${d.kind}: ${JSON.stringify(o)}`;
     }
   }
@@ -834,7 +898,10 @@
     view.currentDecision = -2;
     const filters = $("decision-filters");
     filters.textContent = "";
-    for (const key of ["heuristic", "llm", "event"]) {
+    const hasJev = !!view.match.jev || view.match.decisions.some((d) => d.source === "jev");
+    const keys = hasJev ? ["heuristic", "llm", "event", "jev", "jevChangesOnly"] : ["heuristic", "llm", "event"];
+    const words = { event: "brain events", jev: "pianist", jevChangesOnly: "changes only" };
+    for (const key of keys) {
       const label = el("label");
       const box = el("input");
       box.type = "checkbox";
@@ -844,16 +911,44 @@
         buildDecisionList();
         renderDecisions();
       });
-      label.append(box, ` ${key === "event" ? "brain events" : key}`);
+      label.append(box, ` ${words[key] || key}`);
       filters.append(label);
     }
+    if (hasJev) {
+      const select = el("select");
+      const actors = [...new Set(view.match.decisions.filter((d) => d.source === "jev" && d.inputs?.actor).map((d) => d.inputs.actor))].sort();
+      select.append(new Option("every actor", ""));
+      for (const a of actors) select.append(new Option(a, a));
+      select.value = actors.includes(view.jevActor) ? view.jevActor : "";
+      select.addEventListener("change", () => {
+        view.jevActor = select.value;
+        buildDecisionList();
+        renderDecisions();
+        renderPianist();
+      });
+      filters.append(select);
+    }
+    let shown = 0;
+    const LIMIT = 4000;
     for (const d of view.match.decisions) {
       if (d.kind === "rules") continue;
-      const group = d.kind === "event" ? "event" : d.source.startsWith("llm") ? "llm" : "heuristic";
+      const jev = d.source === "jev";
+      const group = jev ? "jev" : d.kind === "event" ? "event" : d.source.startsWith("llm") ? "llm" : "heuristic";
       if (!view.show[group]) continue;
-      const li = el("li", d.source.startsWith("llm") ? "llm" : "heuristic");
+      if (jev) {
+        const o = d.outputs || {};
+        if (d.kind === "global") continue;
+        if (view.jevActor && d.inputs?.actor !== view.jevActor) continue;
+        if (view.show.jevChangesOnly && (o.played === "continue" || o.played === "nothing" || o.played === "wait")) continue;
+      }
+      if (++shown > LIMIT) break;
+      const li = el("li", jev ? `jev${d.outputs?.played !== d.outputs?.choice ? " kept" : ""}` : d.source.startsWith("llm") ? "llm" : "heuristic");
       const head = el("div");
       head.append(el("span", "when", WR.clock(d.f)), el("span", d.kind === "turn" ? "wake" : null, decisionTitle(d)), el("span", "source", d.source));
+      if (jev && d.outputs) {
+        head.append(el("span", "p", `p ${Number(d.outputs.probability).toFixed(2)} c ${Number(d.outputs.confidence).toFixed(2)}`));
+        if (d.outputs.did) head.append(el("div", "did", d.outputs.did));
+      }
       li.append(head);
       if (d.kind === "turn") {
         for (const text of d.outputs.said) li.append(el("div", "said", text));
@@ -877,7 +972,110 @@
       list.append(li);
       view.decisionItems.push({ f: d.f, li });
     }
+    if (shown > LIMIT) list.append(el("li", null, `... ${view.match.decisions.length - LIMIT} more; narrow the filters`));
     if (!view.decisionItems.length) list.append(el("li", null, "no decision records of the selected kinds"));
+  }
+
+  // ---------------------------------------------------------------- the pianist
+
+  /// Each actor as the call at the playhead saw it, with its last decision.
+  function renderPianist() {
+    const jev = view.match.jev;
+    if (!jev) return;
+    const i = WR.indexAt(jev.calls, view.frame);
+    const call = i >= 0 ? jev.calls[i] : null;
+    $("pianist-summary").textContent = call ? `call ${i + 1} of ${jev.calls.length} at ${WR.clock(call.f)}` : "before the first call";
+    const box = $("pianist-actors");
+    box.textContent = "";
+    if (!call) return;
+    const actors = call.state.actors || {};
+    for (const [name, entry] of Object.entries(actors)) {
+      const row = el("div", `actor${view.jevActor === name ? " selected" : ""}`);
+      row.append(el("b", null, name), el("span", "doing", `${entry.doing || ""}${entry.enemies_near ? ` · ${entry.enemies_near}` : ""}${entry.under_fire ? " · UNDER FIRE" : ""}`));
+      const history = jev.actors.get(name);
+      const last = history ? history.decisions[WR.indexAt(history.decisions, view.frame)] : null;
+      const line = el("div", "last");
+      if (last) {
+        const b = el("b", null, last.played);
+        line.append(b);
+        if (last.kept) line.append(el("span", "kept", ` kept (it chose ${last.choice})`));
+        line.append(` p ${Number(last.probability).toFixed(2)} c ${Number(last.confidence).toFixed(2)}`);
+        if (last.did) line.append(` · ${last.did}`);
+        line.append(el("span", "ago", `  ${WR.clock(last.f)}`));
+      } else {
+        line.append("not asked yet");
+      }
+      row.append(line);
+      row.addEventListener("click", () => {
+        view.jevActor = view.jevActor === name ? "" : name;
+        buildDecisionList();
+        renderDecisions();
+        renderPianist();
+      });
+      box.append(row);
+    }
+    renderCall(call, i);
+  }
+
+  /// The call at the playhead: what Jev was shown and what it answered, built only while the panel is open.
+  function renderCall(call, index) {
+    const panel = $("call-panel");
+    $("call-summary").textContent = `${WR.clock(call.f)} · ${call.ms} ms · ${call.tokens.toLocaleString()} tokens · ${Object.keys(call.questions).length} questions${call.retries ? ` · ${call.retries} retries` : ""}`;
+    if (!panel.open || view.callShown === index) return;
+    view.callShown = index;
+    const box = $("call");
+    box.textContent = "";
+    const played = new Map(call.played.map((d) => [d.actor, d]));
+    for (const [id, q] of Object.entries(call.questions)) {
+      const [actor, what] = id.split(".");
+      const a = call.answers[id];
+      const block = el("div", "q");
+      block.append(el("div", "id", id));
+      const ask = typeof q.instructions === "string" ? q.instructions : JSON.stringify(q.instructions);
+      block.append(el("div", "ask", short(ask, 220)));
+      if (!a) {
+        block.append(el("div", "ask", "no answer"));
+      } else if (a.type === "noul") {
+        block.append(bar("yes", a.noul, false, 1));
+      } else {
+        const chosen = (what === "do" || what === "next") ? played.get(actor) : null;
+        const ranked = Object.entries(a.probabilities || {}).sort((x, y) => y[1] - x[1]).slice(0, 6);
+        for (const [option, p] of ranked) block.append(bar(option, p, chosen ? option === chosen.played : option === a.choice, ranked[0][1]));
+        if (chosen?.kept) block.append(el("div", "ask", `kept its course: ${chosen.choice} did not beat continue by the margin`));
+        const rest = Object.keys(a.probabilities || {}).length - ranked.length;
+        if (rest > 0) block.append(el("div", "ask", `and ${rest} more under ${(ranked[ranked.length - 1][1]).toFixed(2)}`));
+        const crit = q.criteria && typeof q.criteria === "object" && !Array.isArray(q.criteria) ? q.criteria : null;
+        if (crit) block.append(details("the options as worded", Object.entries(crit).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n")));
+      }
+      box.append(block);
+    }
+    box.append(el("div", "meta", `the picture Jev was shown (${call.model || "Jev"}):`));
+    box.append(details("instructions", call.instructions || "(none)"));
+    for (const section of ["economy", "ours", "enemy", "actors", "places", "recent"]) {
+      if (call.state[section] !== undefined) box.append(details(section, JSON.stringify(call.state[section], null, 1)));
+    }
+    box.append(details("rules", call.rules || "(none)"));
+  }
+
+  function bar(label, p, played, top) {
+    const row = el("div", `bar${played ? " played" : ""}`);
+    const fill = el("i");
+    fill.style.width = `${Math.max(1, (100 * p) / Math.max(top, 1e-6))}%`;
+    row.append(el("span", null, label), fill, el("span", null, Number(p).toFixed(2)));
+    return row;
+  }
+
+  function buildPianistMinutes(jev) {
+    const table = $("pianist-minutes");
+    table.textContent = "";
+    const head = el("tr");
+    for (const h of ["minute", "calls", "median ms", "max ms", "tokens", "questions", "changes", "kept", "failed"]) head.append(el("th", null, h));
+    table.append(head);
+    for (const r of WR.jevMinutes(jev)) {
+      const tr = el("tr");
+      for (const v of [r.minute, r.calls, r.medianMs, r.maxMs, r.tokens.toLocaleString(), r.questions, r.changes, r.kept, r.errors]) tr.append(el("td", null, String(v)));
+      table.append(tr);
+    }
   }
 
   /// Rebuilds the list for a match that has grown, keeping the opened details open and the scroll position.
@@ -933,6 +1131,7 @@
     renderRules();
     renderDecisions();
     renderBotLog();
+    renderPianist();
   }
 
   function seek(frame) {
@@ -959,6 +1158,10 @@
     requestAnimationFrame(step);
   }
 
+  $("call-panel").addEventListener("toggle", () => {
+    view.callShown = null;
+    renderPianist();
+  });
   $("play").addEventListener("click", () => setPlaying(!view.playing));
   // Going anywhere by hand stops following the live match; ticking the box again jumps back to the newest sample.
   const leaveLive = () => ($("follow").checked = false);

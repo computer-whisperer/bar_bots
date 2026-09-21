@@ -29,13 +29,26 @@
       <label><input type="checkbox" data-layer="orders" checked> orders</label>
       <label><input type="checkbox" data-layer="intent" checked> intent</label>
       <label><input type="checkbox" data-layer="deaths" checked> deaths</label>
+      <label><input type="checkbox" data-layer="pianist" checked> pianist: groups, places, parties</label>
     </fieldset>
     <ul id="map-legend" class="legend"></ul>
   </section>
 
   <section id="side-pane">
     <div id="now" class="panel"></div>
-    <div class="panel">
+    <div class="panel" id="pianist-panel" hidden>
+      <h2>Pianist: each actor now <span id="pianist-summary" class="muted"></span></h2>
+      <div id="pianist-actors"></div>
+    </div>
+    <details class="panel" id="call-panel" hidden>
+      <summary>The call at the playhead <span id="call-summary" class="muted"></span></summary>
+      <div id="call"></div>
+    </details>
+    <details class="panel" id="pianist-stats" hidden>
+      <summary>Pianist per minute</summary>
+      <table id="pianist-minutes"></table>
+    </details>
+    <div class="panel" id="rules-panel">
       <h2>Rules fired this minute <span id="rules-minute" class="muted"></span></h2>
       <div id="rules"></div>
     </div>
