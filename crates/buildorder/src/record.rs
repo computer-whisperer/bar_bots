@@ -380,6 +380,7 @@ impl Replay {
             metal_storage: observed.metal_storage,
             energy_storage: observed.energy_storage,
             standing,
+            army_metal: listed.iter().filter(|u| !u.being_built && units.list[u.unit].role == Role::Army).map(|u| units.list[u.unit].metal_cost).sum(),
             builders: builders.iter().map(|b| StateBuilder { unit: b.unit, place: b.at, job: job_of(b.id) }).collect(),
         };
         // Queues: the standing builders' in the state's order, then those of the factories and constructors that

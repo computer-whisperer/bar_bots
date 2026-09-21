@@ -86,7 +86,7 @@ pub fn choose(
         let scenario = scenario_for(start);
         let found = anneal_within(&game.units, &scenario, &State::start(&scenario), palette, search, each, threads);
         let at = |minute: f64| found.outcome.samples.iter().find(|s| s.t == minute * 60.0).map_or((0, 0.0, 0.0), |s| (s.extractors, s.metal_income, s.army_value));
-        eprintln!("candidate start ({:.0}, {:.0}): score {:.0}; predicted extractors / metal per s / army metal at 5 and 10 min: {:?} {:?}", start.0, start.1, found.score, at(5.0), at(10.0));
+        eprintln!("candidate start ({:.0}, {:.0}): score {:.0}; predicted extractors / metal per s / army metal at 2 and 3 min: {:?} {:?}", start.0, start.1, found.score, at(2.0), at(3.0));
         if best.as_ref().is_none_or(|(_, b)| found.score > b.score) {
             best = Some((start, found));
         }

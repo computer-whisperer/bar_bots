@@ -211,6 +211,8 @@ pub struct State {
     pub metal_storage: f64,
     pub energy_storage: f64,
     pub standing: Vec<Standing>,
+    /// Metal cost of the soldiers alive: `Sample::army_value` counts on from it.
+    pub army_metal: f64,
     /// In queue order: the commander, then the standing factories, then the standing constructors. A plan's
     /// queues follow this order; the queues of factories and constructors not yet built come after, in the order
     /// they finish.
@@ -227,6 +229,7 @@ impl State {
             metal_storage: scenario.base_storage,
             energy_storage: scenario.base_storage,
             standing: Vec::new(),
+            army_metal: 0.0,
             builders: vec![StateBuilder { unit: scenario.commander, place: scenario.home, job: None }],
         }
     }
@@ -339,7 +342,7 @@ pub fn simulate(units: &Units, scenario: &Scenario, state: &State, plan: &Plan, 
     let mut wind_caps: Vec<f64> = Vec::new();
     let mut nano_power = 0.0;
     let (mut conv_capacity, mut conv_efficiency) = (0.0, 0.0);
-    let (mut army_count, mut army_value) = (0u32, 0.0);
+    let (mut army_count, mut army_value) = (0u32, state.army_metal);
     let (mut metal_wasted, mut energy_wasted, mut metal_spent) = (0.0, 0.0, 0.0);
     let (mut extractor_sites, mut turret_sites): (Vec<((f64, f64), f64)>, Vec<(f64, f64)>) = (Vec::new(), Vec::new());
     for u in &state.standing {

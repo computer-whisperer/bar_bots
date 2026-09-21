@@ -9,7 +9,7 @@ use buildorder::record;
 use buildorder::sim::{simulate, Outcome, Sample, Scenario, State, Wind};
 
 const USAGE: &str = "usage: (the game, that is map, start, faction and unit numbers, comes from a match record's header)
-  buildorder optimize  --game RECORD.jsonl [--factory lab|vp] [--objective income|army|mix|tempo] [--contact WALK[,AT,WEIGHT]] [--minutes 10]
+  buildorder optimize  --game RECORD.jsonl [--factory lab|vp] [--objective income|army|mix|tempo|expect] [--contact WALK[,AT,WEIGHT]] [--minutes 10]
                        [--iterations 40000] [--restarts 8] [--seed 1] [--wind MEAN] [--detour X] [--factories 2] [--constructors 6] [--leash ELMOS]
                        [--no-nano] [--turret llt] [--csv FILE] [--plan-out FILE]      (--detour X: open ground, every walk X straight lines,
                                                                         in place of the map's own ground)
@@ -123,7 +123,7 @@ fn optimize(args: &Args) {
     let factory = args.text("--factory", "lab");
     let mut objective = Objective::parse(&args.text("--objective", "mix")).unwrap_or_else(|| die("unknown objective"));
     // `--contact WALK[,AT,WEIGHT]`: the tempo objective's first-contact term (docs/design/2026-09-20-rush-benchmark.md).
-    if let Objective::Tempo { contact, .. } = &mut objective
+    if let Objective::Tempo { contact, .. } | Objective::Expect { contact, .. } = &mut objective
         && args.has("--contact")
     {
         let parts: Vec<f64> = args.text("--contact", "").split(',').filter_map(|p| p.parse().ok()).collect();

@@ -100,5 +100,11 @@ Then, in later steps of the arc (each a design status line and a measured commit
   (smoke-3: warm starts within 10-30 % everywhere). A/B planner-base (the previous commit's bot) against planner-1, 24 games each: the economy
   measure met (extractors 10 / 9 at 5:00 / 10:00 against 8 / 5, income 20.5 / 19.3 against 17.9 / 13.3) at the
   cost of the early army (720 against 1,327 army metal by 5:00, 8 against 15 soldiers), 2-19-3 against 5-15-4
-  (K-plan-ten-minute-horizon-trades-early-army). Open before step 2: the army share of the objective at the
-  ten-minute horizon (weight, contact term, or the simulator's optimism), or leave it to step 3's requirements.
+  (K-plan-ten-minute-horizon-trades-early-army). The user: "10 minutes sounds much too long -- try it with 3 minutes and use the utility
+  function to incentivise expected extractor numbers etc."
+- 2026-09-21, horizon 180 s with `Objective::Expect` (expectation curves by the clock for extractors, constructors
+  and army metal, `Expectations::STANDARD`; each unit up to the expectation worth a fixed metal value, beyond it
+  less, a constructor beyond it its cost; the bot and the placement alike). planner-smoke-4: to the 40-minute cap,
+  but constructors without limit (fixed). planner-2 against planner-base: 9-13-2 against 5-15-4, extractors
+  9 / 9.5 at 5:00 / 10:00 against 8 / 5, army metal 4,014 against 3,346 at 10:00, still 870 against 1,327 at 5:00
+  (K-plan-three-minute-expectations). The curves are the first thing step 3's requirements should set.

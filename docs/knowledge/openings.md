@@ -236,6 +236,23 @@ that keeps 15 soldiers by 5:00 at the ten-minute horizon and holds the extractor
 commander's requirements (step 3) are the intended lever for the share.
 **Used by.** H-OPEN-SEARCH.
 
+### K-plan-three-minute-expectations
+**Claim.** The rolling planner three minutes ahead with `Objective::Expect` (what stands at the horizon paid against
+the clock's expectations: extractors 2 / 4 / 6 / 8 / 10 at minutes 1-5, constructors 1-5 from 1:30 to 10:00, army
+metal 200 / 650 / 1,400 / 3,200 at 2 / 3 / 5 / 10 min; a constructor beyond the expectation costs its metal) holds
+the economy the ten-minute form gained (9 / 9.5 / 9 extractors at 5 / 10 / 15 min against the old opening's
+8 / 5 / 5, income 18 / 18 / 21 against 18 / 13 / 13) and builds the army from it (army metal 4,014 / 7,297 at
+10 / 15 min against 3,346 / 5,958; 25.5 / 39 soldiers against 23.5 / 31), for 9-13-2 against 5-15-4 (the ten-minute
+form: 2-19-3). The first five minutes are still army-poor: 870 army metal and 9.5 soldiers at 5:00 against the
+expectation's 1,400 and the old opening's 15.
+**Status.** measured (2026-09-21), 24 games an arm on the same setup as planner-base; 24 games is within noise of
+the base's wins (docs/README: 12 games ±14 points), the economy and army curves are not.
+**Evidence.** `planner-2` against `planner-base` and `planner-1`; `docs/design/2026-09-21-rolling-planner.md`.
+**Would be wrong if.** A 48-game rerun lost the win margin, or the early-army shortfall came from the executor
+(labs idle) rather than the objective (the plan's factory queues). Open: the expectation curves are mine, by eye
+from the players' and the searched openings; the commander's requirements (step 3) are meant to set them.
+**Used by.** H-OPEN-SEARCH.
+
 ### K-open-search-beats-rules
 **Claim.** An opening found by half a second of search over a simulator of this game's economy beats our hand-ordered
 opening on every opening measure at once, on the same seeds: extractors 5.2 / 8.2 / 11.4 at minutes 3 / 4 / 5 against

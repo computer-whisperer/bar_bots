@@ -45,6 +45,65 @@ pub enum Objective {
     /// `contact`, a soldier that can stand at the opponent's base by the first-contact time is worth `contact.weight`
     /// of its metal on top (`docs/design/2026-09-20-rush-benchmark.md`).
     Tempo { army: f64, exposed: f64, contact: Option<Contact> },
+    /// A short horizon with expectations at it (the user, 2026-09-21: "try it with 3 minutes and use the utility
+    /// function to incentivise expected extractor numbers etc."): metal made over the horizon, plus
+    /// `TEMPO_INCOME_SECONDS` of the income it ends on (exposed as in `Tempo`), plus what stands at the horizon
+    /// against what is expected of the clock (`Expectations`): each extractor up to the expected count is worth
+    /// `EXPECTED_EXTRACTOR`, beyond it `EXTRA_EXTRACTOR`; each constructor `EXPECTED_CONSTRUCTOR` / `EXTRA_CONSTRUCTOR`;
+    /// army metal up to the expected `EXPECTED_ARMY` times, beyond `EXTRA_ARMY`; the contact term as in `Tempo`;
+    /// less the stall penalty.
+    Expect { exposed: f64, contact: Option<Contact>, expect: Expectations },
+}
+
+/// What a game is expected to have by each second of the clock: a piecewise-linear curve per quantity. The standard
+/// curves (`Expectations::STANDARD`) follow the experienced players' openings (K-open-early-pawn-pressure-is-standard:
+/// 4 / 6 extractors beside 7 / 15 soldiers at 3 / 5 min), the searched openings (5 / 8 / 11 extractors at 3 / 4 / 5
+/// min, open-search-1-ab) and commander game 5 (9 at 6:00, 11 at 12:00, 19 at 33:00), and are the first thing the
+/// commander's requirements will set (`docs/design/2026-09-21-rolling-planner.md`, step 3).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Expectations {
+    pub extractors: &'static [(f64, f64)],
+    pub constructors: &'static [(f64, f64)],
+    /// Metal cost of the soldiers built so far.
+    pub army_metal: &'static [(f64, f64)],
+}
+
+impl Expectations {
+    pub const STANDARD: Expectations = Expectations {
+        extractors: &[(0.0, 0.0), (60.0, 2.0), (120.0, 4.0), (180.0, 6.0), (240.0, 8.0), (300.0, 10.0), (420.0, 12.0), (600.0, 15.0), (900.0, 18.0), (1500.0, 22.0)],
+        constructors: &[(0.0, 0.0), (90.0, 1.0), (150.0, 2.0), (240.0, 3.0), (360.0, 4.0), (600.0, 5.0), (900.0, 6.0)],
+        army_metal: &[(0.0, 0.0), (120.0, 200.0), (180.0, 650.0), (300.0, 1400.0), (420.0, 2100.0), (600.0, 3200.0), (900.0, 5200.0), (1500.0, 9000.0)],
+    };
+
+    /// The curve's value at `t`, held flat beyond its ends.
+    pub fn at(curve: &[(f64, f64)], t: f64) -> f64 {
+        let Some(first) = curve.first() else { return 0.0 };
+        if t <= first.0 {
+            return first.1;
+        }
+        for pair in curve.windows(2) {
+            let ((t0, v0), (t1, v1)) = (pair[0], pair[1]);
+            if t <= t1 {
+                return v0 + (v1 - v0) * (t - t0) / (t1 - t0).max(1e-9);
+            }
+        }
+        curve.last().map_or(0.0, |l| l.1)
+    }
+}
+
+/// Worth, in metal, of what stands at the horizon against the expectation (`Objective::Expect`).
+pub const EXPECTED_EXTRACTOR: f64 = 400.0;
+pub const EXTRA_EXTRACTOR: f64 = 120.0;
+pub const EXPECTED_CONSTRUCTOR: f64 = 250.0;
+/// A constructor beyond the expectation costs its metal: rewarded at 40 the planner kept nine at 5:00 and twenty at
+/// 15:00 (planner-smoke-4), each worth its simulated extractors on spots the game did not have.
+pub const EXTRA_CONSTRUCTOR: f64 = -120.0;
+pub const EXPECTED_ARMY: f64 = 2.0;
+pub const EXTRA_ARMY: f64 = 0.5;
+
+/// Worth of `have` against `expected`: full up to the expectation, `extra` per unit beyond it.
+fn against(have: f64, expected: f64, full: f64, extra: f64) -> f64 {
+    full * have.min(expected) + extra * (have - expected).max(0.0)
 }
 
 /// When the first fight is, and how far away: experienced players' raiders are at the opponent's base before 2:30
@@ -87,6 +146,7 @@ impl Objective {
             "army" => Some(Objective::Army),
             "mix" => Some(Objective::Mix),
             "tempo" => Some(Objective::Tempo { army: 1.0, exposed: 0.3, contact: None }),
+            "expect" => Some(Objective::Expect { exposed: 0.3, contact: None, expect: Expectations::STANDARD }),
             _ => None,
         }
     }
@@ -97,6 +157,7 @@ impl Objective {
             Objective::Army => "army",
             Objective::Mix => "mix",
             Objective::Tempo { .. } => "tempo",
+            Objective::Expect { .. } => "expect",
         }
     }
 
@@ -113,13 +174,29 @@ impl Objective {
             Objective::Tempo { army: weight, exposed, contact } => {
                 let made: f64 = outcome.samples.iter().map(|s| s.metal_income).sum();
                 let stalled: f64 = outcome.samples.iter().map(|s| 1.0 - s.stall).sum();
-                let there: f64 = contact.map_or(0.0, |contact| {
-                    let soldiers = outcome.finished.iter().map(|f| &units.list[f.unit]).zip(outcome.finished.iter()).filter(|(u, _)| u.role == Role::Army);
-                    soldiers.map(|(u, f)| contact.weight * u.metal_cost * contact.presence(f.t, u.speed)).sum()
-                });
+                let there = Self::there(units, outcome, contact);
                 made + TEMPO_INCOME_SECONDS * (income - (1.0 - exposed) * outcome.exposed_income) + weight * army + there - TEMPO_STALL_METAL * stalled + shaping
             }
+            Objective::Expect { exposed, contact, expect } => {
+                let made: f64 = outcome.samples.iter().map(|s| s.metal_income).sum();
+                let stalled: f64 = outcome.samples.iter().map(|s| 1.0 - s.stall).sum();
+                let last = outcome.last();
+                let extractors = against(last.extractors as f64, Expectations::at(expect.extractors, horizon), EXPECTED_EXTRACTOR, EXTRA_EXTRACTOR);
+                let constructors = against(last.constructors as f64, Expectations::at(expect.constructors, horizon), EXPECTED_CONSTRUCTOR, EXTRA_CONSTRUCTOR);
+                let soldiers = against(army, Expectations::at(expect.army_metal, horizon), EXPECTED_ARMY, EXTRA_ARMY);
+                made + TEMPO_INCOME_SECONDS * (income - (1.0 - exposed) * outcome.exposed_income) + extractors + constructors + soldiers + Self::there(units, outcome, contact) - TEMPO_STALL_METAL * stalled + shaping
+            }
         }
+    }
+}
+
+impl Objective {
+    /// The contact term: soldiers that can stand at the opponent's base by the contact time.
+    fn there(units: &Units, outcome: &Outcome, contact: Option<Contact>) -> f64 {
+        contact.map_or(0.0, |contact| {
+            let soldiers = outcome.finished.iter().map(|f| &units.list[f.unit]).zip(outcome.finished.iter()).filter(|(u, _)| u.role == Role::Army);
+            soldiers.map(|(u, f)| contact.weight * u.metal_cost * contact.presence(f.t, u.speed)).sum()
+        })
     }
 }
 

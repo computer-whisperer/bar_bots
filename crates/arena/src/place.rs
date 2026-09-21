@@ -7,15 +7,16 @@
 use std::path::Path;
 use std::time::Duration;
 
-use buildorder::anneal::{Contact, Objective, Palette, Search};
+use buildorder::anneal::{Contact, Expectations, Objective, Palette, Search};
 use buildorder::game::{distance, Spot};
 use buildorder::start::{choose, scenario_from, Rect};
 
 const BUDGET: Duration = Duration::from_secs(4);
 const THREADS: usize = 4;
-/// Ten minutes: at five with 90 s of terminal income the search took a start with six extractors at 5:00 over one
-/// with eleven for a Pawn party more (commander games 6 and 7, `docs/design/2026-09-21-rolling-planner.md`).
-const HORIZON: f64 = 600.0;
+/// Three minutes with the expectations of the clock at the horizon, as the bot's planner (at five minutes with 90 s
+/// of terminal income the search took a start with six extractors at 5:00 over one with eleven for a Pawn party
+/// more: commander games 6 and 7, `docs/design/2026-09-21-rolling-planner.md`).
+const HORIZON: f64 = 180.0;
 
 /// The latest record of a match on `map` that has its terrain beside it and whose opponent started inside `theirs`
 /// (an earlier match may have had the corners the other way round), with that start.
@@ -80,7 +81,7 @@ pub fn choose_starts(repo: &Path, map: &str, ours: [f32; 4], theirs: [f32; 4], s
     let palette = Palette::new(&game.units, game.commander, lab, true, game.units.index(&format!("{side}llt")));
     let their_centre = their_rect.centre();
     let search = Search {
-        objective: Objective::Tempo { army: 1.0, exposed: 0.3, contact: Some(Contact { at: 150.0, walk: distance(our_rect.centre(), their_centre), weight: 6.0, window: 240.0 }) },
+        objective: Objective::Expect { exposed: 0.3, contact: Some(Contact { at: 150.0, walk: distance(our_rect.centre(), their_centre), weight: 6.0, window: 240.0 }), expect: Expectations::STANDARD },
         horizon: HORIZON, iterations: 0, seed: 1, factories: 1, constructors: 4, hot: 0.02, start: None,
     };
     let ground = game.ground();

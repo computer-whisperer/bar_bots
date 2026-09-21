@@ -12,7 +12,7 @@ use std::sync::mpsc::{Receiver, channel};
 use std::sync::Arc;
 
 use bot_protocol::{OwnUnit, Tick, UnitDefId, UnitId, Vec3};
-use buildorder::anneal::{anneal_within, Contact, Objective, Palette, Search};
+use buildorder::anneal::{anneal_within, Contact, Expectations, Objective, Palette, Search};
 use buildorder::game::{distance, Game, Ground, Spot};
 use buildorder::plan::{Item, Plan, Step};
 use buildorder::sim::{simulate, Job, Scenario, Standing, State, StateBuilder};
@@ -21,8 +21,9 @@ use buildorder::units::{Role, Units};
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
 
-/// How far ahead a plan is priced.
-const HORIZON_SECONDS: f64 = 600.0;
+/// How far ahead a plan is priced: three minutes, with the expectations of the clock at the horizon (the user,
+/// 2026-09-21: ten minutes was "much too long"; K-plan-ten-minute-horizon-trades-early-army).
+const HORIZON_SECONDS: f64 = 180.0;
 /// A new plan from a fresh snapshot this often, when nothing forces one sooner; never sooner than the minimum, whatever
 /// comes and goes (in the smoke game constructors dying under a raid forced one every twelve seconds).
 const PLAN_INTERVAL_FRAMES: i32 = 30 * FRAMES_PER_SECOND;
@@ -198,8 +199,10 @@ impl Brain {
                 }
             }
         };
+        let army_metal: f64 = own.iter().filter(|u| !u.being_built).filter_map(|u| index(u.def)).filter(|i| game.units.list[*i].role == Role::Army).map(|i| game.units.list[i].metal_cost).sum();
         let state = State {
             t0: (tick.frame / FRAMES_PER_SECOND) as f64,
+            army_metal,
             metal: tick.snapshot.metal.current as f64,
             energy: tick.snapshot.energy.current as f64,
             metal_storage: tick.snapshot.metal.storage as f64,
@@ -293,7 +296,7 @@ impl Brain {
             Contact { at: CONTACT_AT, walk: self.walk_from_home(self.enemy_base(self.home)) as f64, weight: CONTACT_WEIGHT, window: CONTACT_WINDOW }
         });
         self.fire("H-OPEN-SEARCH");
-        let search = Search { objective: Objective::Tempo { army: 1.0, exposed: 0.3, contact }, horizon: HORIZON_SECONDS, iterations: 0, seed: 1 + tick.frame as u64, factories, constructors, hot: 0.02, start: Some(start.clone()) };
+        let search = Search { objective: Objective::Expect { exposed: 0.3, contact, expect: Expectations::STANDARD }, horizon: HORIZON_SECONDS, iterations: 0, seed: 1 + tick.frame as u64, factories, constructors, hot: 0.02, start: Some(start.clone()) };
         // `WITHIN_REASON_SEARCH_MS` overrides the budget, to measure what more of it buys.
         let budget = std::env::var("WITHIN_REASON_SEARCH_MS").ok().and_then(|ms| ms.parse().ok()).map_or(SEARCH_BUDGET, std::time::Duration::from_millis);
         let (sender, receiver) = channel();
@@ -309,14 +312,14 @@ impl Brain {
             let report = if first {
                 // The comparison script (`run/opening_ab.py`) reads this line's shape.
                 format!(
-                    "opening search: {:.0} ms, score {:.0} from {:.0}, contact walk {:.0}; predicted extractors / metal per s / army metal at 2, 3, 5 min: {:?} {:?} {:?}",
-                    started.elapsed().as_secs_f64() * 1000.0, found.score, before, contact.map_or(0.0, |c| c.walk), at(120.0), at(180.0), at(300.0)
+                    "opening search: {:.0} ms, score {:.0} from {:.0}, contact walk {:.0}; predicted extractors / metal per s / army metal at 1, 2, 3 min: {:?} {:?} {:?}",
+                    started.elapsed().as_secs_f64() * 1000.0, found.score, before, contact.map_or(0.0, |c| c.walk), at(60.0), at(120.0), at(180.0)
                 )
             } else {
                 let mut report = format!(
-                    "planner from {:.0} s ({} standing, {} builders, {} on a job, metal {:.0} energy {:.0}): {:.0} ms, score {:.0} from {:.0}; predicted extractors / metal per s / army metal 2, 5 and 10 min on: {:?} {:?} {:?}; the warm start's: {:?} {:?}",
+                    "planner from {:.0} s ({} standing, {} builders, {} on a job, metal {:.0} energy {:.0}): {:.0} ms, score {:.0} from {:.0}; predicted extractors / metal per s / army metal 1, 2 and 3 min on: {:?} {:?} {:?}; the warm start's: {:?} {:?}",
                     state.t0, state.standing.len(), state.builders.len(), state.builders.iter().filter(|b| b.job.is_some()).count(), state.metal, state.energy,
-                    started.elapsed().as_secs_f64() * 1000.0, found.score, before, at(120.0), at(300.0), at(600.0), warm_at(120.0), warm_at(300.0)
+                    started.elapsed().as_secs_f64() * 1000.0, found.score, before, at(60.0), at(120.0), at(180.0), warm_at(120.0), warm_at(180.0)
                 );
                 if before < 0.6 * found.score {
                     report.push_str(&format!("\nwarm start (scored {before:.0}):\n{}state: {state:?}", start.to_text(&game.units)));
