@@ -16,6 +16,7 @@
 //!              [--opponent-opening any|bots|vehicles]   (pins BARb's first factory by disabling the other; default any)
 //!              [--think-penalty X]   (commander: its orders land X game seconds late per wall second it thought; 1 = as in a live game, default 0)
 //!              [--seed-base N]   (default 1; match i plays seed N+i, for the engine and for BARb: a fresh N is a fresh set of games)
+//!              [--opening-plan PATH]   (the bot plays this plan text instead of searching one; run/replay_plan.py writes one from a replay)
 //!              [--base-port N]   (default 9100; match i uses N+2i and N+2i+1, so a second arena needs another range)
 //!              [--strategist]   (Claude Code strategist per match; use with --speed 2 and few matches)
 //!              [--commander]    (Sonnet field commander per match, one for all our seats; the game is held still during its turns, so any --speed)
@@ -84,6 +85,8 @@ struct Options {
     /// Claude Code config dir for strategist sessions (which subscription they run on).
     claude_config_dir: Option<String>,
     seed_base: u32,
+    /// `--opening-plan PATH`: the bot plays this plan (`buildorder::plan::Plan` text) instead of searching one.
+    opening_plan: Option<String>,
     /// `bots`, `vehicles` or `any` (BARb's own choice, about 70 % bots on Quicksilver).
     opponent_opening: String,
     effort: Option<String>,
@@ -151,7 +154,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "place": options.place, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "commander_each": options.commander_each, "commander_model": options.commander_model, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "mirror": options.mirror, "place": options.place, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "commander_each": options.commander_each, "commander_model": options.commander_model, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opening_plan": options.opening_plan, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -287,6 +290,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .env("WITHIN_REASON_SOCKET", &socket)
         .env("WITHIN_REASON_LOG_DIR", &dir)
         .env("WITHIN_REASON_DISABLE", &disable)
+        .envs(options.opening_plan.as_ref().map(|path| ("WITHIN_REASON_OPENING_PLAN", path)))
         // Every match leaves a record for `run/view_match.py`: 0.1-0.3 MB per game minute (docs/harness/record-format.md).
         .env("WITHIN_REASON_RECORD", "1")
         .envs(options.claude_config_dir.as_ref().map(|dir| ("WITHIN_REASON_CLAUDE_CONFIG_DIR", dir)))
@@ -547,6 +551,7 @@ fn parse_args() -> Options {
         ab_disable: None,
         claude_config_dir: None,
         seed_base: 1,
+        opening_plan: None,
         opponent_opening: "any".into(),
         effort: None,
         think_penalty: None,
@@ -611,6 +616,7 @@ fn parse_args() -> Options {
                 }
             }
             "--seed-base" => options.seed_base = value().parse().unwrap_or_else(|_| usage("--seed-base")),
+            "--opening-plan" => options.opening_plan = Some(std::fs::canonicalize(value()).unwrap_or_else(|_| usage("--opening-plan")).to_string_lossy().into_owned()),
             "--side" => {
                 options.side = Some(match value().to_lowercase().as_str() {
                     "armada" => "Armada",
@@ -650,7 +656,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes standard|corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes standard|corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--opening-plan PATH] [--base-port N]");
     std::process::exit(2)
 }
 

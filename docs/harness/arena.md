@@ -134,3 +134,7 @@ then carries `StartPosType=3` with `StartPosX/Z` per team; the opponent keeps th
 such match exists, the game places everyone (`StartPosType=2`) and the log says why. In a game with people the lobby
 places an AI, so the bot itself never chooses: it plans from where it stands (the user's ruling, 2026-09-20).
 
+**A plan from a file (`--opening-plan PATH`, since 2026-09-20 night).** The bot plays the plan text (the form the log
+prints: `com: mex mex win lab assist`, `fac0: ck pw pw`, `con0: mex mex`) instead of searching one. `run/replay_plan.py
+run/matches/<replay>/record-<team>.jsonl` transcribes a player's opening from a replayed game; `run/plans/` keeps them.
+

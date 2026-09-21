@@ -47,6 +47,10 @@ pub(super) struct Opening {
     constructors: usize,
     /// Per builder: the frame of its last plan order and how often that step has been given again.
     last: HashMap<UnitId, (i32, u32)>,
+    /// Builders on an `assist` step (guarding the first lab), and the frame the step ends at. Until 2026-09-20
+    /// night the executor skipped assist steps, so the commander never lent the lab its build power although the
+    /// searched plans asked for it three times over.
+    assist_until: HashMap<UnitId, i32>,
 }
 
 /// What a builder on the plan does next.
@@ -54,7 +58,12 @@ pub(super) enum Planned {
     Extractor(Vec3),
     /// With the place the plan names for it, if it names one (a turret at a metal spot).
     Building(UnitDefId, Option<Vec3>),
+    /// Guard this lab (add the builder's build power to it) for the assist chunk.
+    Assist(UnitId),
 }
+
+/// Length of one `assist` step, the simulator's `assist_chunk`.
+const ASSIST_FRAMES: i32 = 20 * FRAMES_PER_SECOND;
 
 impl Brain {
     /// The game as the build-order simulator sees it, from what the engine told us at the start.
@@ -102,7 +111,24 @@ impl Brain {
         let Some(game) = self.buildorder_game(kit) else { return };
         let Some(mut plan) = self.default_opening(&game, kit) else { return };
         let lab = self.world.hello.unit_defs.iter().position(|d| d.id == kit.lab);
-        if self.enabled("H-OPEN-SEARCH") && let Some(lab) = lab {
+        // `WITHIN_REASON_OPENING_PLAN`: a plan from a file (`Plan::from_text`, the form the log prints) instead of the
+        // search: a player's transcribed order (`run/replay_plan.py`), or one written by hand, played as given.
+        let given = std::env::var_os("WITHIN_REASON_OPENING_PLAN").and_then(|path| {
+            let side = self.world.def(kit.commander).map_or("arm".to_string(), |d| d.name.chars().take(3).collect());
+            match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|text| Plan::from_text(&text, &side, &game.units)) {
+                Ok(plan) => {
+                    eprintln!("[ai {}] f={} opening plan from {}", self.ai(), tick.frame, path.to_string_lossy());
+                    Some(plan)
+                }
+                Err(problem) => {
+                    eprintln!("[ai {}] f={} opening plan file {} not usable ({problem}); searching instead", self.ai(), tick.frame, path.to_string_lossy());
+                    None
+                }
+            }
+        });
+        if let Some(given) = given {
+            plan = given;
+        } else if self.enabled("H-OPEN-SEARCH") && let Some(lab) = lab {
             // Ours to count on: the spots nearer to us than to the enemy on foot.
             let mut spots: Vec<Spot> = self.world.hello.metal_spots.iter().filter(|s| self.reachable_on_foot(**s) && self.spot_is_ours(**s))
                 .map(|s| Spot { at: (s.x as f64, s.z as f64), metal: game.spot_metal(s.y as f64) }).collect();
@@ -131,7 +157,7 @@ impl Brain {
         }
         eprintln!("[ai {}] f={} opening plan:\n{}", self.ai(), tick.frame, plan.to_text(&game.units));
         let queues = plan.queue_count();
-        self.opening = Some(Opening { plan, next: vec![0; queues], queue_of: HashMap::new(), factories: 0, constructors: 0, last: HashMap::new() });
+        self.opening = Some(Opening { plan, next: vec![0; queues], queue_of: HashMap::new(), factories: 0, constructors: 0, last: HashMap::new(), assist_until: HashMap::new() });
     }
 
     /// Ends the plan for everybody when the game has left it.
@@ -171,6 +197,17 @@ impl Brain {
     }
 
     /// A step given to `builder` as a queued build that the engine never started: back to it.
+    /// True once for a builder whose assist step has run its chunk: the economy plans it again although it is not
+    /// idle (it is still guarding the lab).
+    pub(super) fn assist_over(&mut self, builder: UnitId, frame: i32) -> bool {
+        let Some(opening) = self.opening.as_mut() else { return false };
+        if opening.assist_until.get(&builder).is_some_and(|until| frame >= *until) {
+            opening.assist_until.remove(&builder);
+            return true;
+        }
+        false
+    }
+
     pub(super) fn unqueue_step(&mut self, builder: UnitId) {
         if let Some(opening) = self.opening.as_mut()
             && let Some(queue) = opening.queue_of.get(&builder).copied()
@@ -224,7 +261,13 @@ impl Brain {
             let opening = self.opening.as_mut()?;
             let step = *opening.plan.queue(queue).get(opening.next[queue])?;
             opening.next[queue] += 1;
-            let Item::Build(unit) = step.item else { continue };
+            let Item::Build(unit) = step.item else {
+                // Assist: guard the first finished lab for the chunk; with no lab standing yet the step is moot.
+                let lab = own.iter().find(|u| u.def == kit.lab && !u.being_built);
+                let Some(lab) = lab else { continue };
+                opening.assist_until.insert(builder.id, tick.frame + ASSIST_FRAMES);
+                return Some(Planned::Assist(lab.id));
+            };
             let def = self.world.hello.unit_defs[unit].id;
             if !self.world.def(builder.def).is_some_and(|d| d.build_options.contains(&def)) {
                 continue;

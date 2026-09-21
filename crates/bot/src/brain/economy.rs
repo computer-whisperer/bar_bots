@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitDefId, Vec3};
+use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitDefId, UnitId, Vec3};
 
 use super::opening::Planned;
 use super::roster::Kit;
@@ -172,7 +172,9 @@ impl Brain {
             commands.push(Command::Repair { unit: bot, target: raised, queue: false });
         }
         self.queue_next_steps(tick, kit, commands);
-        for unit in own.iter().filter(|u| u.idle && !u.being_built) {
+        // Idle, or on the plan's assist step and its chunk is up (a guarding builder is never idle).
+        let assist_over: Vec<UnitId> = own.iter().filter(|u| !u.idle && !u.being_built).map(|u| u.id).filter(|id| self.assist_over(*id, tick.frame)).collect();
+        for unit in own.iter().filter(|u| (u.idle || assist_over.contains(&u.id)) && !u.being_built) {
             if self.last_orders.get(&unit.id).is_some_and(|(frame, _, _)| tick.frame - frame < ORDER_GRACE_FRAMES) {
                 continue;
             }
@@ -224,6 +226,13 @@ impl Brain {
                     Some(Planned::Extractor(spot)) => (Plan::Extractor(spot), "H-OPEN-PLAN"),
                     Some(Planned::Building(def_id, Some(site))) => (Plan::Near(def_id, site), "H-OPEN-PLAN"),
                     Some(Planned::Building(def_id, None)) => (self.place_planned(def_id, unit, own, kit), "H-OPEN-PLAN"),
+                    Some(Planned::Assist(lab)) => {
+                        self.fire("H-OPEN-PLAN");
+                        self.jobs.insert(unit.id, kit.commander);
+                        self.last_orders.remove(&unit.id);
+                        commands.push(Command::Guard { unit: unit.id, target: lab });
+                        continue;
+                    }
                     None => self.plan_for(unit, tick, kit),
                 };
                 // A stationed commander builds where it stands, whatever anchor the rule had in mind.
@@ -419,6 +428,11 @@ impl Brain {
                 Planned::Extractor(spot) => Plan::Extractor(spot),
                 Planned::Building(def_id, Some(site)) => Plan::Near(def_id, site),
                 Planned::Building(def_id, None) => self.place_planned(def_id, unit, own, kit),
+                // An assist is not a build to queue: the step waits for the builder to come free.
+                Planned::Assist(_) => {
+                    self.unqueue_step(unit.id);
+                    continue;
+                }
             };
             let Some((def_id, site)) = self.build_site_for(&plan, unit, kit) else { continue };
             self.fire("H-OPEN-QUEUE");

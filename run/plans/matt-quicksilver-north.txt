@@ -1,0 +1,9 @@
+# Matt (player 2) against BARb medium on Quicksilver, the lobby boxes, from the north: the players' replay of 2026-09-20.
+# Transcribed by run/replay_plan.py (the record has no spot list, so extractors go to the nearest free spot by travel time).
+# Lab at 0:34 after two extractors and three winds; six more winds by 1:30; the commander assists the lab from 1:30; the lab makes a constructor first, then Pawns without a gap.
+# from run/matches/1789930356-replay-player2-vs-medium/record-0.jsonl, the first 300 s
+com: mex mex win win win lab win solar win win win win win assist assist assist makr assist win win win assist assist
+fac0: ck pw pw pw pw ck pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw pw
+con0: mex mex llt rad mex llt mex
+con1: mex llt mex llt
+# timings:
