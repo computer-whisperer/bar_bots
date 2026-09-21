@@ -130,6 +130,17 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   the games after it: fewer turrets, more mobile squads posted around the map where the raids come through, moved as
   the raids move; a turret only where a squad cannot be. By minute 10 game 5 had spent 765 metal on nine turrets and
   2,608 on soldiers, with 1,975 on energy and 990 on constructors.
+- cmd-opus-low-6 (2026-09-21, Opus at low effort, the E2 plateau start, lost at 14 minutes): played the instruction
+  above from its first turn ("mobile squads on approaches rather than turret spam"), posted a screen of eight Pawns
+  and three Rocketeers at E4 and an east squad of Hammers at G4, and requested no turret before 7:35. The bot built
+  six turrets by 6:00 on its own (its base-turret rule, five, and the opening plan's one; 680 metal by minute 10
+  against game 5's 765), which the commander noted as "spammed 4 turrets at F3 (waste)" and could not stop: no
+  directive reaches that rule. Then the classic shape, named by the commander itself at 7:40: lone Pawns and Ticks
+  killed extractors at E3, F4 and G3, inside the posts, while the squads sat on the outer approaches; four
+  extractors from 7:00 on, three by 12:24, and the block walked in at 11:24. Posted squads do not catch single
+  raiders (K-army-posted-squads-chase-singles): the answer to those is the bot's contact rule, which sent one unit
+  at each and lost the extractor anyway. What the commander can do about it today is a turret at each inner
+  extractor, the thing the instruction said not to do; until the bot's outpost answer is rebuilt, that stands.
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.
