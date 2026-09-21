@@ -105,8 +105,11 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   rush-smoke2, seven of eleven here). The wake now names the commander when it is there and is not sent for a party
   under about seventeen Pawns; when it is named, the answer is Maces and Rocketeers with the Pawns, not the Pawns.
   Then the same shape as games 1 and 2: lone Pawns and Fleas took the outlying extractors one by one (three left by
-  7:50) and the block of Maces walked in at 9:52. Three games, one shape: after the pressure fails, the outlying
-  extractors go to single raiders and the economy is at three or four when the block comes.
+  7:50) and the block of Maces walked in at 9:52. Four games (cmd-opus-low-4 followed every lesson above and lost
+  the same way at 14:36), one shape: after the pressure fails, the outlying extractors go to single raiders between
+  minutes 5 and 10 and the economy is at three or four when the block comes. Until the bot's outpost answer is
+  better, expansion past the near spots needs a turret requested at each new extractor as it is taken, and a squad
+  of two or three line units posted on the approach the raids use (D4/E5 from the plateau, D4/C4 from the west).
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.
