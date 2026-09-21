@@ -162,7 +162,12 @@ Your levers:
   converters only out of an energy surplus its income carries; the cap is for when it should not). `tier2`: the advanced bot lab costs
   2600 metal and a few minutes of build power, then its constructors upgrade our extractors in place to four times
   the yield (620 each, repaid in about two minutes if it survives) and it builds heavier units (name them in
-  `set_production`; without a mix it waits for four upgrades first). The bot starts it by itself at metal income 22 and
+  `set_production`; without a mix it waits for four upgrades first). `base_turrets` and `outpost_turrets` are how many light
+turrets the bot puts up on its own and where: unset it builds two 450 forward of home after the lab (six when constructors
+are idle) and one at every extractor more than 500 from home; `base_turrets` 0 stops the first, `outpost_turrets` `"none"`
+the second, and a list of spot numbers restricts the second to those extractors. A light turret (85 metal) at an
+extractor repels the Ticks where no army stands; Hammers and Pawns are the army's to counter, and a turret is not an
+answer to them. `request_turret` puts one at a point of your choosing. The bot starts it by itself at metal income 22 and
   energy income 450 when home is quiet; `true` forces it now, `false` holds it. This opponent has its own by about
   minute 20 in two games out of three. It is a bet on the game lasting: 3000 metal of soldiers now, or double the
   income in five minutes. `pressure` (false keeps the early raiders home) and `scout_at` (the next scout looks round

@@ -6,6 +6,7 @@ use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitDefId, UnitId, Vec3};
 
 use super::opening::Planned;
 use super::roster::Kit;
+use crate::strategist::shared::{OutpostRule, OutpostTurrets};
 use super::territory::Ground;
 use super::tier2::{ADVANCED_CONSTRUCTORS, Advance, LAB_ASSISTANTS, UPGRADES_BEFORE_ARMY};
 use crate::strategist::shared::Focus;
@@ -530,6 +531,7 @@ impl Brain {
             *counts.entry(def).or_default() += 1;
         }
         let planned = |def: UnitDefId| counts.get(&def).copied().unwrap_or(0);
+        let base_turret_cap = self.directives.base_turrets.map_or(MAX_TURRETS, |t| t.value);
         let energy = snapshot.energy;
         // Judge energy by what is stored, not by income against usage: converters soak up any
         // surplus, so usage always catches up with income and would read as a permanent shortage.
@@ -698,8 +700,10 @@ impl Brain {
                         return (Plan::Beside(kit.nano, *lab), "H-ECO-NANO");
                     }
                 }
-                Step::FirstTurrets if planned(kit.turret) < 2 => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
-                Step::MoreTurrets if planned(kit.turret) < MAX_TURRETS => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
+                // The commander's `base_turrets` caps the rule's own 2 and 6 (cmd-opus-low-6: six turrets by 6:00 that
+                // the commander called waste and could not stop).
+                Step::FirstTurrets if planned(kit.turret) < 2.min(base_turret_cap) => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
+                Step::MoreTurrets if planned(kit.turret) < MAX_TURRETS.min(base_turret_cap) => return (Plan::Near(kit.turret, front), "H-ECO-BASE-TURRETS"),
                 // A construction turret is a third of a lab's metal for the same build power: labs come after them.
                 Step::MoreLabs
                     if snapshot.metal.current > floating
@@ -709,7 +713,15 @@ impl Brain {
                     return (Plan::Near(kit.lab, yard), "H-ECO-MORE-LABS");
                 }
                 Step::OutpostTurret if !is_commander => {
-                    if let Some(outpost) = self.unguarded_outpost(builder, snapshot.own_units.as_slice(), kit) {
+                    // The commander's `outpost_turrets`: the rule, none, or only the extractors on the spots it named.
+                    let only: Option<&[usize]> = match self.directives.outpost_turrets.as_ref().map(|t| &t.value) {
+                        Some(OutpostTurrets::Rule(OutpostRule::None)) => None,
+                        Some(OutpostTurrets::Spots(spots)) => Some(spots.as_slice()),
+                        _ => Some(&[]),
+                    };
+                    if let Some(only) = only
+                        && let Some(outpost) = self.unguarded_outpost(builder, snapshot.own_units.as_slice(), kit, only)
+                    {
                         return (Plan::Near(kit.turret, outpost), "H-ECO-OUTPOST-TURRET");
                     }
                 }
@@ -837,8 +849,10 @@ impl Brain {
         own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < radius) || self.allied_extractor_on(spot)
     }
 
-    /// The nearest far-flung extractor with no turret beside it; raiders pick those off first.
-    fn unguarded_outpost(&self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Option<Vec3> {
+    /// The nearest far-flung extractor with no turret beside it; raiders pick those off first. `only` (when not
+    /// empty) restricts it to the extractors standing on those numbered metal spots.
+    fn unguarded_outpost(&self, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit, only: &[usize]) -> Option<Vec3> {
+        let named = |pos: Vec3| only.is_empty() || only.iter().any(|n| self.world.hello.metal_spots.get(*n).is_some_and(|s| s.dist2d(pos) < 100.0));
         let guarded = |pos: Vec3| {
             let turret_near = own.iter().any(|u| u.def == kit.turret && u.pos.dist2d(pos) < OUTPOST_GUARD_RADIUS);
             // Somebody is already building a turret for THIS place. (The test used to ignore the place, so one turret
@@ -853,7 +867,7 @@ impl Brain {
         own.iter()
             .filter(|u| kit.is_extractor(u.def))
             .map(|u| u.pos)
-            .filter(|pos| pos.dist2d(self.home) > OUTPOST_DISTANCE && !guarded(*pos) && self.reachable_on_foot(*pos))
+            .filter(|pos| pos.dist2d(self.home) > OUTPOST_DISTANCE && named(*pos) && !guarded(*pos) && self.reachable_on_foot(*pos))
             .min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)))
     }
 

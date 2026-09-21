@@ -139,8 +139,10 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   killed extractors at E3, F4 and G3, inside the posts, while the squads sat on the outer approaches; four
   extractors from 7:00 on, three by 12:24, and the block walked in at 11:24. Posted squads do not catch single
   raiders (K-army-posted-squads-chase-singles): the answer to those is the bot's contact rule, which sent one unit
-  at each and lost the extractor anyway. What the commander can do about it today is a turret at each inner
-  extractor, the thing the instruction said not to do; until the bot's outpost answer is rebuilt, that stands.
+  at each and lost the extractor anyway. The user's ruling after the game (2026-09-21): a light turret at an
+  extractor repels the Ticks where no army stands, one per extractor; Hammers and Pawns have to be countered by the
+  army. So: `outpost_turrets` names the extractors your squads do not cover (or leaves the rule on), `base_turrets`
+  0 unless the base itself is what you are defending, and the squads go where the Pawns and Hammers come through.
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.

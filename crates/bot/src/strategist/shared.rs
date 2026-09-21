@@ -101,6 +101,23 @@ pub enum Focus {
 }
 
 /// A directive value that lapses, so a silent strategist hands control back to the heuristics.
+/// Which of our extractors get a light turret of the bot's own accord (H-ECO-OUTPOST-TURRET): the rule as it is
+/// (`"all"`: one per extractor beyond 500 from home), none (`"none"`: turrets only where `request_turret` asks), or
+/// the extractors on these numbered spots and no other.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OutpostTurrets {
+    Rule(OutpostRule),
+    Spots(Vec<usize>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OutpostRule {
+    All,
+    None,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Timed<T> {
     pub value: T,
@@ -122,6 +139,11 @@ pub struct Directives {
     pub max_converters: Option<Timed<usize>>,
     /// Constructors take no metal spot farther than this from home, on foot.
     pub expansion_radius: Option<Timed<usize>>,
+    /// The cap on the bot's own base turrets (H-ECO-BASE-TURRETS; its own numbers are 2, then 6); 0 stops them. The
+    /// user's ruling after cmd-opus-low-6: the commander dictates how many light turrets go up and where.
+    pub base_turrets: Option<Timed<usize>>,
+    /// Which extractors get a turret of the bot's own accord (H-ECO-OUTPOST-TURRET); unset means all beyond 500.
+    pub outpost_turrets: Option<Timed<OutpostTurrets>>,
     /// Where the commander stands and builds, instead of roaming its leash around home.
     pub commander_station: Option<Timed<Vec3>>,
     /// Tier 2: `true` starts the advanced lab now whatever the economy, `false` holds it back.
@@ -150,6 +172,8 @@ impl Directives {
         lapse(&mut self.min_converters, frame);
         lapse(&mut self.max_converters, frame);
         lapse(&mut self.expansion_radius, frame);
+        lapse(&mut self.base_turrets, frame);
+        lapse(&mut self.outpost_turrets, frame);
         lapse(&mut self.commander_station, frame);
         lapse(&mut self.tier2, frame);
         lapse(&mut self.resurrect, frame);
@@ -186,6 +210,17 @@ impl Directives {
         }
         if let Some(t) = self.expansion_radius {
             lines.push(format!("expansion_radius={} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(t) = self.base_turrets {
+            lines.push(format!("base_turrets={} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(t) = &self.outpost_turrets {
+            let value = match &t.value {
+                OutpostTurrets::Rule(OutpostRule::All) => "all".to_string(),
+                OutpostTurrets::Rule(OutpostRule::None) => "none".to_string(),
+                OutpostTurrets::Spots(spots) => format!("spots {}", spots.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(",")),
+            };
+            lines.push(format!("outpost_turrets={value} ({})", left(t.expires_frame)));
         }
         if let Some(r) = self.resurrect {
             lines.push(format!("resurrect={} ({})", r.value, left(r.expires_frame)));
@@ -505,5 +540,18 @@ impl Shared {
         gate.closed = true;
         gate.in_progress = false;
         self.gate_changed.notify_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn outpost_turrets_parse_as_a_word_or_a_list() {
+        assert_eq!(serde_json::from_str::<OutpostTurrets>("\"all\"").unwrap(), OutpostTurrets::Rule(OutpostRule::All));
+        assert_eq!(serde_json::from_str::<OutpostTurrets>("\"none\"").unwrap(), OutpostTurrets::Rule(OutpostRule::None));
+        assert_eq!(serde_json::from_str::<OutpostTurrets>("[5, 7]").unwrap(), OutpostTurrets::Spots(vec![5, 7]));
+        assert!(serde_json::from_str::<OutpostTurrets>("\"some\"").is_err());
     }
 }

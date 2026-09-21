@@ -8,7 +8,7 @@ use bot_protocol::Vec3;
 use serde_json::{Value, json};
 use tiny_http::{Header, Method, Response, Server};
 
-use super::shared::{Focus, OrderKind, Post, Shared, Stance, Timed};
+use super::shared::{Focus, OrderKind, OutpostTurrets, Post, Shared, Stance, Timed};
 use super::transcript::Transcript;
 
 const DEFAULT_TTL_SECONDS: i64 = 120;
@@ -122,6 +122,10 @@ fn tool_list() -> Value {
                   "description": "Constructors build energy-to-metal converters up to this count before expanding further, energy permitting." },
               "max_converters": { "type": ["integer", "null"], "minimum": 0, "maximum": 40,
                   "description": "No more converters than this, whatever energy is banked (each takes 70 energy a second to run and costs 1150 to build; the bot's own rule builds one only when energy income exceeds usage by that much and stops at 40). 0 stops them." },
+              "base_turrets": { "type": ["integer", "null"], "minimum": 0, "maximum": 6,
+                  "description": "How many light turrets (85 metal each) the bot puts up on its own 450 forward of home: unset it builds 2 after the lab and up to 6 when constructors are idle; 0 stops them. Turrets are for Ticks: one at an extractor repels them where no army stands; Hammers and Pawns are the army's to counter." },
+              "outpost_turrets": { "type": ["string", "array", "null"], "items": { "type": "integer", "minimum": 0 },
+                  "description": "Which of our extractors get a light turret of the bot's own accord: \"all\" (unset: one at every extractor more than 500 from home), \"none\" (only where request_turret asks), or a list of metal spot numbers n from the map (a turret at each of those extractors as they stand, none elsewhere). Give the spots your squads do not cover." },
               "expansion_radius": { "type": ["integer", "null"], "minimum": 500, "maximum": 20000,
                   "description": "Constructors build extractors only on metal spots within this walking distance of home (see walk_from_home in the map). Use it to stop expansion into places you cannot defend." },
               "tier2": { "type": ["boolean", "null"],
@@ -363,6 +367,12 @@ fn set_directives(arguments: &Value, shared: &Shared) -> Result<String, String> 
             }
             "expansion_radius" => {
                 directives.expansion_radius = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
+            }
+            "base_turrets" => {
+                directives.base_turrets = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
+            }
+            "outpost_turrets" => {
+                directives.outpost_turrets = parse::<OutpostTurrets>(value).map_err(|e| format!("outpost_turrets is \"all\", \"none\" or a list of spot numbers: {e}"))?.map(|value| Timed { value, expires_frame });
             }
             "resurrect" => directives.resurrect = parse::<bool>(value)?.map(|value| Timed { value, expires_frame }),
             "tier2" => directives.tier2 = parse::<bool>(value)?.map(|value| Timed { value, expires_frame }),
