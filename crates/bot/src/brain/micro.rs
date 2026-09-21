@@ -352,9 +352,16 @@ impl Brain {
             // Dearest target per second of the group's fire on it, until each is covered; a shooter goes to the
             // first target it can reach in that order.
             let mut unassigned: Vec<usize> = group.clone();
+            // What shoots comes before what does not (raid-price-debug2: the dearest-per-second rule put Pawns on a
+            // base's winds while its tower killed them; the user's rule: combatants first unless the brain has said
+            // otherwise), and what the brain has told a member to attack comes first of all.
+            let ordered: Vec<UnitId> = group.iter().filter_map(|j| match self.lane.standing.get(&shooters[*j].0.id)?.0 { Command::Attack { target, .. } => Some(target), _ => None }).collect();
             let mut order: Vec<(&EnemyUnit, f32, f32)> = targets.iter().map(|(e, metal)| {
                 let dps: f32 = group.iter().filter(|j| shooters[**j].0.pos.dist2d(e.pos) < shooters[**j].1 + FOCUS_SLACK).map(|j| shooters[*j].2).sum();
-                (*e, *metal, if dps > 0.0 { metal / (e.health / dps).max(0.1) } else { 0.0 })
+                let score = if dps > 0.0 { metal / (e.health / dps).max(0.1) } else { 0.0 };
+                let shoots = e.def.and_then(|d| self.sim_stats(d)).is_some_and(|(reach, dps, _)| reach > 0.0 && dps > 0.0);
+                let rank = if ordered.contains(&e.id) { 2.0 } else if shoots { 1.0 } else { 0.0 };
+                (*e, *metal, if score > 0.0 { score + rank * 1.0e6 } else { 0.0 })
             }).collect();
             order.retain(|(_, _, score)| *score > 0.0);
             order.sort_by(|a, b| b.2.total_cmp(&a.2));

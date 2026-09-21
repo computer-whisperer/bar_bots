@@ -19,6 +19,10 @@ pub struct Chase {
     /// The party's own buildings standing with it (its turrets, when the question is our raid on its ground): they
     /// hold and shoot, and count in what the party loses.
     pub party_buildings: Vec<(usize, Vec2)>,
+    /// The pursuers' turrets, holding where they stand: the question asked the other way round, our party raiding
+    /// their base (`docs/design/2026-09-20-base-raid-pricing.md`): their soldiers pursue, their towers hold, their
+    /// unarmed buildings are the assets, and ours is the party with a raid intent.
+    pub pursuer_buildings: Vec<(usize, Vec2)>,
     /// How long the question runs.
     pub seconds: f32,
 }
@@ -53,6 +57,11 @@ impl Chase {
         }
         for (def, place) in &self.assets {
             scenario.sides[0].push(Group::new(*def, 1, *place, Vec2::new(1.0, 0.0)));
+        }
+        for (def, place) in &self.pursuer_buildings {
+            let mut group = Group::new(*def, 1, *place, place.towards(self.at));
+            group.hold = true;
+            scenario.sides[0].push(group);
         }
         let threat = self.pursuers.first().map_or(Vec2::new(self.at.x - 1.0, self.at.z), |p| p.2);
         for (def, place) in &self.party_buildings {

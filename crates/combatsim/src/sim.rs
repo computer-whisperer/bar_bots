@@ -35,11 +35,15 @@ pub struct Tuning {
     /// (`CGroundMoveType` uses `unit->radius`, the collision volume, which is wider than the build footprint):
     /// the front rank halts at its range and the ranks behind it are stuck there. Off for measuring what it costs.
     pub collide: bool,
+    /// A commander's D-gun is a weapon: 99,999 damage at 250 every 0.9 s. Off by default (nobody presses the button
+    /// in the duel tables); on for pricing against BARb, whose commander presses it
+    /// (K-barb-commander-dgun-beats-a-pawn-party).
+    pub dgun: bool,
 }
 
 impl Default for Tuning {
     fn default() -> Tuning {
-        Tuning { spread: 1.0, stop_at: 0.9, aim_seconds: 0.0, collide: true }
+        Tuning { spread: 1.0, stop_at: 0.9, aim_seconds: 0.0, collide: true, dgun: false }
     }
 }
 
@@ -102,7 +106,7 @@ impl Rules {
         let shots = (units.list.iter())
             .map(|unit| {
                 (unit.weapons.iter())
-                    .filter(|w| w.hits_ground())
+                    .filter(|w| w.hits_ground() || (tuning.dgun && w.command_fire && !w.paralyzer && w.damage_to("standard") > 0.0))
                     .map(|w| Shot {
                         range: w.range,
                         reload: (w.reload * FPS).round().max(1.0) as u32,

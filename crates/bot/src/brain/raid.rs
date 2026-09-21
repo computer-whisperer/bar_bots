@@ -244,7 +244,7 @@ impl Brain {
         candidates.sort_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)));
         // Priced as the party's target will be, over the same radius (rush-16: a target priced won at 600 and lost at
         // 1000 had the party go and retreat every four seconds under a turret).
-        let found = candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.assault_verdict(body, *t, CONTACT_RADIUS, tick).gain >= GO_GAIN);
+        let found = candidates.into_iter().take(ELSEWHERE_TRIES).find(|t| self.raid_verdict(body, *t, tick).gain >= GO_GAIN);
         found.or_else(|| self.perimeter_probe(centre, tick.frame))
     }
 
@@ -290,7 +290,9 @@ impl Brain {
             let party: Vec<&OwnUnit> = free[..PARTY].to_vec();
             let Some(centre) = centre(&party) else { return };
             let Some(target) = self.pressure_target(centre, tick) else { return };
-            let verdict = self.assault_verdict(&party, target, TARGET_RADIUS, tick);
+            // Priced as a raid (base-raid-pricing design): what the party burns and kills there against what it loses,
+            // not whether it wins a stand-up fight with everything in reach.
+            let verdict = self.raid_verdict(&party, target, tick);
             if verdict.gain < GO_GAIN {
                 return;
             }
@@ -354,11 +356,16 @@ impl Brain {
         let reprice = in_sight.iter().any(|e| armed(e)) || tick.frame - self.raid.priced_at >= REPRICE_FRAMES || turrets_known != self.raid.turrets_known;
         let party_metal: f32 = body.iter().map(|u| self.world.def(u.def).map_or(0.0, |d| d.metal_cost)).sum();
         let too_small_for_commander = commander_near && party_metal < COMMANDER_PARTY_METAL;
-        self.raid.fights_commander = party_metal >= COMMANDER_PARTY_METAL;
+        // The lane lets the party fight the commander only at the kill gate's size (its D-gun is not priced).
+        self.raid.fights_commander = party_metal >= 2.0 * COMMANDER_PARTY_METAL;
         if reprice {
             self.raid.priced_at = tick.frame;
-            let verdict = self.assault_verdict(&body, target.unwrap_or(centre), CONTACT_RADIUS, tick);
+            let verdict = self.raid_verdict(&body, target.unwrap_or(centre), tick);
             self.raid.outmatched = verdict.gain < GO_GAIN;
+            if std::env::var_os("WITHIN_REASON_RAID_DEBUG").is_some() {
+                let v = &verdict.verdict;
+                eprintln!("[ai {}] f={} raid-debug: party of {} priced at ({:.0}, {:.0}): burn {:.0}, kill {:.0}, lose {:.0} -> gain {:.0}", self.ai(), tick.frame, body.len(), target.map_or(centre.x, |t| t.x), target.map_or(centre.z, |t| t.z), v.assets_lost, v.pursuers_lost, v.party_killed, verdict.gain);
+            }
             self.raid.turrets = verdict.turrets;
             self.raid.turrets_known = turrets_known;
         }

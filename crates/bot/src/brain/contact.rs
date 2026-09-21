@@ -12,6 +12,8 @@ use combatsim::chase::{Chase, Verdict};
 use combatsim::scenario::{Intent, Vec2};
 use combatsim::sim::Rules;
 
+use super::army::CONTACT_RADIUS;
+
 use super::army::BASE_RADIUS;
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
@@ -81,7 +83,6 @@ pub(super) struct Assault {
     pub gain: f32,
     /// Their turrets priced in, nearest the party first: what the party kills first.
     pub turrets: Vec<UnitId>,
-    #[allow(dead_code)]
     pub verdict: Verdict,
 }
 
@@ -97,7 +98,9 @@ pub(super) struct Contacts {
 
 impl Default for Contacts {
     fn default() -> Self {
-        Contacts { rules: Arc::new(Rules::default()), sim_defs: HashMap::new(), responses: Vec::new(), spent: (0, 0.0, 0.0) }
+        // Their commander presses its D-gun (K-barb-commander-dgun-beats-a-pawn-party); ours never does in a scene.
+        let tuning = combatsim::sim::Tuning { dgun: true, ..Default::default() };
+        Contacts { rules: Arc::new(Rules::new(combatsim::units::Units::default(), tuning)), sim_defs: HashMap::new(), responses: Vec::new(), spent: (0, 0.0, 0.0) }
     }
 }
 
@@ -115,6 +118,23 @@ pub(super) fn to_segment(p: Vec3, a: Vec3, b: Vec3) -> f32 {
 
 /// A turret has this much beyond its range for the approach: a unit walking past at the edge of its range is shot.
 pub(super) const TURRET_MARGIN: f32 = 100.0;
+/// A raid on a building of theirs burns what stands within this of it, and is priced against the turrets there.
+const RAID_ASSETS: f32 = 600.0;
+/// The raid's safety on our losses: metal for metal (Matt paid seven Pawns, 378, for 1,270 of base; the contact
+/// answer's 1.7 is for pursuits whose losses the simulator under-predicts).
+const RAID_SAFETY: f32 = 1.0;
+/// A base's worth of assets in the raid scene (the contact answer's 8 is for our outposts).
+const RAID_MAX_ASSETS: usize = 12;
+/// What a base of BARb's holds that we have not seen, priced in when the target lies at its base: the lab and the
+/// extractors and winds round it (K-barb-medium-observed-build; its true state at 3:00-5:00 in the players' and our
+/// games: 3-4 extractors, 4-7 winds, the lab), and its towers by the clock (1 by 2:00, 2 by 3:00, 3 by 4:00, 4 by
+/// 5:00). Estimated the way a player does, because a party priced only against what it has seen walked into
+/// three towers it had not (raid-price-debug: fifteen Pawns in a minute at "lose 0").
+const EXPECTED_BASE_EXTRACTORS: usize = 3;
+const EXPECTED_BASE_WINDS: usize = 4;
+fn expected_towers(frame: i32) -> usize {
+    ((frame as f32 / (60.0 * FRAMES_PER_SECOND as f32)) - 1.0).clamp(0.0, 4.0) as usize
+}
 
 impl Brain {
     pub(super) fn survey_sim_defs(&mut self) {
@@ -202,7 +222,7 @@ impl Brain {
         let rules = self.contacts.rules.clone();
         let burns = assets.iter().any(|(def, _)| rules.units.list[*def].reach() == 0.0);
         let intent = if burns { Intent::Raid { then: flat(self.enemy_base(party.at)) } } else { Intent::Fight };
-        let chase = Chase { pursuers, party: party.units.clone(), at: flat(party.at), intent, assets: assets.to_vec(), party_buildings: party_buildings.to_vec(), seconds: SECONDS };
+        let chase = Chase { pursuers, party: party.units.clone(), at: flat(party.at), intent, assets: assets.to_vec(), party_buildings: party_buildings.to_vec(), pursuer_buildings: Vec::new(), seconds: SECONDS };
         let started = std::time::Instant::now();
         let verdict = chase.verdict(&rules, REPS);
         let ms = started.elapsed().as_secs_f64() * 1000.0;
@@ -233,43 +253,101 @@ impl Brain {
         turrets
     }
 
-    /// What `party` of ours attacking `at` comes to, against what is known to stand within `radius` of it: remembered
-    /// armed buildings, and soldiers in sight (radar contacts taken for the enemy's usual soldier). H-ARMY-PRESSURE
-    /// prices its raids by this; the same simulator and the same safety on our losses as the contact response.
-    pub(super) fn assault_verdict(&mut self, party: &[&OwnUnit], at: Vec3, radius: f32, tick: &Tick) -> Assault {
-        if self.contacts.sim_defs.is_empty() {
-            self.survey_sim_defs();
-        }
-        let mut seen: HashMap<UnitDefId, usize> = HashMap::new();
-        self.enemy_soldiers.values().for_each(|(def, _)| *seen.entry(*def).or_default() += 1);
-        let blip = seen.into_iter().max_by_key(|(def, n)| (*n, def.0)).map(|(def, _)| def).or(self.kit.as_ref().map(|k| k.line));
-        let mut theirs: HashMap<usize, u32> = HashMap::new();
-        let from = party.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / party.len().max(1) as f32, y: 0.0, z: sum.z + u.pos.z / party.len().max(1) as f32 });
-        let bearing = self.turrets_bearing(from, at, radius);
-        let turrets: Vec<(usize, Vec2)> = bearing.iter().map(|(_, index, pos)| (*index, flat(*pos))).collect();
-        let mut metal = 0.0;
-        for enemy in tick.snapshot.enemies.iter().filter(|e| e.pos.dist2d(at) < radius) {
-            let Some(def) = enemy.def.or(blip) else { continue };
-            let Some(d) = self.world.def(def) else { continue };
-            if d.speed > 0.0 && d.weapon_count > 0 && d.move_class.is_some()
-                && let Some(index) = self.contacts.sim_defs.get(&def)
-            {
-                *theirs.entry(*index).or_default() += 1;
-                metal += d.metal_cost;
-            }
-        }
-        let mut units: Vec<(usize, u32)> = theirs.into_iter().collect();
-        units.sort();
-        let their_party = Party { ids: HashSet::new(), units, at, metal };
-        let verdict = self.chase_verdict(&their_party, &[], party, &turrets);
-        let gain = verdict.party_killed - LOSS_SAFETY * verdict.pursuers_lost;
-        Assault { gain, turrets: bearing.into_iter().map(|(id, _, _)| id).collect(), verdict }
-    }
-
     /// Per contact answer: its members and the turrets of theirs it was priced against (the control lane's
     /// commitments, `micro.rs`).
     pub(super) fn response_commitments(&self) -> Vec<(Vec<UnitId>, Vec<UnitId>)> {
         self.contacts.responses.iter().map(|r| (r.members.clone(), r.turrets.clone())).collect()
+    }
+
+    /// What our `party` raiding `target` (a building of theirs) comes to: the chase the other way round
+    /// (`docs/design/2026-09-20-base-raid-pricing.md`). Their soldiers in sight within `CONTACT_RADIUS` of the
+    /// target pursue from where they stand, their turrets bearing on the target or the approach hold, every unarmed
+    /// building of theirs remembered within `RAID_ASSETS` of the target is an asset, and our party fights: it kills
+    /// what shoots and then burns the rest, which is what Matt's twelve did (the simulator's `Fight` with assets
+    /// present: six Pawns for two towers and everything behind them, as he paid seven). Their commander is left out
+    /// of the scene: a party that fights it loses whatever else stands there, and the control lane keeps the
+    /// party out of its reach until the kill gate opens. Gain: their metal burned and killed, less the safety
+    /// times ours lost.
+    pub(super) fn raid_verdict(&mut self, party: &[&OwnUnit], target: Vec3, tick: &Tick) -> Assault {
+        if self.contacts.sim_defs.is_empty() {
+            self.survey_sim_defs();
+        }
+        let n = party.len().max(1) as f32;
+        let from = party.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / n, y: 0.0, z: sum.z + u.pos.z / n });
+        let bearing = self.turrets_bearing(from, target, RAID_ASSETS);
+        let mut turrets: Vec<(usize, Vec2)> = bearing.iter().map(|(_, index, pos)| (*index, flat(*pos))).collect();
+        let known: Vec<(UnitDefId, Vec3)> = self.enemy_buildings.values()
+            .filter(|(def, pos, _)| pos.dist2d(target) < RAID_ASSETS && self.world.def(*def).is_some_and(|d| d.weapon_count == 0))
+            .map(|(def, pos, _)| (*def, *pos))
+            .collect();
+        let mut assets: Vec<(usize, Vec2)> = known.iter().filter_map(|(def, pos)| Some((*self.contacts.sim_defs.get(def)?, flat(*pos)))).collect();
+        // At their base, what we have not seen of it yet, priced as it usually stands.
+        let base = self.enemy_base(target);
+        if base.dist2d(target) < super::army::BASE_RADIUS && let Some(kit) = self.kit {
+            let their = |ours: UnitDefId| {
+                // Their faction's counterpart of our unit by name suffix, else ours (the simulator prices by type).
+                let suffix = self.world.def(ours).map(|d| d.name[3..].to_string()).unwrap_or_default();
+                self.enemy_buildings.values().map(|(d, _, _)| *d).chain(self.enemy_soldiers.values().map(|(d, _)| *d))
+                    .find(|d| self.world.def(*d).is_some_and(|x| x.name.ends_with(&suffix)))
+                    .unwrap_or(ours)
+            };
+            let counted = |ours: UnitDefId| known.iter().filter(|(d, _)| self.world.def(*d).is_some_and(|x| self.world.def(ours).is_some_and(|o| x.name[3..] == o.name[3..]))).count();
+            let place = |def: UnitDefId, n: usize, list: &mut Vec<(usize, Vec2)>| {
+                let Some(index) = self.contacts.sim_defs.get(&their(def)).copied() else { return };
+                for i in 0..n {
+                    let angle = i as f32 * 2.4;
+                    list.push((index, Vec2::new(base.x + angle.cos() * 120.0, base.z + angle.sin() * 120.0)));
+                }
+            };
+            place(kit.lab, 1usize.saturating_sub(counted(kit.lab)), &mut assets);
+            place(kit.extractor, EXPECTED_BASE_EXTRACTORS.saturating_sub(counted(kit.extractor)), &mut assets);
+            place(kit.wind, EXPECTED_BASE_WINDS.saturating_sub(counted(kit.wind)), &mut assets);
+            // BARb puts a tower beside nearly every extractor (K-barb-medium-observed-build): the first unseen tower
+            // stands by the target when the target is an extractor, the rest at the base.
+            let known_towers = bearing.len();
+            let mut unseen = expected_towers(tick.frame).saturating_sub(known_towers);
+            let target_is_extractor = known.iter().any(|(d, p)| p.dist2d(target) < 50.0 && self.world.def(*d).is_some_and(|x| x.extracts_metal > 0.0));
+            if unseen > 0 && target_is_extractor && let Some(index) = self.contacts.sim_defs.get(&their(kit.turret)).copied() {
+                turrets.push((index, Vec2::new(target.x + 60.0, target.z + 60.0)));
+                unseen -= 1;
+            }
+            place(kit.turret, unseen, &mut turrets);
+        }
+        assets.truncate(RAID_MAX_ASSETS);
+        // Their soldiers (the commander among them) as pursuers from where they stand, grouped as ours are.
+        let mut seen: HashMap<UnitDefId, usize> = HashMap::new();
+        self.enemy_soldiers.values().for_each(|(def, _)| *seen.entry(*def).or_default() += 1);
+        let blip = seen.into_iter().max_by_key(|(def, n)| (*n, def.0)).map(|(def, _)| def).or(self.kit.as_ref().map(|k| k.line));
+        let mut groups: HashMap<(usize, i32, i32), (u32, f32, f32)> = HashMap::new();
+        for enemy in tick.snapshot.enemies.iter().filter(|e| e.pos.dist2d(target) < CONTACT_RADIUS) {
+            let Some(def) = enemy.def.or(blip) else { continue };
+            let Some(d) = self.world.def(def) else { continue };
+            if !(d.speed > 0.0 && d.weapon_count > 0 && d.move_class.is_some()) || (d.name.ends_with("com") && d.build_speed > 0.0) {
+                continue;
+            }
+            let Some(index) = self.contacts.sim_defs.get(&def) else { continue };
+            let group = groups.entry((*index, (enemy.pos.x / 300.0) as i32, (enemy.pos.z / 300.0) as i32)).or_default();
+            *group = (group.0 + 1, group.1 + enemy.pos.x, group.2 + enemy.pos.z);
+        }
+        let mut pursuers: Vec<(usize, u32, Vec2)> = groups.into_iter().map(|((def, _, _), (k, x, z))| (def, k, Vec2::new(x / k as f32, z / k as f32))).collect();
+        pursuers.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)).then(a.2.x.total_cmp(&b.2.x)));
+        let mut ours: HashMap<usize, u32> = HashMap::new();
+        for unit in party {
+            if let Some(index) = self.contacts.sim_defs.get(&unit.def) {
+                *ours.entry(*index).or_default() += 1;
+            }
+        }
+        let mut ours: Vec<(usize, u32)> = ours.into_iter().collect();
+        ours.sort();
+        let chase = Chase { pursuers, party: ours, at: flat(from), intent: Intent::Fight, assets, party_buildings: Vec::new(), pursuer_buildings: turrets, seconds: SECONDS };
+        let rules = self.contacts.rules.clone();
+        let started = std::time::Instant::now();
+        let verdict = chase.verdict(&rules, REPS);
+        let ms = started.elapsed().as_secs_f64() * 1000.0;
+        let spent = &mut self.contacts.spent;
+        *spent = (spent.0 + 1, spent.1 + ms, spent.2.max(ms));
+        let gain = verdict.assets_lost + verdict.pursuers_lost - RAID_SAFETY * verdict.party_killed;
+        Assault { gain, turrets: bearing.into_iter().map(|(id, _, _)| id).collect(), verdict }
     }
 
     /// Answers every party on our ground from `free` (the home group) and returns who is answering one.

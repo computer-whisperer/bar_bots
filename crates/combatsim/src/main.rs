@@ -20,7 +20,7 @@ combatsim --a <type:count[@delay][,...]> --b <type:count[@delay][,...]>
 combatsim validate [--spacing 56|100|both] [--reps 4] [--worst 15] [--no-collide] [--stored E] [--income E]
 combatsim micro [--reps 8] [--budget 1200] [--ratios 0.7,1,1.4] [--policies LIST] [--detail] [--spacing 56]
 combatsim speed [--reps 200]
-combatsim chase --pursuers <type:count,...> --party <type:count,...> [--distance 1500] [--assets armmex:3] [--intent raid|fight|flee]
+combatsim chase --pursuers <type:count,...> --party <type:count,...> [--distance 1500] [--assets armmex:3] [--defences armllt:2] [--dgun] [--intent raid|fight|flee]
           [--seconds 60] [--reps 8]    (the party stands among the assets, the pursuers start --distance away; a fleeing
           party runs directly away from them; printed beside the same contact with nobody sent)
 
@@ -38,6 +38,7 @@ fn main() {
     let flags = Flags::parse(&args);
     let tuning = Tuning {
         collide: !flags.has("no-collide"),
+        dgun: flags.has("dgun"),
         spread: flags.num("spread", Tuning::default().spread),
         stop_at: flags.num("stop-at", Tuning::default().stop_at),
         aim_seconds: flags.num("aim", Tuning::default().aim_seconds),
@@ -253,7 +254,7 @@ fn chase_file(rules: &Rules, path: &str, reps: u32) {
         let pursuers = e["pursuers"].as_array().unwrap().iter().filter_map(|v| Some((def(v)?, v[1].as_u64()? as u32, point(v, 2)))).collect();
         let party = e["party"].as_array().unwrap().iter().filter_map(|v| Some((def(v)?, v[1].as_u64()? as u32))).collect();
         let assets = e["assets"].as_array().unwrap().iter().filter_map(|v| Some((def(v)?, point(v, 1)))).collect();
-        let chase = Chase { pursuers, party, at: point(&e["at"], 0), intent: Intent::Raid { then: point(&e["then"], 0) }, assets, party_buildings: Vec::new(), seconds: e["seconds"].as_f64().unwrap_or(60.0) as f32 };
+        let chase = Chase { pursuers, party, at: point(&e["at"], 0), intent: Intent::Raid { then: point(&e["then"], 0) }, assets, party_buildings: Vec::new(), pursuer_buildings: Vec::new(), seconds: e["seconds"].as_f64().unwrap_or(60.0) as f32 };
         let v = chase.verdict(rules, reps);
         println!("{{\"caught\":{},\"caught_after\":{},\"party_killed\":{},\"pursuers_lost\":{},\"assets_lost\":{},\"survived\":{},\"unknown\":{unknown}}}", v.caught, v.caught_after, v.party_killed, v.pursuers_lost, v.assets_lost, v.survived);
     }
@@ -278,7 +279,11 @@ fn chase(rules: &Rules, flags: &Flags) {
     let assets: Vec<(usize, Vec2)> = pairs(flags.get("assets").unwrap_or("armmex:3").to_string()).into_iter()
         .flat_map(|(def, count)| (0..count).map(move |i| (def, Vec2::new(150.0, 250.0 * (i as f32 - (count - 1) as f32 / 2.0))))).collect();
     let from = Vec2::new(-distance, 0.0);
-    let sent = Chase { pursuers: pairs(flags.get("pursuers").unwrap_or("").to_string()).into_iter().map(|(d, n)| (d, n, from)).collect(), party: pairs(flags.get("party").unwrap_or("").to_string()), at, intent, assets, party_buildings: Vec::new(), seconds: flags.num("seconds", 60.0) };
+    // `--defences armllt:2`: the pursuers' turrets in a row 200 beyond the assets, holding (the raid question the
+    // other way round: `--party` is then ours, raiding; `--dgun` arms their commander).
+    let defences: Vec<(usize, Vec2)> = pairs(flags.get("defences").unwrap_or("").to_string()).into_iter()
+        .flat_map(|(def, count)| (0..count).map(move |i| (def, Vec2::new(350.0, 300.0 * (i as f32 - (count - 1) as f32 / 2.0))))).collect();
+    let sent = Chase { pursuers: pairs(flags.get("pursuers").unwrap_or("").to_string()).into_iter().map(|(d, n)| (d, n, from)).collect(), party: pairs(flags.get("party").unwrap_or("").to_string()), at, intent, assets, party_buildings: Vec::new(), pursuer_buildings: defences, seconds: flags.num("seconds", 60.0) };
     let reps = flags.num("reps", 8.0) as u32;
     let started = std::time::Instant::now();
     let with = sent.verdict(rules, reps);
