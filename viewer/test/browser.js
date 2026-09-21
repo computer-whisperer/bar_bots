@@ -58,7 +58,7 @@ function run(socket) {
     await send("Page.navigate", { url });
     for (let i = 0; i < 100 && !(await evaluate("document.body.dataset.loaded")); i++) await sleep(100);
     const loaded = await evaluate("document.body.dataset.loaded");
-    if (!loaded) fail(`the match did not load: ${await evaluate("document.getElementById('status').textContent")}`);
+    if (!loaded) fail(`the match did not load: ${await evaluate("document.getElementById('status').textContent")}; page errors: ${problems.join(" | ")}`);
     const report = { loaded, subtitle: await evaluate("document.getElementById('subtitle').textContent") };
 
     // Scrub: a click at 60 % of the timeline lands at about 60 % of the game.
@@ -97,24 +97,35 @@ function run(socket) {
     if (!/ours: /.test(report.mapTooltip)) fail(`map tooltip: ${report.mapTooltip}`);
 
     await evaluate("document.querySelectorAll('#layers input').forEach((box) => box.click())");
+    // The tabs: decisions with its filters, rules and the log, then the pianist's if the match has one.
+    await evaluate("document.querySelector('#tabs [data-tab=decisions]').click()");
     await evaluate("document.querySelectorAll('#decision-filters input').forEach((box) => box.click())");
     await evaluate("document.querySelectorAll('#decision-filters input').forEach((box) => box.click())");
     await send("Input.dispatchKeyEvent", { type: "keyDown", key: "ArrowLeft", code: "ArrowLeft" });
-    report.panels = await evaluate("({ decisions: document.querySelectorAll('#decisions li').length, llmTurns: document.querySelectorAll('#decisions li.llm').length, rules: document.querySelectorAll('#rules .rule').length, stats: document.querySelectorAll('#now .stat').length, mapPixels: (() => { const c = document.getElementById('map'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 2] > 200 && d[i] < 100) n++; return n; })() })");
-    if (!report.panels.stats || !report.panels.mapPixels) fail(`empty panels: ${JSON.stringify(report.panels)}`);
+    report.panels = await evaluate("({ decisions: document.querySelectorAll('#decisions li').length, llmTurns: document.querySelectorAll('#decisions li.llm').length, stats: document.querySelectorAll('#now .stat').length, mapPixels: (() => { const c = document.getElementById('map'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 2] > 200 && d[i] < 100) n++; return n; })() })");
+    await evaluate("document.querySelector('#tabs [data-tab=rules]').click()");
+    report.panels.rules = await evaluate("document.querySelectorAll('#rules .rule').length");
+    if (!report.panels.stats || !report.panels.mapPixels || !report.panels.decisions) fail(`empty panels: ${JSON.stringify(report.panels)}`);
 
     // The pianist's audit: every actor of the call at the playhead, the call's answers as bars, the per-minute table,
     // the actor filter on the decision list.
     if (await evaluate("!!viewer.match.jev")) {
-      await evaluate("document.getElementById('call-panel').open = true; document.getElementById('call-panel').dispatchEvent(new Event('toggle'))");
+      await evaluate("document.querySelector('#tabs [data-tab=pianist]').click()");
       await sleep(200);
       const pianist = await evaluate("({ actors: document.querySelectorAll('#pianist-actors .actor').length, questions: document.querySelectorAll('#call .q').length, bars: document.querySelectorAll('#call .bar').length, played: document.querySelectorAll('#call .bar.played').length, minutes: document.querySelectorAll('#pianist-minutes tr').length - 1, summary: document.getElementById('call-summary').textContent })");
       if (!pianist.actors || !pianist.questions || !pianist.bars || !pianist.minutes) fail(`pianist panels empty: ${JSON.stringify(pianist)}`);
       await evaluate("document.querySelector('#pianist-actors .actor').click()");
-      pianist.narrowedTo = await evaluate("viewer.jevActor");
+      pianist.opened = await evaluate("viewer.jevActor");
+      pianist.history = await evaluate("document.querySelectorAll('#pianist-actors .actor.selected .more .hist').length");
+      if (!pianist.opened || !pianist.history) fail("clicking an actor did not open its history");
+      await evaluate("document.querySelector('#tabs [data-tab=decisions]').click()");
       pianist.narrowedDecisions = await evaluate("document.querySelectorAll('#decisions li.jev').length");
-      if (!pianist.narrowedTo) fail("clicking an actor did not narrow the decision list");
-      await evaluate("document.querySelector('#pianist-actors .actor').click()");
+      await evaluate("document.querySelector('#tabs [data-tab=pianist]').click()");
+      await evaluate("document.querySelector('#pianist-actors .actor.selected').click()");
+      await evaluate("document.getElementById('wide').click()");
+      await evaluate("document.getElementById('compact').click()");
+      pianist.wide = await evaluate("document.body.dataset.wide");
+      pianist.compact = await evaluate("document.body.dataset.compact");
       report.pianist = pianist;
     }
     if (screenshot) {

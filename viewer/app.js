@@ -25,7 +25,7 @@
     background: null, mapBox: null, hoverFrame: null, decisionItems: [], currentDecision: -2,
     show: { heuristic: true, llm: true, event: false, jev: true, jevChangesOnly: true },
     /// The pianist's actor the decision list is narrowed to ("" for all), and the call drawn last.
-    jevActor: "", callShown: null,
+    jevActor: "", callShown: null, tab: null,
   };
   window.viewer = view;
 
@@ -233,7 +233,7 @@
     if (texts.botLog) match.botLog = WR.parseBotLog(texts.botLog);
     match.jev = texts.jev ? WR.parseJev(texts.jev) : null;
     document.body.dataset.pianist = match.jev ? "1" : "";
-    $("pianist-panel").hidden = $("call-panel").hidden = $("pianist-stats").hidden = !match.jev;
+    document.querySelector('#tabs [data-tab="pianist"]').hidden = !match.jev;
     if (match.jev) buildPianistMinutes(match.jev);
     view.callShown = null;
     view.match = match;
@@ -244,7 +244,14 @@
     if (refresh) rebuildDecisionList();
     else buildDecisionList();
     if (!refresh) buildLegend();
-    renderAll();
+    if (refresh) {
+      renderAll();
+    } else {
+      // The tab last used, unless it is the pianist's and this match has no log; setTab renders everything.
+      let saved = null;
+      try { saved = localStorage.getItem("wr-tab"); } catch (_) { /* no storage */ }
+      setTab(saved && (saved !== "pianist" || match.jev) ? saved : match.jev ? "pianist" : "decisions");
+    }
     document.body.dataset.loaded = `${match.samples.length} samples`;
   }
 
@@ -657,7 +664,12 @@
     }
     y += 4;
 
+    // Folded: the lanes and the axis only.
+    const compact = document.body.dataset.compact === "1";
+    if (compact) view.chartRows = [];
+
     // Legend, once, for the two-series charts below.
+    if (!compact) {
     ctx.textAlign = "left";
     ctx.fillStyle = COLOR["ink-2"];
     ctx.strokeStyle = COLOR.ours;
@@ -714,6 +726,7 @@
       }
       view.chartRows.push({ chart, top, bottom });
       y += CHART_H;
+    }
     }
 
     // Time axis: a label every few minutes, however long the game.
@@ -833,6 +846,7 @@
   }
 
   function renderRules() {
+    if (view.tab !== "rules") return;
     const rules = WR.rulesInMinute(view.match, view.frame);
     const minute = Math.floor(view.frame / (60 * WR.FPS));
     $("rules-minute").textContent = `(minute ${minute})`;
@@ -978,10 +992,20 @@
 
   // ---------------------------------------------------------------- the pianist
 
-  /// Each actor as the call at the playhead saw it, with its last decision.
+  function setTab(name) {
+    view.tab = name;
+    for (const button of document.querySelectorAll("#tabs [data-tab]")) button.classList.toggle("active", button.dataset.tab === name);
+    for (const tab of document.querySelectorAll(".tab")) tab.hidden = tab.dataset.tab !== name;
+    try { localStorage.setItem("wr-tab", name); } catch (_) { /* no storage */ }
+    view.callShown = null;
+    view.currentDecision = -2;
+    renderAll();
+  }
+
+  /// Each actor as the call at the playhead saw it, with its last decision; opened, its history and its entry.
   function renderPianist() {
     const jev = view.match.jev;
-    if (!jev) return;
+    if (!jev || view.tab !== "pianist") return;
     const i = WR.indexAt(jev.calls, view.frame);
     const call = i >= 0 ? jev.calls[i] : null;
     $("pianist-summary").textContent = call ? `call ${i + 1} of ${jev.calls.length} at ${WR.clock(call.f)}` : "before the first call";
@@ -989,25 +1013,45 @@
     box.textContent = "";
     if (!call) return;
     const actors = call.state.actors || {};
+    const decisionLine = (d, withClock) => {
+      const line = el("span", "hist");
+      if (withClock) line.append(`${WR.clock(d.f)}  `);
+      line.append(el("b", null, d.played));
+      if (d.kept) line.append(el("span", "kept", ` kept (it chose ${d.choice})`));
+      line.append(` p ${Number(d.probability).toFixed(2)} c ${Number(d.confidence).toFixed(2)}`);
+      if (d.did) line.append(` · ${d.did}`);
+      return line;
+    };
     for (const [name, entry] of Object.entries(actors)) {
-      const row = el("div", `actor${view.jevActor === name ? " selected" : ""}`);
+      const selected = view.jevActor === name;
+      const row = el("div", `actor${selected ? " selected" : ""}`);
       row.append(el("b", null, name), el("span", "doing", `${entry.doing || ""}${entry.enemies_near ? ` · ${entry.enemies_near}` : ""}${entry.under_fire ? " · UNDER FIRE" : ""}`));
       const history = jev.actors.get(name);
-      const last = history ? history.decisions[WR.indexAt(history.decisions, view.frame)] : null;
+      const at = history ? WR.indexAt(history.decisions, view.frame) : -1;
+      const last = at >= 0 ? history.decisions[at] : null;
       const line = el("div", "last");
       if (last) {
-        const b = el("b", null, last.played);
-        line.append(b);
-        if (last.kept) line.append(el("span", "kept", ` kept (it chose ${last.choice})`));
-        line.append(` p ${Number(last.probability).toFixed(2)} c ${Number(last.confidence).toFixed(2)}`);
-        if (last.did) line.append(` · ${last.did}`);
-        line.append(el("span", "ago", `  ${WR.clock(last.f)}`));
+        line.append(decisionLine(last, false), el("span", "ago", `  ${WR.clock(last.f)}`));
       } else {
         line.append("not asked yet");
       }
       row.append(line);
+      if (selected) {
+        const more = el("div", "more");
+        more.append(el("div", "meta", "its entry in the picture:"), el("pre", null, JSON.stringify(entry, null, 1)));
+        if (history && at >= 0) {
+          more.append(el("div", "meta", "its decisions up to now, newest first:"));
+          for (const d of history.decisions.slice(Math.max(0, at - 11), at + 1).reverse()) {
+            const item = el("div");
+            item.append(decisionLine(d, true));
+            more.append(item);
+          }
+        }
+        more.addEventListener("click", (e) => e.stopPropagation());
+        row.append(more);
+      }
       row.addEventListener("click", () => {
-        view.jevActor = view.jevActor === name ? "" : name;
+        view.jevActor = selected ? "" : name;
         buildDecisionList();
         renderDecisions();
         renderPianist();
@@ -1017,16 +1061,21 @@
     renderCall(call, i);
   }
 
-  /// The call at the playhead: what Jev was shown and what it answered, built only while the panel is open.
+  /// The call at the playhead: what Jev was shown and what it answered; rebuilt when the call changes. With an actor
+  /// selected, its questions come first.
   function renderCall(call, index) {
-    const panel = $("call-panel");
     $("call-summary").textContent = `${WR.clock(call.f)} · ${call.ms} ms · ${call.tokens.toLocaleString()} tokens · ${Object.keys(call.questions).length} questions${call.retries ? ` · ${call.retries} retries` : ""}`;
-    if (!panel.open || view.callShown === index) return;
-    view.callShown = index;
+    const key = `${index}:${view.jevActor}`;
+    if (view.callShown === key) return;
+    view.callShown = key;
     const box = $("call");
     box.textContent = "";
+    const questions = el("div", "questions");
+    const picture = el("div", "picture");
+    box.append(questions, picture);
     const played = new Map(call.played.map((d) => [d.actor, d]));
-    for (const [id, q] of Object.entries(call.questions)) {
+    const ordered = Object.entries(call.questions).sort(([a], [b]) => (b.startsWith(`${view.jevActor}.`) - a.startsWith(`${view.jevActor}.`)));
+    for (const [id, q] of ordered) {
       const [actor, what] = id.split(".");
       const a = call.answers[id];
       const block = el("div", "q");
@@ -1047,14 +1096,14 @@
         const crit = q.criteria && typeof q.criteria === "object" && !Array.isArray(q.criteria) ? q.criteria : null;
         if (crit) block.append(details("the options as worded", Object.entries(crit).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n")));
       }
-      box.append(block);
+      questions.append(block);
     }
-    box.append(el("div", "meta", `the picture Jev was shown (${call.model || "Jev"}):`));
-    box.append(details("instructions", call.instructions || "(none)"));
+    picture.append(el("div", "meta", `the picture Jev was shown (${call.model || "Jev"}):`));
+    picture.append(details("instructions", call.instructions || "(none)"));
     for (const section of ["economy", "ours", "enemy", "actors", "places", "recent"]) {
-      if (call.state[section] !== undefined) box.append(details(section, JSON.stringify(call.state[section], null, 1)));
+      if (call.state[section] !== undefined) picture.append(details(section, JSON.stringify(call.state[section], null, 1)));
     }
-    box.append(details("rules", call.rules || "(none)"));
+    picture.append(details("rules", call.rules || "(none)"));
   }
 
   function bar(label, p, played, top) {
@@ -1099,6 +1148,7 @@
   }
 
   function renderDecisions() {
+    if (view.tab !== "decisions") return;
     const items = view.decisionItems;
     const current = WR.indexAt(items, view.frame);
     if (current === view.currentDecision) return;
@@ -1116,7 +1166,8 @@
   }
 
   function renderBotLog() {
-    const lines = WR.range(view.match.botLog, view.frame - 60 * WR.FPS, view.frame).slice(-10);
+    if (view.tab !== "rules") return;
+    const lines = WR.range(view.match.botLog, view.frame - 60 * WR.FPS, view.frame).slice(-30);
     $("botlog").textContent = lines.length ? lines.map((l) => `${WR.clock(l.f)}  ${l.text}`).join("\n") : view.match.botLog.length ? "" : "bot.log not loaded";
   }
 
@@ -1158,10 +1209,21 @@
     requestAnimationFrame(step);
   }
 
-  $("call-panel").addEventListener("toggle", () => {
-    view.callShown = null;
-    renderPianist();
-  });
+  for (const button of document.querySelectorAll("#tabs [data-tab]")) button.addEventListener("click", () => setTab(button.dataset.tab));
+  const setWide = (wide) => {
+    document.body.dataset.wide = wide ? "1" : "";
+    try { localStorage.setItem("wr-wide", wide ? "1" : ""); } catch (_) { /* no storage */ }
+    renderAll();
+  };
+  $("wide").addEventListener("click", () => setWide(document.body.dataset.wide !== "1"));
+  const setCompact = (compact) => {
+    document.body.dataset.compact = compact ? "1" : "";
+    try { localStorage.setItem("wr-compact", compact ? "1" : ""); } catch (_) { /* no storage */ }
+    renderAll();
+  };
+  $("compact").addEventListener("click", () => setCompact(document.body.dataset.compact !== "1"));
+  try { if (localStorage.getItem("wr-compact") === "1") document.body.dataset.compact = "1"; } catch (_) { /* no storage */ }
+  try { if (localStorage.getItem("wr-wide") === "1") document.body.dataset.wide = "1"; } catch (_) { /* no storage */ }
   $("play").addEventListener("click", () => setPlaying(!view.playing));
   // Going anywhere by hand stops following the live match; ticking the box again jumps back to the newest sample.
   const leaveLive = () => ($("follow").checked = false);
@@ -1194,6 +1256,8 @@
     if (e.key === " ") setPlaying(!view.playing);
     else if (e.key === "ArrowLeft") seek(view.frame - (e.shiftKey ? 60 : 10) * WR.FPS);
     else if (e.key === "ArrowRight") seek(view.frame + (e.shiftKey ? 60 : 10) * WR.FPS);
+    else if (e.key === "w") return setWide(document.body.dataset.wide !== "1");
+    else if (e.key === "c") return setCompact(document.body.dataset.compact !== "1");
     else return;
     leaveLive();
     e.preventDefault();

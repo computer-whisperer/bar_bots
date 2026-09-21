@@ -98,13 +98,19 @@ file's new bytes (`<file>?from=<byte offset>`, answered by `run/view_match.py` w
 sends the whole file and the page copes), parses up to the last complete line, and with "follow live" ticked stays on the
 newest sample. Scrubbing, stepping or playing unticks it; ticking it again jumps to the newest sample. Opened details and
 the scroll position of the decision list survive each refresh. Polling stops when the result line arrives.
-The pianist (a match with a `jev-<ai_id>.jsonl`): the side pane widens; "each actor now" lists every actor of the call at
-the playhead with what it was doing and its last decision (click one to narrow the decision list to it); "the call at the
-playhead" opens to every question with its answer as bars (the played option marked, a kept course said), the options as
-worded, and the picture by section; "pianist per minute" is calls, latency, tokens, questions, changes, kept and failures;
-the timeline gains lanes for the pianist's builders, labs and army (a change of course solid, a continue faint); the map
-draws the named places, the parties and the groups with a line to where each is going (the `pianist` layer); the decision
-list takes "pianist" and "changes only" filters and an actor select, and shows at most 4,000 rows.
+The side pane is tabs (2026-09-21 evening, the user: too much at the top level): **Decisions** (the list with its
+filters), **Rules & log** (heuristic firings this minute, bot.log near the playhead), and **Pianist** for a match with a
+`jev-<ai_id>.jsonl`. The tab and the two modes below are remembered in the browser. "⟷ wide" (key `w`) gives the side
+pane most of the window and the map a third; "▾ charts" (key `c`) folds the timeline's charts away and keeps the lanes.
+The layer switches and the legend fold into one corner box over the map.
+The Pianist tab: "each actor now" lists every actor of the call at the playhead with what it was doing and its last
+decision (a kept course said in amber); click one to open its entry in the picture and its last twelve decisions, and to
+narrow the Decisions tab to it. "The call at the playhead" is every question with its answer as bars (the played option
+marked), the options as worded, and beside it the picture by section (in the wide mode side by side; the selected actor's
+questions first); "pianist per minute" is calls, latency, tokens, questions, changes, kept and failures. The timeline gains
+lanes for the pianist's builders, labs and army (a change of course solid, a continue faint); the map draws the named
+places, the parties and the groups with a line to where each is going (the `pianist` layer); the decision list takes
+"pianist" and "changes only" filters and an actor select, and shows at most 4,000 rows.
 Tests: `node viewer/test/smoke.js <match dir>` (model, truncated file) and `node viewer/test/browser.js <url> [shot.png]`
 (the real page in headless Chromium: load, follow a live match if it is one, scrub, play, hover, toggles, the pianist's
 panels when the match has a log; fails on any page error; saves a screenshot when asked).

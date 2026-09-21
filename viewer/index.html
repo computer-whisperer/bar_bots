@@ -17,6 +17,8 @@
   <section id="map-pane">
     <canvas id="map"></canvas>
     <div id="tooltip" class="tooltip" hidden></div>
+    <details id="map-tools">
+      <summary>layers &amp; legend</summary>
     <fieldset id="layers">
       <legend>Layers</legend>
       <label><input type="checkbox" data-layer="terrain" checked> terrain</label>
@@ -32,36 +34,42 @@
       <label><input type="checkbox" data-layer="pianist" checked> pianist: groups, places, parties</label>
     </fieldset>
     <ul id="map-legend" class="legend"></ul>
+    </details>
   </section>
 
   <section id="side-pane">
     <div id="now" class="panel"></div>
-    <div class="panel" id="pianist-panel" hidden>
-      <h2>Pianist: each actor now <span id="pianist-summary" class="muted"></span></h2>
+    <nav id="tabs" class="panel">
+      <button data-tab="pianist" hidden>Pianist</button>
+      <button data-tab="decisions">Decisions</button>
+      <button data-tab="rules">Rules &amp; log</button>
+      <button id="wide" title="give the side pane most of the window (w)">⟷ wide</button>
+    </nav>
+    <div class="tab panel" data-tab="pianist" hidden>
+      <div class="tab-head">
+        <h2>Each actor now <span id="pianist-summary" class="muted"></span></h2>
+        <span class="muted">click an actor for its history and its entry in the picture</span>
+      </div>
       <div id="pianist-actors"></div>
-    </div>
-    <details class="panel" id="call-panel" hidden>
-      <summary>The call at the playhead <span id="call-summary" class="muted"></span></summary>
+      <h2 class="call-title">The call at the playhead <span id="call-summary" class="muted"></span></h2>
       <div id="call"></div>
-    </details>
-    <details class="panel" id="pianist-stats" hidden>
-      <summary>Pianist per minute</summary>
-      <table id="pianist-minutes"></table>
-    </details>
-    <div class="panel" id="rules-panel">
-      <h2>Rules fired this minute <span id="rules-minute" class="muted"></span></h2>
-      <div id="rules"></div>
+      <details id="pianist-stats">
+        <summary>Pianist per minute</summary>
+        <table id="pianist-minutes"></table>
+      </details>
     </div>
-    <div class="panel grow">
-      <h2>Decisions
-        <span class="filters" id="decision-filters"></span>
-      </h2>
+    <div class="tab panel" data-tab="decisions" hidden>
+      <div class="tab-head">
+        <h2>Decisions <span class="filters" id="decision-filters"></span></h2>
+      </div>
       <ol id="decisions"></ol>
     </div>
-    <details class="panel">
-      <summary>bot.log near the playhead</summary>
+    <div class="tab panel" data-tab="rules" hidden>
+      <h2>Rules fired this minute <span id="rules-minute" class="muted"></span></h2>
+      <div id="rules"></div>
+      <h2 class="call-title">bot.log near the playhead</h2>
       <pre id="botlog"></pre>
-    </details>
+    </div>
   </section>
 </main>
 
@@ -77,6 +85,7 @@
       </select>
     </label>
     <label id="follow-label" hidden title="stay on the newest sample of a match still being played"><input type="checkbox" id="follow"> follow live</label>
+    <button id="compact" title="fold the charts away and keep the lanes (c)">▾ charts</button>
     <output id="clock">0:00</output>
     <span id="status" class="muted"></span>
   </div>
