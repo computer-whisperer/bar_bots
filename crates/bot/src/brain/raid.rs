@@ -201,7 +201,9 @@ impl Brain {
             .filter(|(def, pos, _)| self.world.def(*def).is_some_and(|d| d.weapon_count == 0) && pos.dist2d(base) < PARTY_VICINITY)
             .map(|(_, pos, _)| *pos)
             .chain(self.unscouted_box_spots(centre, tick.frame))
-            .filter(|t| t.dist2d(target) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && !self.commander_ground(*t) && self.reachable_on_foot(*t))
+            // Not where the party already stands: a candidate within arrival distance of the centre counted as
+            // reached the next tick and was dropped for the next (raid-debug: every alternative "arrived" at once).
+            .filter(|t| t.dist2d(target) > TARGET_RADIUS && t.dist2d(centre) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && !self.commander_ground(*t) && self.reachable_on_foot(*t))
             .collect();
         candidates.sort_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)));
         // Priced as the party's target will be, over the same radius (rush-16: a target priced won at 600 and lost at
@@ -222,7 +224,7 @@ impl Brain {
                 Vec3 { x: base.x + angle.cos() * PERIMETER, y: 0.0, z: base.z + angle.sin() * PERIMETER }
             })
             .filter(|p| self.reachable_on_foot(*p) && !self.commander_ground(*p) && !armed.iter().any(|a| a.dist2d(*p) < TURRET_BERTH))
-            .filter(|p| !self.raid.probed.iter().any(|(q, _)| q.dist2d(*p) < 1.0))
+            .filter(|p| !self.raid.probed.iter().any(|(q, _)| q.dist2d(*p) < 1.0) && p.dist2d(centre) > TARGET_RADIUS)
             .min_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)))
     }
 
@@ -294,6 +296,9 @@ impl Brain {
         let held = !arrived && tick.frame < self.raid.hold_until;
         let still_there = self.raid.target.is_some_and(|t| held || self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(t) < 100.0) || (!arrived && (unscouted || t.dist2d(self.enemy_base(t)) < BASE_RADIUS)));
         let target = if still_there { self.raid.target } else { self.pressure_target(centre, tick) };
+        if std::env::var_os("WITHIN_REASON_RAID_DEBUG").is_some() && let Some(t) = self.raid.target && target != Some(t) {
+            eprintln!("[ai {}] f={} raid-debug: target {:?} dropped: arrived={arrived} held={held} hold_until={} unscouted={unscouted} mode={:?} -> {:?}", self.ai(), tick.frame, (t.x as i32, t.z as i32), self.raid.hold_until, self.raid.mode, target.map(|p| (p.x as i32, p.z as i32)));
+        }
         // Priced every few seconds against what is in sight of the party and what is known at the target, and every
         // tick while something armed is in sight: four seconds is a fight's length.
         let armed = |e: &bot_protocol::EnemyUnit| e.def.is_none_or(|d| self.world.def(d).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0));
