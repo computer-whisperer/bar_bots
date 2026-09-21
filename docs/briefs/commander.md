@@ -99,6 +99,14 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   will not get in: turn it off then, at once, and post those Pawns on the D4/E5 approach with a turret. The bot also
   built fifteen converters on four extractors while the base was overrun (an energy sink that darkened the lasers
   twice); its rule now builds one only out of an income surplus, and `max_converters` caps them.
+- cmd-opus-low-3 (2026-09-20, Opus at low effort, the E2 plateau start, lost at 15 minutes): woken at 3:57 with "the
+  kill is open" while the enemy commander stood in sight of eleven Pawns, it committed and lost seven of them to
+  the D-gun in a minute. Pawns do not kill a commander: its D-gun takes one a shot (four dead in six seconds in
+  rush-smoke2, seven of eleven here). The wake now names the commander when it is there and is not sent for a party
+  under about seventeen Pawns; when it is named, the answer is Maces and Rocketeers with the Pawns, not the Pawns.
+  Then the same shape as games 1 and 2: lone Pawns and Fleas took the outlying extractors one by one (three left by
+  7:50) and the block of Maces walked in at 9:52. Three games, one shape: after the pressure fails, the outlying
+  extractors go to single raiders and the economy is at three or four when the block comes.
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.

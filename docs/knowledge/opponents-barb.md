@@ -596,3 +596,17 @@ clock, or the error on another map stayed near its in-map level (it does not: 16
 four v33 maps, and the extractor model does not transfer at all).
 **Used by.** (none yet) — candidate: H-ARMY-WAVE-GATE's estimate of the enemy army, and a line in the commander's
 briefing. Integration proposal in the study.
+
+### K-barb-commander-dgun-beats-a-pawn-party
+**Claim.** BARb's commander, standing at its base, kills a party of Pawns that attacks it: the D-gun takes one a shot
+and the laser the rest, and the fight simulator, which has no D-gun, prices the party's attack as a win. Four Pawns
+died in six seconds in rush-smoke2; eleven Pawns committed on "the kill is open" lost seven in under a minute in
+cmd-opus-low-3; the cmd-opus-1 pair's kill windows "closed on laser towers" at 4:40 in every game.
+**Status.** conjectured (2026-09-20 night); three games' worth of deaths, no controlled test. A second player's twelve
+Pawns did kill BARb's commander (the players' replays), with a player's micro.
+**Evidence.** rush-smoke2, cmd-opus-low-3 (`run/commander_turns.py --notes`), cmd-opus-1.
+**Would be wrong if.** A party of eleven to fifteen Pawns under the control lane killed the commander in a duel-harness
+scene, or the simulator with a D-gun model priced such fights won.
+**Used by.** H-ARMY-KILL (no kill offered with the commander there under 900 metal of party; the wake names it),
+H-ARMY-PRESSURE (`COMMANDER_PARTY_METAL`), the brief.
+

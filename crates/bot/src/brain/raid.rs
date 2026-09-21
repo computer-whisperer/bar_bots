@@ -87,6 +87,8 @@ pub struct Raid {
     /// H-ARMY-KILL: the party stands at the opponent's base and nothing armed of theirs is in sight; the home group is
     /// committed after it (`army.rs` reads this).
     pub(super) kill_offered: Option<Vec3>,
+    /// The enemy commander stands at the offered kill (the wake names it: Pawns alone do not kill it).
+    pub(super) kill_with_commander: bool,
     /// H-ARMY-MARCH: members stopped until the body of the party has come up (Pawns 2000 elmos apart met BARb's
     /// commander one at a time in rush-smoke2).
     held: HashSet<UnitId>,
@@ -398,7 +400,10 @@ impl Brain {
                 // or outnumbered, the home group comes to finish it.
                 // A party too small for the commander is no kill, in sight of it or not: it is usually a step away
                 // (cmd-harness-smoke: the commander was woken nine times by one to three Pawns at the base).
-                let kill_open = !armed_in_sight && party_metal >= COMMANDER_PARTY_METAL;
+                // Nor with the commander standing there unless the party is twice that (cmd-opus-low-3: eleven Pawns
+                // committed at the commander, seven dead to the D-gun in a minute; rush-smoke2 four in six seconds).
+                let kill_open = !armed_in_sight && party_metal >= COMMANDER_PARTY_METAL && (!commander_near || party_metal >= 2.0 * COMMANDER_PARTY_METAL);
+                self.raid.kill_with_commander = commander_near;
                 let at_their_base = centre.dist2d(self.enemy_base(centre)) < BASE_RADIUS && self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(centre) < BASE_RADIUS);
                 if at_their_base && kill_open && self.enabled("H-ARMY-KILL") {
                     self.raid.kill_offered = Some(target);

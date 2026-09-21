@@ -423,7 +423,12 @@ impl Brain {
             target = offered;
         } else if let Some(offered) = self.raid.kill_offered {
             let place = self.world.grid(offered);
-            self.trigger("kill-open", tick.frame, format!("The kill is open: our raiders stand at the enemy base ({place}) with nothing armed in sight. Commit the army (army_stance attack, attack_target there) or the moment passes."));
+            let text = if self.raid.kill_with_commander {
+                format!("The kill may be open: our raiders stand at the enemy base ({place}) with nothing armed in sight but its commander, and they are many. Its D-gun kills a Pawn a shot: commit the army (army_stance attack, attack_target there) with line units in it, or hold the Pawns off it.")
+            } else {
+                format!("The kill is open: our raiders stand at the enemy base ({place}) with nothing armed in sight. Commit the army (army_stance attack, attack_target there) or the moment passes.")
+            };
+            self.trigger("kill-open", tick.frame, text);
         }
         let stance = self.directives.army_stance.map(|s| s.value);
         self.note_station_failures(tick, kit);
