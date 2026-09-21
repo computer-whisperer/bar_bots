@@ -143,6 +143,18 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   extractor repels the Ticks where no army stands, one per extractor; Hammers and Pawns have to be countered by the
   army. So: `outpost_turrets` names the extractors your squads do not cover (or leaves the rule on), `base_turrets`
   0 unless the base itself is what you are defending, and the squads go where the Pawns and Hammers come through.
+- cmd-opus-low-7 (2026-09-21, Opus at low effort, the same placed start as game 6, lost at 16 minutes): the first
+  game with `base_turrets` and `outpost_turrets`. It set `base_turrets` 0 at 0:30 and no turret stood before minute
+  6, as ordered; at 4:58 it turned outpost turrets on against the Ticks, per the ruling, and at 5:35 found "only 1
+  constructor, no turrets, Fleas killing mexes": the searched opening at this start had built one constructor and
+  eleven Pawns by 4:30, and there was nobody to build the turrets or the extractors (five at 6:00; game 5's start
+  had nine). It raised `min_constructors` to 4, and by 8:00 had four constructors, but Ticks took four extractors in
+  minutes 4 to 6, Pawn packs of five took the east, and the Hammer block came at 10:00 with the economy at four. It
+  then went back to turrets (`base_turrets` 6, four requests) and the plateau fortress, and lost at 16:00. The
+  lesson is above the commander: games 6 and 7 started at (4448, 1544), where the opening search predicts six
+  extractors at 5:00 for more early army, and scores that above game 5's start with eleven; both were the worst
+  economies of the series. Until that is fixed, on a start whose opening plan carries one constructor, set
+  `min_constructors` 3 or 4 in the first turn, before anything else.
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.

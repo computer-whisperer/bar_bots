@@ -28,4 +28,4 @@ paragraph and the brief say what turrets are for, in the user's words.
 
 ## Status
 - 2026-09-21: written; nothing built.
-- 2026-09-21, built: `Directives.base_turrets`, `Directives.outpost_turrets` (`OutpostTurrets`: all, none, spots), the schema and parser, the report line, H-ECO-BASE-TURRETS capped and H-ECO-OUTPOST-TURRET filtered by them, the prompt's paragraph, the brief's ruling. First game with it: cmd-opus-low-7.
+- 2026-09-21, built: `Directives.base_turrets`, `Directives.outpost_turrets` (`OutpostTurrets`: all, none, spots), the schema and parser, the report line, H-ECO-BASE-TURRETS capped and H-ECO-OUTPOST-TURRET filtered by them, the prompt's paragraph, the brief's ruling. First game with it: cmd-opus-low-7 (ledger): the lever works (no turret before minute 6 on `base_turrets` 0; outpost turrets on at 4:58), the game lost on the placed start's opening (one constructor to 7:00).
