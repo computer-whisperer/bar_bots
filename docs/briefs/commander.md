@@ -83,6 +83,13 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   minutes) met "4 soldiers and 7 light turrets". The one win (game 06) kept scouting (`scout_at` nine times), kept
   attacking (`attack` 21 times) and read the traded line: "fist is inside their base, their army really is all in our
   half". Turning the pressure off is not wrong; sitting on four extractors afterwards is the loss.
+- cmd-opus-low-1 (2026-09-20, Opus at low effort, lost at 16 minutes): `expansion_radius` 2,200 at 0:30 and 2,600
+  at 4:06 with `economy_focus` expand sent constructors into the middle rows (D4-E5, 2,000-2,600 on foot) while the
+  army stood at its station and the Pawn party waited far south; four-Pawn raids through D4/E5 took five extractors
+  in three minutes from 5:00 and it never got past three again; the base fell at 14:00. Its own lesson at 14:10:
+  "needed line units on the D4/E5 approach from minute 4 and turrets at every forward mex". On this start the safe
+  spots are the plateau and its foot (F2, E2, E3, G3, F4, about 1,500 on foot); anything in the middle rows needs a
+  squad posted on the D4/E5 approach and a turret first, and the radius set only as far as that squad covers.
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.

@@ -660,7 +660,10 @@ impl Brain {
                         let uncovered = |p: &Vec3| radars.iter().all(|r| r.dist2d(*p) > RADAR_SPACING);
                         // H-COM-TRIP: the commander does not walk to a far extractor for its radar once a
                         // constructor is out (micro-ab2: 1,900 elmos out for one).
-                        let near_enough = |p: &Vec3| !is_commander || !self.commander_has_help(own, kit) || self.seconds_to_site(builder.def, builder.pos, *p) <= COMMANDER_TRIP_SECONDS;
+                        // Plan or no plan: the plan's exemption is for its own extractor steps (cmd-opus-low-1: a
+                        // 1,400-elmo walk for a radar at 3:24 while the plan still ran).
+                        let has_help = self.enabled("H-COM-TRIP") && own.iter().any(|u| u.def == kit.constructor && !u.being_built);
+                        let near_enough = |p: &Vec3| !is_commander || !has_help || self.seconds_to_site(builder.def, builder.pos, *p) <= COMMANDER_TRIP_SECONDS;
                         let site = std::iter::once(front)
                             .chain(own.iter().filter(|u| kit.is_extractor(u.def)).map(|u| u.pos))
                             .filter(uncovered)
