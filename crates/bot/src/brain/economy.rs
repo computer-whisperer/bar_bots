@@ -85,7 +85,7 @@ const MEX_SQUARE: f32 = 16.0;
 const MEX_STEP: f32 = 8.0;
 const MEX_MARGIN: f32 = 6.0;
 /// How far off its centre an extractor still counts as refused for that spot (the dropped-order fallback).
-const MEX_PATCH: f32 = 130.0;
+pub(super) const MEX_PATCH: f32 = 130.0;
 const LAB_YARD: f32 = 350.0;
 /// How far a building's anchor keeps from anything of ours standing or started, so the engine's closest free site
 /// to it stays within the builder's reach: the lab's gap (LAB_GAP squares) plus half of it and a neighbour, and a
@@ -103,9 +103,9 @@ const OPENING_REACH: f32 = 300.0;
 /// Generators before the first lab, counting a wind generator as one and a solar as two.
 const OPENING_GENERATORS: usize = 2;
 /// No orders before this frame: the engine loses them.
-const FIRST_ORDER_FRAME: i32 = 60;
+pub(super) const FIRST_ORDER_FRAME: i32 = 60;
 /// A builder is not judged idle for this long after an order: the order has to reach it first.
-const ORDER_GRACE_FRAMES: i32 = 45;
+pub(super) const ORDER_GRACE_FRAMES: i32 = 45;
 
 /// The rules a builder tries once the opening stands and energy is not short.
 #[derive(Clone, Copy)]
@@ -123,7 +123,7 @@ enum Step {
 }
 
 /// What one builder should do next.
-enum Plan {
+pub(super) enum Plan {
     Extractor(Vec3),
     /// A building placed near `anchor`.
     Near(UnitDefId, Vec3),
@@ -362,7 +362,7 @@ impl Brain {
 
     /// Where a building the opening plan asks for goes: the places the rules would put it (H-ECO-BASE-LAYOUT), and
     /// generators beside the builder until the first lab is started (H-ECO-OPENING: no walking between the first buildings).
-    fn place_planned(&self, def: UnitDefId, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Plan {
+    pub(super) fn place_planned(&self, def: UnitDefId, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Plan {
         let lab = own.iter().filter(|u| u.def == kit.lab).min_by(|a, b| a.pos.dist2d(builder.pos).total_cmp(&b.pos.dist2d(builder.pos)));
         match def {
             // The yard, but no farther from the builder than its reach: the commander built the lab at its feet in
@@ -459,7 +459,7 @@ impl Brain {
     /// beyond reach (the user, rush-17: "the second mex is reachable without moving, but it chooses the far corner").
     /// The spot's squares are taken to lie within `MEX_PATCH` of its centre; a refused offset puts that spot on the
     /// exact centre from then on.
-    fn extractor_site(&self, spot: Vec3, builder: &OwnUnit) -> Vec3 {
+    pub(super) fn extractor_site(&self, spot: Vec3, builder: &OwnUnit) -> Vec3 {
         let hello = &self.world.hello;
         let Some(index) = hello.metal_spots.iter().position(|s| s.dist2d(spot) < 1.0) else { return spot };
         let squares = hello.metal_spot_squares.get(index).map_or(&[][..], |s| s.as_slice());
@@ -488,7 +488,7 @@ impl Brain {
     }
 
     /// What a plan builds and where the engine is asked to put it. None when the builder cannot build it.
-    fn build_site_for(&self, plan: &Plan, unit: &OwnUnit, kit: &Kit) -> Option<(UnitDefId, BuildSite)> {
+    pub(super) fn build_site_for(&self, plan: &Plan, unit: &OwnUnit, kit: &Kit) -> Option<(UnitDefId, BuildSite)> {
         let planned_def = match plan {
             Plan::Extractor(_) => kit.extractor,
             Plan::Near(def_id, _) | Plan::Beside(def_id, _) => *def_id,

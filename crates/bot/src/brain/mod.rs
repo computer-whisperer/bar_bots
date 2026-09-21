@@ -14,6 +14,7 @@ mod economy;
 pub mod journal;
 mod march;
 mod micro;
+pub mod pianist;
 mod planner;
 mod raid;
 mod scout;
@@ -69,6 +70,8 @@ pub struct Brain {
     /// The rolling economy plan (`planner.rs`), and whether planning is over for this game (the commander is gone).
     planner: Option<planner::Planner>,
     planner_off: bool,
+    /// The pianist (`pianist/`): Jev plays every actor from the player's instructions; no decision heuristic runs.
+    pianist: Option<pianist::Pianist>,
     /// Whose ground is whose (`territory.rs`).
     territory: territory::Territory,
     /// Units a constructor has been sent to repair, and when, so that one goes to each.
@@ -153,7 +156,7 @@ pub struct Brain {
 }
 
 impl Brain {
-    pub fn new(world: World, strategist: Option<Arc<Shared>>, board: Arc<crate::team::TeamBoard>, banner: String) -> Self {
+    pub fn new(world: World, strategist: Option<Arc<Shared>>, board: Arc<crate::team::TeamBoard>, banner: String, pianist: Option<pianist::Pianist>) -> Self {
         let h = &world.hello;
         eprintln!(
             "[ai {}] team {} on {} ({}x{}), {} unit defs, {} metal spots",
@@ -176,6 +179,7 @@ impl Brain {
             reclaim: Default::default(),
             planner: None,
             planner_off: false,
+            pianist,
             territory: Default::default(),
             repair_claims: HashMap::new(),
             upgrade_claims: HashMap::new(),
@@ -270,9 +274,13 @@ impl Brain {
             let side = self.world.hello.teams.iter().find(|t| t.team == self.world.hello.team).map_or("?", |t| t.side.as_str());
             commands.push(Command::Say { text: format!("{{name}} is {banner} | seat ai{} team {} {side}", self.world.hello.ai_id, self.world.hello.team) });
         }
-        self.protect_commander(tick, &kit, &mut commands);
-        self.run_economy(tick, &kit, &mut commands);
-        self.run_army(tick, &kit, &mut commands);
+        if self.pianist.is_some() {
+            self.run_pianist(tick, &kit, &mut commands);
+        } else {
+            self.protect_commander(tick, &kit, &mut commands);
+            self.run_economy(tick, &kit, &mut commands);
+            self.run_army(tick, &kit, &mut commands);
+        }
         self.exchange_with_team(tick);
         self.journal_intent();
         self.report(tick, &kit);

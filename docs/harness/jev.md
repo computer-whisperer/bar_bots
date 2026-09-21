@@ -1,7 +1,8 @@
 # Jev (TypeSafe AI) — notes for when we slot it in
 
-Access granted 2026-09-19 (waitlist). Not integrated; the order is Opus observe-and-direct first, Jev after (see roadmap in
-`docs/README.md` once written there, and DESIGN.md). Credentials come from the environment only — this repository is public.
+Access granted 2026-09-19 (waitlist). Integrated 2026-09-21 as the pianist (`docs/design/2026-09-21-pianist.md`): `crates/jev` is
+the client (`jev SCENARIO.json` reproduces the probe below), `crates/bot/src/brain/pianist/` the player of the keyboard.
+Credentials come from the environment only — this repository is public.
 
 What it is: a hosted "System One" model. A request carries a **state** (text or JSON) plus typed **questions**; every question is
 answered in parallel, in isolation, in one pass, with probabilities. No text generation. Vendor figures: 70-500 ms end to end,
@@ -48,3 +49,16 @@ The key lives in `~/.config/within-reason/jev.env` (mode 600), never in this rep
 - Repeated identical requests differ slightly (escort 0.37 vs 0.31), so answers are not bit-stable; thresholds need margin.
 - Their documented weaknesses (arithmetic, counting, comparing quantities, dates, multi-hop, distraction by unrelated state)
   mean the heuristics must hand Jev digested judgments ("metal income is very low", "a large group"), not raw numbers.
+
+## The client (2026-09-21, `crates/jev`)
+`jev::Client::from_env()` (the key file or `TYPESAFE_API_KEY`; the model `jev-latest` unless `TYPESAFE_DEFAULT_MODEL`),
+`ask(&Request { state, questions })` blocking over `ureq` with rustls, 20 s timeout, two retries on 429 or 5xx waiting
+`retry-after` (5 s at most), the versioned model and the usage in every `Response`. The key is never written by the crate.
+- The three probe scenarios again (`cargo run -p jev -- experiments/jev/0*.json --repeat 3`, model jev-1.13.0): latency
+  **median 145-174 ms** (min 127, max 339) against 318-350 two days earlier, on the same request sizes (630-730 tokens).
+- **The same state and model do not give the same answers two days apart.** Scenario 01: `escort` 0.72 on 2026-09-19,
+  `defend` 0.58 / `escort` 0.39 on 2026-09-21 (the top choice flipped). Scenario 02: `attack` 0.03 then 0.05,
+  `sending_army_out_is_safe` 0.71 (was not asked then). Scenario 03: `return_and_defend` 0.93 then 0.96. Between calls
+  minutes apart the wobble was a few hundredths (2026-09-19). Whatever the cause (the vendor's serving, or a wider
+  spread than the first day showed), a decision layer needs hysteresis: the pianist holds a busy actor's course unless
+  the winner beats "continue" by 0.15 (H-HANDS-SWITCH).

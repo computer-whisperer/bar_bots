@@ -442,6 +442,8 @@ pub struct Shared {
     pub fights: Mutex<BTreeMap<String, u32>>,
     /// The commander's own notes, carried across session restarts.
     pub notes: Mutex<Vec<String>>,
+    /// The player's standing instructions to the pianist (`instruct` tool), the whole packet, replaced each time.
+    pub instructions: Mutex<String>,
     pub wake: Mutex<Wake>,
     /// True when turns are taken in lockstep with the game (the field commander).
     pub lockstep: std::sync::atomic::AtomicBool,

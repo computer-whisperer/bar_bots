@@ -65,6 +65,7 @@ struct Options {
     commander: bool,
     /// With `commander`: every seat of ours gets its own session instead of one for the team.
     commander_each: bool,
+    pianist: bool,
     commander_model: Option<String>,
     /// Play every match as this faction instead of alternating.
     side: Option<&'static str>,
@@ -287,6 +288,9 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
     let mut bot = Command::new(options.bot.clone().unwrap_or_else(|| repo.join("target/release/bot")))
         .args(options.strategist.then_some("--strategist"))
         .args(options.commander.then_some(if options.commander_each { "--commander-each" } else { "--commander" }))
+        .args(options.pianist.then_some("--pianist"))
+        // The pianist's every request and answer, for study (`docs/design/2026-09-21-pianist.md`).
+        .envs(options.pianist.then_some(("WITHIN_REASON_JEV_LOG", "1")))
         .env("WITHIN_REASON_SOCKET", &socket)
         .env("WITHIN_REASON_LOG_DIR", &dir)
         .env("WITHIN_REASON_DISABLE", &disable)
@@ -538,6 +542,7 @@ fn parse_args() -> Options {
         strategist: false,
         commander: false,
         commander_each: false,
+        pianist: false,
         commander_model: None,
         side: None,
         corner: None,
@@ -590,6 +595,10 @@ fn parse_args() -> Options {
             }
             "--strategist" => {
                 options.strategist = true;
+                continue;
+            }
+            "--pianist" => {
+                options.pianist = true;
                 continue;
             }
             _ => {}
@@ -656,7 +665,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes standard|corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--opening-plan PATH] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--pianist] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes standard|corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--opening-plan PATH] [--base-port N]");
     std::process::exit(2)
 }
 

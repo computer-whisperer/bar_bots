@@ -15,19 +15,24 @@ use brain::Brain;
 use strategist::{Mode, Strategist};
 use world::World;
 
-/// usage: bot [--strategist | --commander | --commander-each]
+/// usage: bot [--strategist | --commander | --commander-each] [--pianist]
 /// A Claude Code session beside the brains (see `DESIGN.md`): the Opus strategist with standing directives, or the
 /// Sonnet field commander with squads and the unit mix. One session serves every seat we play on a team
-/// (`strategist/seats.rs`); `--commander-each` gives each seat a commander of its own. Transcripts go to
-/// `$WITHIN_REASON_LOG_DIR`, else the current directory.
+/// (`strategist/seats.rs`); `--commander-each` gives each seat a commander of its own. `--pianist`: Jev plays every
+/// unit from the player's instructions in place of the decision heuristics (`docs/design/2026-09-21-pianist.md`).
+/// Transcripts go to `$WITHIN_REASON_LOG_DIR`, else the current directory.
 fn main() -> io::Result<()> {
-    let mode = match std::env::args().nth(1).as_deref() {
-        None => None,
-        Some("--strategist") => Some((Mode::Strategist, false)),
-        Some("--commander") => Some((Mode::Commander, false)),
-        Some("--commander-each") => Some((Mode::Commander, true)),
-        Some(other) => return Err(io::Error::other(format!("unknown argument {other}; usage: bot [--strategist | --commander | --commander-each]"))),
-    };
+    let mut mode = None;
+    let mut pianist = false;
+    for argument in std::env::args().skip(1) {
+        match argument.as_str() {
+            "--strategist" => mode = Some((Mode::Strategist, false)),
+            "--commander" => mode = Some((Mode::Commander, false)),
+            "--commander-each" => mode = Some((Mode::Commander, true)),
+            "--pianist" => pianist = true,
+            other => return Err(io::Error::other(format!("unknown argument {other}; usage: bot [--strategist | --commander | --commander-each] [--pianist]"))),
+        }
+    }
     let path = socket_path();
     // A previous run may have left its socket file behind; nothing can be listening on it.
     if UnixStream::connect(&path).is_err() {
@@ -38,7 +43,7 @@ fn main() -> io::Result<()> {
     for stream in listener.incoming() {
         let stream = stream?;
         std::thread::spawn(move || {
-            if let Err(e) = session(stream, mode) {
+            if let Err(e) = session(stream, mode, pianist) {
                 eprintln!("session ended: {e}");
             }
         });
@@ -51,7 +56,7 @@ fn log_dir() -> std::path::PathBuf {
 }
 
 /// `mode`: the kind of LLM session, and whether each seat gets its own (else one per team).
-fn session(mut stream: UnixStream, mode: Option<(Mode, bool)>) -> io::Result<()> {
+fn session(mut stream: UnixStream, mode: Option<(Mode, bool)>, pianist: bool) -> io::Result<()> {
     let mut input = stream.try_clone()?;
     let mut reader = FrameReader::default();
     let mut next = move || reader.read::<ToBot>(&mut input).map(|m| m.expect("blocking socket"));
@@ -67,10 +72,23 @@ fn session(mut stream: UnixStream, mode: Option<(Mode, bool)>) -> io::Result<()>
             if each { start() } else { board.strategist(start) }
         })
         .and_then(|started| started.inspect_err(|e| eprintln!("strategist failed to start: {e}")).ok());
-    let mode_name = match mode {
-        None => "heuristic",
-        Some((Mode::Strategist, _)) => "strategist",
-        Some((Mode::Commander, _)) => "commander",
+    let mode_name = match (mode, pianist) {
+        (_, true) => "pianist",
+        (None, _) => "heuristic",
+        (Some((Mode::Strategist, _)), _) => "strategist",
+        (Some((Mode::Commander, _)), _) => "commander",
+    };
+    // No key, no pianist: the process says so and the seat is not played at all rather than by the heuristics,
+    // which would pass for the pianist in the ledger.
+    let pianist = match pianist {
+        false => None,
+        true => match brain::pianist::Pianist::from_env(&log_dir(), hello.ai_id) {
+            Ok(pianist) => {
+                eprintln!("[ai {}] pianist: Jev ({}) plays from the instructions", hello.ai_id, pianist.model());
+                Some(pianist)
+            }
+            Err(e) => return Err(io::Error::other(format!("pianist mode asked for but {e}"))),
+        },
     };
     let mut recorder = recorder::Recorder::from_env(&log_dir(), &hello, mode_name);
     let setting = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -81,7 +99,10 @@ fn session(mut stream: UnixStream, mode: Option<(Mode, bool)>) -> io::Result<()>
     if let Some(disabled) = setting("WITHIN_REASON_DISABLE") {
         banner += &format!(" | off: {disabled}");
     }
-    let mut brain = Brain::new(World::new(hello), strategist.as_ref().map(|s| s.shared.clone()), board, banner);
+    if pianist.is_some() {
+        banner += &format!(" | pianist {}", pianist.as_ref().map_or("", |p| p.model()));
+    }
+    let mut brain = Brain::new(World::new(hello), strategist.as_ref().map(|s| s.shared.clone()), board, banner, pianist);
     write_frame(&mut stream, &Commands::default())?;
     loop {
         let ToBot::Tick(tick) = next()? else {

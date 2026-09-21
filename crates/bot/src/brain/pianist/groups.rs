@@ -1,0 +1,141 @@
+//! Soldier groups: the pianist's unit of command. A new soldier joins the group standing nearest it or forms one of
+//! its own; a group carries one task at a time; between calls the standing orders are kept up (a march arrives
+//! together, an engagement follows its party, an arrival becomes a hold).
+
+use std::collections::HashSet;
+
+use bot_protocol::{Command, OwnUnit, Tick, UnitId, Vec3};
+
+use super::super::roster::Kit;
+use super::super::{Brain, FRAMES_PER_SECOND};
+
+/// H-HANDS-GROUPS: a new soldier joins a group whose centre is this close, else forms a new one.
+const ADOPT_RADIUS: f32 = 400.0;
+/// A moving group has arrived when its centre is this close to its destination.
+const ARRIVED: f32 = 300.0;
+/// An engaged group is sent on when its party has moved this far, and no more often than this.
+const FOLLOW_DISTANCE: f32 = 150.0;
+const FOLLOW_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
+/// A party nobody has seen for this long is gone; the group holds where it stands.
+const LOST_FRAMES: i32 = 6 * FRAMES_PER_SECOND;
+
+#[derive(Clone, Debug)]
+pub(crate) enum GroupTask {
+    Hold { since: i32 },
+    Move { to: Vec3, place: String, fight: bool, since: i32 },
+    Engage { party: Vec<UnitId>, at: Vec3, since: i32, last_seen: i32 },
+}
+
+impl GroupTask {
+    pub(crate) fn busy(&self) -> bool {
+        !matches!(self, GroupTask::Hold { .. })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct Group {
+    pub name: String,
+    pub members: Vec<UnitId>,
+    pub task: GroupTask,
+    /// H-ARMY-MARCH's memory: who is waiting for the body.
+    pub held: HashSet<UnitId>,
+    pub last_order: i32,
+    /// Whether an enemy party stood within reach at the last look: a new one is a reason to ask at once.
+    pub enemies_near: bool,
+}
+
+impl Group {
+    pub(crate) fn units<'a>(&self, own: &'a [OwnUnit]) -> Vec<&'a OwnUnit> {
+        own.iter().filter(|u| self.members.contains(&u.id)).collect()
+    }
+}
+
+pub(crate) fn centre_of(units: &[&OwnUnit]) -> Option<Vec3> {
+    if units.is_empty() {
+        return None;
+    }
+    let n = units.len() as f32;
+    Some(units.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / n, y: 0.0, z: sum.z + u.pos.z / n }))
+}
+
+impl Brain {
+    /// Every think: membership against what stands, new soldiers adopted, standing orders kept up.
+    pub(super) fn keep_groups(&mut self, tick: &Tick, _kit: &Kit, commands: &mut Vec<Command>) {
+        let Some(kit) = self.kit else { return };
+        let own = &tick.snapshot.own_units;
+        let soldiers: Vec<&OwnUnit> = own.iter().filter(|u| !u.being_built && self.is_army(u, &kit)).collect();
+        let enemies = &tick.snapshot.enemies;
+        let frame = tick.frame;
+        let home = self.home;
+        let Some(mut pianist) = self.pianist.take() else { return };
+        for group in &mut pianist.groups {
+            group.members.retain(|id| soldiers.iter().any(|u| u.id == *id));
+        }
+        pianist.groups.retain(|g| !g.members.is_empty());
+        // H-HANDS-GROUPS: newcomers.
+        let mut loose: Vec<&OwnUnit> = soldiers.iter().copied().filter(|u| !pianist.groups.iter().any(|g| g.members.contains(&u.id))).collect();
+        loose.sort_by_key(|u| u.id.0);
+        for unit in loose {
+            let nearest = pianist
+                .groups
+                .iter_mut()
+                .filter_map(|g| centre_of(&g.units(own)).map(|c| (c.dist2d(unit.pos), g)))
+                .filter(|(d, _)| *d < ADOPT_RADIUS)
+                .min_by(|a, b| a.0.total_cmp(&b.0));
+            match nearest {
+                Some((_, group)) => group.members.push(unit.id),
+                None => {
+                    let name = pianist.new_group_name();
+                    pianist.groups.push(Group { name, members: vec![unit.id], task: GroupTask::Hold { since: frame }, held: HashSet::new(), last_order: frame, enemies_near: false });
+                }
+            }
+        }
+        // Standing orders.
+        let mut marches: Vec<(usize, Vec3)> = Vec::new();
+        for (index, group) in pianist.groups.iter_mut().enumerate() {
+            let units = group.units(own);
+            let Some(centre) = centre_of(&units) else { continue };
+            match &mut group.task {
+                GroupTask::Hold { .. } => {}
+                GroupTask::Move { to, fight, .. } => {
+                    if centre.dist2d(*to) < ARRIVED {
+                        group.task = GroupTask::Hold { since: frame };
+                        group.held.clear();
+                    } else if *fight {
+                        marches.push((index, *to));
+                    }
+                }
+                GroupTask::Engage { party, at, last_seen, .. } => {
+                    let seen: Vec<&bot_protocol::EnemyUnit> = enemies.iter().filter(|e| party.contains(&e.id)).collect();
+                    if let Some(now) = centre_of_enemies(&seen) {
+                        *last_seen = frame;
+                        if now.dist2d(*at) > FOLLOW_DISTANCE && frame - group.last_order >= FOLLOW_FRAMES {
+                            *at = now;
+                            group.last_order = frame;
+                            commands.extend(units.iter().map(|u| Command::Fight { unit: u.id, to: now, queue: false }));
+                        }
+                    } else if frame - *last_seen > LOST_FRAMES {
+                        group.task = GroupTask::Hold { since: frame };
+                    }
+                }
+            }
+            let _ = home;
+        }
+        self.pianist = Some(pianist);
+        for (index, to) in marches {
+            let mut held = std::mem::take(&mut self.pianist.as_mut().expect("pianist mode").groups[index].held);
+            let members = self.pianist.as_ref().expect("pianist mode").groups[index].members.clone();
+            let group: Vec<&OwnUnit> = own.iter().filter(|u| members.contains(&u.id)).collect();
+            commands.extend(self.march(&mut held, &group, to, enemies.as_slice()));
+            self.pianist.as_mut().expect("pianist mode").groups[index].held = held;
+        }
+    }
+}
+
+pub(crate) fn centre_of_enemies(units: &[&bot_protocol::EnemyUnit]) -> Option<Vec3> {
+    if units.is_empty() {
+        return None;
+    }
+    let n = units.len() as f32;
+    Some(units.iter().fold(Vec3::default(), |sum, u| Vec3 { x: sum.x + u.pos.x / n, y: 0.0, z: sum.z + u.pos.z / n }))
+}

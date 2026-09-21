@@ -215,6 +215,19 @@ impl Brain {
                 commitment.insert(*id, Commitment::All);
             }
         }
+        // The pianist's groups: one holding, advancing or engaging stands against mobile units and flees turrets
+        // and the commander; one walking without fighting flees everything.
+        if let Some(pianist) = &self.pianist {
+            for group in &pianist.groups {
+                let fights = match &group.task {
+                    super::pianist::GroupTask::Hold { .. } | super::pianist::GroupTask::Engage { .. } => true,
+                    super::pianist::GroupTask::Move { fight, .. } => *fight,
+                };
+                for id in &group.members {
+                    commitment.insert(*id, if fights { Commitment::Priced { turrets: Vec::new(), commander: false } } else { Commitment::None });
+                }
+            }
+        }
         self.lane.commitment = commitment;
     }
 

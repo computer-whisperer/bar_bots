@@ -46,7 +46,12 @@ impl Journal {
 
     /// A decision of the heuristic brain.
     pub fn note(&mut self, frame: i32, kind: &'static str, inputs: Value, outputs: Value) {
-        self.notes.push(Note { source: "heuristic", frame, kind, inputs, outputs });
+        self.note_from("heuristic", frame, kind, inputs, outputs);
+    }
+
+    /// A decision of another layer (`jev` for the pianist's).
+    pub fn note_from(&mut self, source: &'static str, frame: i32, kind: &'static str, inputs: Value, outputs: Value) {
+        self.notes.push(Note { source, frame, kind, inputs, outputs });
     }
 }
 
