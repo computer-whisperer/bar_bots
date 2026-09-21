@@ -96,3 +96,10 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   attack via spot_36 toward the presumed enemy base", and the ball of 25 Maces walked through fourteen artillery
   pieces and seven towers to the commander. The pattern: expand hard, one ball, read the army lead off the score line,
   and one `fight_to` with everything.
+- pianist-player-4 (2026-09-21, Opus at low effort, WON at 13 minutes): the same shape as game 3 (10 extractors by 4:13,
+  15 by 5:43, the ball committed at 8:27 with the army at 3,250 against 370 seen), and the first game in which the report
+  named the hands' own failures: the player read "held back by their own footwork" at 11:33 and kept the ball moving
+  through named spots inside their half instead of holding at enemy_base, where a holding group steps out of turret reach.
+  Its other lessons: a scouting instruction on the ball peels one soldier per ask until it names a small group for the
+  job; energy needs a named builder of its own or it stalls twice; the enemy commander leaves its base to raid our spots
+  once its factories are dead, and the ball must come home to hunt it, gathering first so stragglers are not eaten.
