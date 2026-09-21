@@ -129,6 +129,8 @@ pub struct MoveClass {
     pub max_slope: f32,
     /// Deepest water a land unit wades; for a ship, the shallowest it floats in.
     pub depth: f32,
+    /// The engine slows a unit on a slope to `1 / (1 + slope * slope_mod)` of its speed (`GroundMoveMath.cpp`).
+    pub slope_mod: f32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -11,12 +11,20 @@ use super::tier2::{ADVANCED_CONSTRUCTORS, Advance, LAB_ASSISTANTS, UPGRADES_BEFO
 use crate::strategist::shared::Focus;
 use super::{Brain, FRAMES_PER_SECOND};
 
-/// The commander never builds farther from home than this.
-const COMMANDER_LEASH: f32 = 900.0;
+/// The commander never builds farther from home than this many seconds of its own walking (900 elmos on flat
+/// ground; slopes and its own movement class priced by the terrain fields, routing design 2026-09-20).
+const COMMANDER_LEASH_SECONDS: f32 = 24.0;
 /// H-ECO-EARLY-EXPAND: until this frame the commander's leash is the longer one (no raider that can hurt it is out
 /// yet), and until we hold this many extractors constructors take a spot before anything else.
 const EARLY_FRAMES: i32 = 5 * 60 * FRAMES_PER_SECOND;
 pub(super) const EARLY_COMMANDER_LEASH: f32 = 1500.0;
+/// The same in seconds of the commander's walking, for the leash itself (the search keeps the radius).
+const EARLY_COMMANDER_LEASH_SECONDS: f32 = 40.0;
+/// H-COM-TRIP: once a constructor is out, the commander takes no job farther than this many seconds of its own
+/// walking from where it stands; the rest is the constructors' (micro-ab2: the commander walked 6,500-12,400
+/// elmos in the first ten minutes, three to five minutes of its build power on foot, to extractors, radars and
+/// turrets a constructor could have built).
+const COMMANDER_TRIP_SECONDS: f32 = 12.0;
 const EARLY_EXTRACTORS: usize = 5;
 /// H-ECO-NANO: a construction turret per this much metal income, up to this many per factory, placed within reach of it.
 const NANO_PER_INCOME: f32 = 8.0;
@@ -650,10 +658,14 @@ impl Brain {
                     // One under construction at a time, so that two builders do not answer the same gap.
                     if planned(kit.radar) == own.iter().filter(|u| u.def == kit.radar && !u.being_built).count() {
                         let uncovered = |p: &Vec3| radars.iter().all(|r| r.dist2d(*p) > RADAR_SPACING);
+                        // H-COM-TRIP: the commander does not walk to a far extractor for its radar once a
+                        // constructor is out (micro-ab2: 1,900 elmos out for one).
+                        let near_enough = |p: &Vec3| !is_commander || !self.commander_has_help(own, kit) || self.seconds_to_site(builder.def, builder.pos, *p) <= COMMANDER_TRIP_SECONDS;
                         let site = std::iter::once(front)
                             .chain(own.iter().filter(|u| kit.is_extractor(u.def)).map(|u| u.pos))
                             .filter(uncovered)
-                            .min_by(|a, b| a.dist2d(builder.pos).total_cmp(&b.dist2d(builder.pos)));
+                            .filter(near_enough)
+                            .min_by(|a, b| self.seconds_to_site(builder.def, builder.pos, *a).total_cmp(&self.seconds_to_site(builder.def, builder.pos, *b)));
                         if let Some(site) = site {
                             return (Plan::Near(kit.radar, site), "H-ECO-RADAR");
                         }
@@ -718,8 +730,15 @@ impl Brain {
                 match commander_station {
                     Some(station) => spot.dist2d(station) < COMMANDER_STATION_REACH,
                     None => {
+                        // In seconds of the commander's own walking, slopes and its own ground priced (routing
+                        // design, 2026-09-20): a spot near in a straight line may be a minute away round a cliff.
+                        // H-COM-TRIP: with a constructor out, only a short trip from where it stands.
                         let early = frame < EARLY_FRAMES && self.enabled("H-ECO-EARLY-EXPAND");
-                        self.walk_from_home(spot) < if early { EARLY_COMMANDER_LEASH } else { COMMANDER_LEASH }
+                        if self.commander_has_help(own, kit) {
+                            self.seconds_to_site(kit.commander, builder.pos, spot) <= COMMANDER_TRIP_SECONDS
+                        } else {
+                            self.commander_seconds_from_home(spot) < if early { EARLY_COMMANDER_LEASH_SECONDS } else { COMMANDER_LEASH_SECONDS }
+                        }
                     }
                 }
             } else {
@@ -756,10 +775,15 @@ impl Brain {
             .filter(|(_, s)| !self.spot_taken(**s, own, kit))
             // On foot from where the builder stands (the user, 2026-09-20: the commander walked the cliffs behind the
             // base for spots a straight line called near).
-            .min_by(|(i, _), (j, _)| self.walk_to_spot(*i, builder.pos).total_cmp(&self.walk_to_spot(*j, builder.pos)))?;
+            .min_by(|(i, _), (j, _)| self.seconds_to_spot(builder.def, *i, builder.pos).total_cmp(&self.seconds_to_spot(builder.def, *j, builder.pos)))?;
         self.spot_claims.insert(index, frame);
         // The engine stores the spot's metal value in `y`.
         Some(Vec3 { y: 0.0, ..*spot })
+    }
+
+    /// H-COM-TRIP: whether a finished constructor of ours exists to take the far jobs.
+    fn commander_has_help(&self, own: &[OwnUnit], kit: &Kit) -> bool {
+        self.enabled("H-COM-TRIP") && own.iter().any(|u| u.def == kit.constructor && !u.being_built)
     }
 
     /// What this constructor should mend: the commander first (the game ends with it), then the nearest damaged

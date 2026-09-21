@@ -285,7 +285,7 @@ fn header(hello: &Hello, mode: &str) -> Value {
                 "energy_storage": d.energy_storage,
                 "radar_range": d.radar_range,
                 "converter": d.converter.map(|c| json!([c.capacity, c.efficiency])),
-                "move": d.move_class.map(|m| json!([format!("{:?}", m.kind).to_lowercase(), m.max_slope, m.depth])),
+                "move": d.move_class.map(|m| json!([format!("{:?}", m.kind).to_lowercase(), m.max_slope, m.depth, m.slope_mod])),
             })
         })
         .collect();

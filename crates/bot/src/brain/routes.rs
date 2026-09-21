@@ -1,7 +1,9 @@
 //! Walking distances for the brain's geometry: what is reachable, what is ours, which way is forward.
 //! Everything falls back to straight lines when the engine sent no terrain.
 
-use bot_protocol::Vec3;
+use std::collections::HashMap;
+
+use bot_protocol::{UnitDefId, Vec3};
 
 use super::Brain;
 use super::roster::Kit;
@@ -10,17 +12,28 @@ use terrain::Field;
 /// The enemy-side field is rebuilt when our estimate of where an enemy lives has moved this far.
 const ENEMY_MOVED: f32 = 600.0;
 
+/// The movement classes we field: our soldiers and constructors walk as the lab's raider does, the commander as
+/// itself (`COMMANDERBOT` crosses different ground, and slower on slopes). Vehicles when a game has them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Walker {
+    Bots,
+    Commander,
+}
+
 pub struct Routes {
     from_home: Field,
+    /// Effective elmos from home for the commander (its own class and slopes), for its leash in seconds.
+    commander_from_home: Option<Field>,
     /// Distance from the nearest live enemy base.
     from_enemy: Option<Field>,
     enemy_origins: Vec<Vec3>,
     passable: Vec<bool>,
-    /// One field per metal spot (the map's order), so that "nearest spot" means walking distance from wherever a
-    /// unit stands (the user, 2026-09-20: the commander walked the cliffs behind the Quicksilver base to spots a
-    /// straight line called near). Built on a thread at the survey (10 ms a spot); empty until it arrives.
-    spot_fields: Vec<Option<Field>>,
-    spot_fields_pending: Option<std::sync::mpsc::Receiver<Vec<Option<Field>>>>,
+    /// One field per metal spot (the map's order) per class, in effective elmos (slopes priced by the engine's
+    /// law), so that "nearest spot" means travel time from wherever a unit stands (the user, 2026-09-20: the
+    /// commander walked the cliffs behind the Quicksilver base to spots a straight line called near). Built on a
+    /// thread at the survey (10 ms a field); empty until they arrive.
+    spot_fields: HashMap<Walker, Vec<Option<Field>>>,
+    spot_fields_pending: Option<std::sync::mpsc::Receiver<HashMap<Walker, Vec<Option<Field>>>>>,
 }
 
 impl Brain {
@@ -53,17 +66,24 @@ impl Brain {
         let cut_off: Vec<String> =
             spots.iter().filter(|s| from_home.distance(**s).is_none()).map(|s| format!("({:.0}, {:.0})", s.x, s.z)).collect();
         eprintln!("[ai {}] terrain: spots we cannot walk to: {}", self.ai(), cut_off.join(" "));
+        let commander_class = self.world.def(kit.commander).and_then(|d| d.move_class);
+        let bot_costs = terrain::costs(terrain, class);
+        let commander_costs = commander_class.map(|c| terrain::costs(terrain, c));
+        let commander_from_home = commander_costs.as_ref().and_then(|costs| Field::from_costs(terrain, costs, &[self.home]));
         let (sender, receiver) = std::sync::mpsc::channel();
         {
             let terrain = terrain.clone();
-            let passable = passable.clone();
             let spots = spots.clone();
             std::thread::spawn(move || {
-                let fields = spots.iter().map(|spot| Field::from(&terrain, &passable, *spot)).collect();
+                let mut fields = HashMap::new();
+                fields.insert(Walker::Bots, spots.iter().map(|spot| Field::from_costs(&terrain, &bot_costs, &[*spot])).collect());
+                if let Some(costs) = commander_costs {
+                    fields.insert(Walker::Commander, spots.iter().map(|spot| Field::from_costs(&terrain, &costs, &[*spot])).collect());
+                }
                 let _ = sender.send(fields);
             });
         }
-        self.routes = Some(Routes { from_home, from_enemy, enemy_origins, passable, spot_fields: Vec::new(), spot_fields_pending: Some(receiver) });
+        self.routes = Some(Routes { from_home, commander_from_home, from_enemy, enemy_origins, passable, spot_fields: HashMap::new(), spot_fields_pending: Some(receiver) });
         for p in self.passages() {
             eprintln!("[ai {}] terrain: passage at {} ({:.0}, {:.0}), {:.0} wide, {:.0} % of the way to the enemy", self.ai(), self.world.grid(p.at), p.at.x, p.at.z, p.width, p.along * 100.0);
         }
@@ -97,11 +117,44 @@ impl Brain {
         }
     }
 
-    /// Walking distance from `from` to the metal spot with this index; the straight line until the fields are
-    /// built or where the spot cannot be walked to.
-    pub(super) fn walk_to_spot(&self, index: usize, from: Vec3) -> f32 {
+    /// Which class a unit of this type walks as.
+    pub(super) fn walker_of(&self, def: UnitDefId) -> Walker {
+        if self.kit.is_some_and(|k| k.commander == def) { Walker::Commander } else { Walker::Bots }
+    }
+
+    /// Effective elmos (elmos at full speed, slopes priced) from `from` to the metal spot with this index for a
+    /// class; the straight line until the fields are built or where the spot cannot be walked to.
+    pub(super) fn walk_to_spot_as(&self, walker: Walker, index: usize, from: Vec3) -> f32 {
         let spot = self.world.hello.metal_spots.get(index).copied().unwrap_or(from);
-        self.routes.as_ref().and_then(|r| r.spot_fields.get(index)?.as_ref()?.distance(from)).unwrap_or_else(|| spot.dist2d(from))
+        self.routes.as_ref().and_then(|r| r.spot_fields.get(&walker)?.get(index)?.as_ref()?.distance(from)).unwrap_or_else(|| spot.dist2d(from))
+    }
+
+    /// As our soldiers walk.
+    pub(super) fn walk_to_spot(&self, index: usize, from: Vec3) -> f32 {
+        self.walk_to_spot_as(Walker::Bots, index, from)
+    }
+
+    /// Seconds a unit of this type takes from `from` to the spot (its speed over the effective elmos).
+    pub(super) fn seconds_to_spot(&self, def: UnitDefId, index: usize, from: Vec3) -> f32 {
+        let speed = self.world.def(def).map_or(1.0, |d| d.speed.max(1.0));
+        self.walk_to_spot_as(self.walker_of(def), index, from) / speed
+    }
+
+    /// Seconds a unit of this type takes from `from` to `site`: over the field of the metal spot at `site` when one
+    /// lies within 100 of it (extractors, radars and turrets at spots), else the straight line at its speed.
+    pub(super) fn seconds_to_site(&self, def: UnitDefId, from: Vec3, site: Vec3) -> f32 {
+        let speed = self.world.def(def).map_or(1.0, |d| d.speed.max(1.0));
+        match self.world.hello.metal_spots.iter().position(|s| s.dist2d(site) < 100.0) {
+            Some(index) => self.seconds_to_spot(def, index, from),
+            None => site.dist2d(from) / speed,
+        }
+    }
+
+    /// Seconds the commander takes from home to `pos`, on its own ground; the straight line without terrain.
+    pub(super) fn commander_seconds_from_home(&self, pos: Vec3) -> f32 {
+        let speed = self.kit.and_then(|k| self.world.def(k.commander)).map_or(1.0, |d| d.speed.max(1.0));
+        let effective = self.routes.as_ref().and_then(|r| r.commander_from_home.as_ref()?.distance(pos)).unwrap_or_else(|| pos.dist2d(self.home));
+        effective / speed
     }
 
     /// The index of the metal spot at `pos`, if one lies there.

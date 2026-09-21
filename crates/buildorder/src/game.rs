@@ -43,7 +43,9 @@ impl Ground for Straight {
 /// and base sites), made when first asked for.
 pub struct Walked {
     terrain: Terrain,
-    passable: Vec<bool>,
+    /// The builder's class's cost a cell: slopes priced by the engine's own law (`terrain::costs`), so that a plan
+    /// walks the commander over its own ground at its own pace (routing design, 2026-09-20).
+    costs: Vec<u32>,
     fields: Mutex<HashMap<(i32, i32), Option<Arc<Field>>>>,
 }
 
@@ -54,9 +56,9 @@ const NO_WAY_DETOUR: f64 = 3.0;
 impl Walked {
     /// `None` without terrain data.
     pub fn new(terrain: &Terrain, class: MoveClass) -> Option<Walked> {
-        let passable = terrain::passable(terrain, class);
-        (terrain.width > 0 && passable.len() == (terrain.width * terrain.height) as usize)
-            .then(|| Walked { terrain: terrain.clone(), passable, fields: Mutex::default() })
+        let costs = terrain::costs(terrain, class);
+        (terrain.width > 0 && costs.len() == (terrain.width * terrain.height) as usize)
+            .then(|| Walked { terrain: terrain.clone(), costs, fields: Mutex::default() })
     }
 }
 
@@ -70,7 +72,7 @@ impl Ground for Walked {
     fn walk(&self, from: (f64, f64), to: (f64, f64)) -> f64 {
         let at = |p: (f64, f64)| Vec3 { x: p.0 as f32, y: 0.0, z: p.1 as f32 };
         let key = ((to.0 / self.terrain.cell as f64) as i32, (to.1 / self.terrain.cell as f64) as i32);
-        let field = self.fields.lock().unwrap().entry(key).or_insert_with(|| Field::from(&self.terrain, &self.passable, at(to)).map(Arc::new)).clone();
+        let field = self.fields.lock().unwrap().entry(key).or_insert_with(|| Field::from_costs(&self.terrain, &self.costs, &[at(to)]).map(Arc::new)).clone();
         field.and_then(|f| f.distance(at(from))).map_or(distance(from, to) * NO_WAY_DETOUR, |d| (d as f64).max(distance(from, to)))
     }
 }

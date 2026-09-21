@@ -20,6 +20,26 @@ const UNREACHABLE: u32 = u32::MAX;
 /// A position is judged by the best cell this close to it: buildings and spots sit on ledges' edges and shorelines.
 const SNAP_CELLS: i32 = 6;
 
+/// A cell's cost of crossing for a class, in tenths of the flat rate: 10 on flat ground, more on a slope by the
+/// engine's own law (`1 / (1 + slope * slope_mod)` of the speed, `GroundMoveMath.cpp`), [`IMPASSABLE`] where the
+/// class cannot go. The unit of a field built on these is effective elmos: elmos at full speed.
+pub const IMPASSABLE: u32 = u32::MAX;
+
+pub fn costs(terrain: &Terrain, class: MoveClass) -> Vec<u32> {
+    passable(terrain, class)
+        .iter()
+        .zip(&terrain.slopes)
+        .map(|(&ok, &slope)| {
+            if !ok {
+                return IMPASSABLE;
+            }
+            let slope = f32::from(slope) / 255.0;
+            let slower = 1.0 + slope * class.slope_mod.max(0.0);
+            (10.0 * slower).round().clamp(10.0, 1_000_000.0) as u32
+        })
+        .collect()
+}
+
 pub fn passable(terrain: &Terrain, class: MoveClass) -> Vec<bool> {
     let max_slope = (class.max_slope * 255.0).round() as i32;
     terrain
@@ -43,16 +63,26 @@ impl Field {
         Field::from_many(terrain, passable, &[origin])
     }
 
-    /// Distances from whichever of `origins` is nearest on foot. `None` when none of them is near passable ground.
+    /// Distances from whichever of `origins` is nearest on foot, flat ground at one rate everywhere. `None` when
+    /// none of them is near passable ground.
     pub fn from_many(terrain: &Terrain, passable: &[bool], origins: &[Vec3]) -> Option<Field> {
+        let costs: Vec<u32> = passable.iter().map(|&ok| if ok { 10 } else { IMPASSABLE }).collect();
+        Field::from_costs(terrain, &costs, origins)
+    }
+
+    /// Effective elmos from whichever of `origins` is nearest, over a cost layer (`costs`: tenths of the flat rate
+    /// a cell, [`IMPASSABLE`] where the class cannot go; a threat penalty is the caller's to add). A step costs its
+    /// length times the mean of the two cells' rates. `None` when no origin is near passable ground.
+    pub fn from_costs(terrain: &Terrain, costs: &[u32], origins: &[Vec3]) -> Option<Field> {
         let (width, height) = (terrain.width as usize, terrain.height as usize);
-        if width == 0 || passable.len() != width * height {
+        if width == 0 || costs.len() != width * height {
             return None;
         }
+        let passable = |index: usize| costs[index] != IMPASSABLE;
         let mut field = Field { cell: terrain.cell, width, height, cost: vec![UNREACHABLE; width * height] };
         let mut queue = BinaryHeap::new();
         for origin in origins {
-            if let Some(start) = field.nearest(*origin, |index| passable[index]) {
+            if let Some(start) = field.nearest(*origin, passable) {
                 field.cost[start] = 0;
                 queue.push(Reverse((0u32, start)));
             }
@@ -65,17 +95,25 @@ impl Field {
                 continue;
             }
             let (x, z) = ((index % width) as i32, (index / width) as i32);
-            for (dx, dz, step) in [(1, 0, 10), (-1, 0, 10), (0, 1, 10), (0, -1, 10), (1, 1, 14), (1, -1, 14), (-1, 1, 14), (-1, -1, 14)] {
+            for (dx, dz, step) in [(1, 0, 10u64), (-1, 0, 10), (0, 1, 10), (0, -1, 10), (1, 1, 14), (1, -1, 14), (-1, 1, 14), (-1, -1, 14)] {
                 let (nx, nz) = (x + dx, z + dz);
                 if nx < 0 || nz < 0 || nx >= width as i32 || nz >= height as i32 {
                     continue;
                 }
                 let next = nz as usize * width + nx as usize;
+                if !passable(next) {
+                    continue;
+                }
                 // No cutting corners between two blocked cells.
-                let corner_clear = dx == 0 || dz == 0 || (passable[z as usize * width + nx as usize] && passable[nz as usize * width + x as usize]);
-                if passable[next] && corner_clear && cost + step < field.cost[next] {
-                    field.cost[next] = cost + step;
-                    queue.push(Reverse((cost + step, next)));
+                let corner_clear = dx == 0 || dz == 0 || (passable(z as usize * width + nx as usize) && passable(nz as usize * width + x as usize));
+                if !corner_clear {
+                    continue;
+                }
+                let rate = (u64::from(costs[index]) + u64::from(costs[next])) / 2;
+                let total = (u64::from(cost) + step * rate / 10).min(u64::from(UNREACHABLE - 1)) as u32;
+                if total < field.cost[next] {
+                    field.cost[next] = total;
+                    queue.push(Reverse((total, next)));
                 }
             }
         }
@@ -119,6 +157,36 @@ impl Field {
     /// The reachable ground nearest `pos`, if any is close.
     pub fn snap(&self, pos: Vec3) -> Option<Vec3> {
         self.nearest(pos, |i| self.cost[i] != UNREACHABLE).map(|index| self.centre(index))
+    }
+
+    /// The way from `from` down to the origin: the cells' centres, `from`'s end first, the origin last. Empty when
+    /// `from` cannot reach the origin. This is the route a unit would walk at the field's rates; read by descending
+    /// the field, no search.
+    pub fn route(&self, from: Vec3) -> Vec<Vec3> {
+        let Some(mut index) = self.nearest(from, |i| self.cost[i] != UNREACHABLE) else { return Vec::new() };
+        let mut route = vec![self.centre(index)];
+        while self.cost[index] > 0 {
+            let (x, z) = ((index % self.width) as i32, (index / self.width) as i32);
+            let Some(downhill) = (-1..=1)
+                .flat_map(|dz| (-1..=1).map(move |dx| (x + dx, z + dz)))
+                .filter(|&(nx, nz)| nx >= 0 && nz >= 0 && nx < self.width as i32 && nz < self.height as i32)
+                .map(|(nx, nz)| nz as usize * self.width + nx as usize)
+                .min_by_key(|&next| self.cost[next])
+            else {
+                break;
+            };
+            if self.cost[downhill] >= self.cost[index] {
+                break;
+            }
+            index = downhill;
+            route.push(self.centre(index));
+        }
+        route
+    }
+
+    /// Whether the way from `from` to the origin passes a point `bad` says is dangerous.
+    pub fn route_crosses(&self, from: Vec3, bad: impl Fn(Vec3) -> bool) -> bool {
+        self.route(from).into_iter().any(bad)
     }
 
     /// The point `along` elmos from the origin on the way to `goal`; the goal itself if it is nearer than that.
@@ -275,6 +343,58 @@ pub fn sketch(terrain: &Terrain, passable: &[bool], field: &Field, size: usize) 
         .collect()
 }
 
+
+#[cfg(test)]
+mod weighted {
+    use super::*;
+
+    fn flat(width: u32, height: u32) -> Terrain {
+        Terrain { cell: 16.0, width, height, heights: vec![50; (width * height) as usize], slopes: vec![0; (width * height) as usize] }
+    }
+
+    fn at(x: f32, z: f32) -> Vec3 {
+        Vec3 { x, y: 0.0, z }
+    }
+
+    #[test]
+    fn a_slope_costs_what_the_engine_slows_a_unit_by() {
+        let mut terrain = flat(32, 4);
+        // A band of slope 0.2 across the middle columns; a class slowed by slope_mod 4: 1 + 0.2 * 4 = 1.8 times.
+        for z in 0..4 {
+            for x in 10..20 {
+                terrain.slopes[z * 32 + x] = 51;
+            }
+        }
+        let class = MoveClass { kind: MoveKind::Bot, max_slope: 0.5, depth: 20.0, slope_mod: 4.0 };
+        let costs = costs(&terrain, class);
+        assert_eq!(costs[5], 10);
+        assert_eq!(costs[15], 18);
+        let field = Field::from_costs(&terrain, &costs, &[at(8.0, 24.0)]).unwrap();
+        let flat_distance = field.distance(at(8.0 + 9.0 * 16.0, 24.0)).unwrap();
+        let over_the_band = field.distance(at(8.0 + 20.0 * 16.0, 24.0)).unwrap();
+        assert!((flat_distance - 144.0).abs() < 1.0, "{flat_distance}");
+        // Twenty steps, ten of them through the band at 1.8 (the two edge steps at the mean rate, 1.4): 448.
+        assert!((over_the_band - 448.0).abs() < 1.0, "{over_the_band}");
+    }
+
+    #[test]
+    fn a_route_goes_round_a_wall_and_says_so() {
+        let terrain = flat(32, 32);
+        let class = MoveClass { kind: MoveKind::Bot, max_slope: 0.5, depth: 20.0, slope_mod: 0.0 };
+        let mut costs = costs(&terrain, class);
+        // A wall down column 16 with a gap at the bottom.
+        for z in 0..28 {
+            costs[z * 32 + 16] = IMPASSABLE;
+        }
+        let field = Field::from_costs(&terrain, &costs, &[at(24.0, 24.0)]).unwrap();
+        let route = field.route(at(24.0 + 30.0 * 16.0, 24.0));
+        assert!(route.len() > 40, "goes round: {} cells", route.len());
+        assert!(route.iter().any(|p| p.z > 28.0 * 16.0), "through the gap at the bottom");
+        assert_eq!(route.last().map(|p| (p.x, p.z)), Some((24.0, 24.0)));
+        assert!(field.route_crosses(at(24.0 + 30.0 * 16.0, 24.0), |p| p.z > 28.0 * 16.0));
+        assert!(!field.route_crosses(at(24.0 + 30.0 * 16.0, 24.0), |p| p.z < 0.0));
+    }
+}
 
 #[cfg(test)]
 mod field_timing {

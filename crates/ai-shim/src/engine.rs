@@ -182,6 +182,7 @@ impl Engine {
             kind,
             max_slope: call!(self, UnitDef_MoveData_getMaxSlope(id)),
             depth: call!(self, UnitDef_MoveData_getDepth(id)),
+            slope_mod: call!(self, UnitDef_MoveData_getSlopeMod(id)),
         })
     }
 
