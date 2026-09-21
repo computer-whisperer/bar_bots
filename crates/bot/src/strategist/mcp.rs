@@ -127,7 +127,7 @@ fn tool_list() -> Value {
               "resurrect": { "type": ["boolean", "null"],
                   "description": "Resurrection bots (the bot builds one per 600 metal of wrecks lying on held ground, at most 6) raise wrecked soldiers worth 100 metal or more when stored energy is above half and 100 metal is banked, and take everything else apart for its metal. false: they raise nothing and reclaim everything." },
               "commander_station": { "type": ["object", "null"], "properties": { "x": { "type": "number" }, "z": { "type": "number" } },
-                  "required": ["x", "z"], "description": "The commander walks here and builds only near here (it is a strong builder and fighter, and the game is lost if it dies). Without this it roams within 900 of home." },
+                  "required": ["x", "z"], "description": "The commander walks here and builds only near here (it is a strong builder and fighter, and the game is lost if it dies). Without this it builds within 24 seconds of its own walking from home." },
               "economy_focus": { "enum": ["expand", "energy", "production", "defence", null],
                   "description": "What constructors prefer once the opening is done." },
               "pressure": { "type": ["boolean", "null"],

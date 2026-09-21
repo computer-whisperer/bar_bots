@@ -1,5 +1,5 @@
 
-# What we know (field brief, revised 2026-09-19)
+# What we know (field brief, revised 2026-09-20 night)
 
 This is the project's accumulated knowledge, from some hundred recorded games against this opponent, unit duels and the
 opponent's own configuration. Each line names its source entry in `docs/knowledge/`. It is evidence, not orders: say in a
@@ -55,21 +55,37 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
 - Constructors die in the field: 16-31 a game in our losses, mostly walking alone to far spots. Expand in steps the
   army has already covered, not to the far side of the map at once. [K-army-verdicts-v18]
 
-**This map, from the north-west start.** [K-maps-terrain-not-straight-lines, K-maps-quicksilver-corner-asymmetry,
-`docs/studies/perception.md`]
-- Our start is the head of a peninsula (x 1500-2500, z under 1200) with two metal spots. The head joins the rest through
-  a corridor only about 250 wide at (1650-1900, 1220-1350); below it is a lobe (x 1500-2000, z 1400-1800), which opens
-  onto the mainland between z 1900 and 2050, with the west coast at x 1500 and cliffs at x 2300. Nothing that walks
-  reaches the base except through there. The place to stand is at or beyond that mouth, around (1900, 2150), not in
-  the lobe or the corridor. Later in the game the opponent may build amphibious bots (`coramph`) that come out of the
-  water anywhere: watch the fights list for them.
-- Beyond the neck the near spots are at C3/C4 (2136,2136), (2312,2344), (2296,2936), B4 (1352,2808), D3/D4. The line of
-  spots far to the east (x above 4000 in rows 2-3) has been bought and swept in every game we recorded.
-- Six spots cannot be reached on foot at all (`walk_from_home` null).
-- Keep the army out of the base: 40 soldiers among the buildings on the peninsula jam, and everything they do starts
-  with a walk through the neck.
+**This map, from the north start (the lobby's boxes: we start in a strip across the north, the opponent across the
+south).** [K-maps-terrain-not-straight-lines, the terrain picture the bot prints at the start]
+- Our commander stands at about (3810, 2081), E3, on a high plateau ringed by cliffs (the `O` block at E2-G3 in the
+  picture). The plateau's ways down are west, onto the low ground at D3-E3, and south-east through the middle-height
+  slope at F4-G5; behind the base (north) is sea. Anything walking to the base comes up one of those two ways.
+- The opponent starts on the mirror plateau in the south-west, B6-C7 (its buildings have been seen at (3320-3660,
+  5300-5800), D6/D7): about 3,950 on foot from our start, 3,750 in a straight line, over the open middle (C4-F6).
+- 38 of the 44 spots can be walked to; six on islets cannot (the `map` tool's `walk_from_home` is null for them).
+  The nearest to us are on and just below the plateau (F2, E3, F3, G4); the middle rows (C4-F5) are the contested
+  ones and change hands all game. The `map` tool gives every spot's walking distance from home.
+- The bot prices every walk over this ground (slopes and cliffs, each unit class its own): when it says a spot is
+  near it means on foot. The commander's leash is 24 seconds of its own walking.
 
-**What earlier commanders did, right and wrong.** [experiments ledger: commander-1 to -8]
+**What the bot does for you now (2026-09-20).** Every soldier handles its own footwork under a control lane that
+runs ten times a second: it steps out of the reach of a turret or the enemy commander it was not sent against, holds
+at the edge until you or the bot order otherwise, leaves a unit fight only when wounded and losing where it stands,
+and a group shoots one target at a time. Do not micro units with orders every few seconds: give a squad its post or
+its fight and judge it by the `traded` line minutes later. The early Pawn pressure is priced the same way and backs
+off the commander and turrets on its own; what it cannot do is crack a turret line with Pawns, and it will not try.
+
+**What earlier commanders did, right and wrong.** [experiments ledger: commander-1 to -8, cmd-opus-1, cmd-sonnet-1]
+- cmd-opus-1 (2026-09-20, eight Opus games on this start, 1-7): every game switched `pressure` off at about 4:40
+  when the kill window closed on laser towers ("Pawns cannot crack turrets", true), then massed Maces and Rocketeers
+  in defensive squads and played `defend` for the rest: by minute 15 it held 3.6 extractors against the bot's own 5.2
+  playing alone, with less army, and the opponent's block (eleven Stumpies and four Janus, 4,200 metal, at 22
+  minutes) met "4 soldiers and 7 light turrets". The one win (game 06) kept scouting (`scout_at` nine times), kept
+  attacking (`attack` 21 times) and read the traded line: "fist is inside their base, their army really is all in our
+  half". Turning the pressure off is not wrong; sitting on four extractors afterwards is the loss.
+- The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
+  level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
+  buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.
 - Game 8, low effort, thrown at minute 32: banked 10,000 metal of army on 4 extractors, marched on the base with no
   rockets against 15 turrets, arrived with the Centurions 350 ahead of the Hammers and lost 3,000 in 17 seconds while
   killing its tier-2 lab; noted "pressing through", and eleven seconds later ordered everyone home with `move`. At

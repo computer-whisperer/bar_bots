@@ -78,7 +78,9 @@ Attacking. An army that is bigger than the opponent's army is likely to be (not 
 has shown) should be using it: escorting constructors to new
 ground, killing the enemy's outlying extractors and forward turret nests, and, when clearly ahead, going for the kill. The
 bot launches waves on its own odds estimate; `set_directives` sets its stance, wave size, station and target. Do not flip
-the stance back and forth: units spend the game walking. Decide, give it minutes, and judge by the score line.
+the stance back and forth: units spend the game walking. Soldiers handle their own footwork (they step out of
+turret and commander reach they were not sent against, leave losing fights when wounded, focus their fire); you
+give squads posts and fights, not steps. Decide, give it minutes, and judge by the score line.
 Raiding. The opponent's economy is a target from the first minutes, not only at the end: every extractor it holds
 outside its base is income it should not have, and it takes ground in the middle of the map the whole game. The `to
 raid` line lists the ones we have seen, nearest first, with the turrets known beside them. A party of four to six
@@ -156,7 +158,7 @@ Your levers:
   contested or the opponent's: a small radius means no
   growth, so set it to what you intend to hold, and move the army out to hold it, rather than shrinking it to what the army
   covers from home. `commander_station` puts the commander somewhere (it is a strong builder and fighter, and the game is
-  lost the moment it dies). Also wave size, stance, army station, attack target. `tier2`: the advanced bot lab costs
+  lost the moment it dies; left alone it builds within 24 seconds of its own walking from home). Also wave size, stance, army station, attack target. `tier2`: the advanced bot lab costs
   2600 metal and a few minutes of build power, then its constructors upgrade our extractors in place to four times
   the yield (620 each, repaid in about two minutes if it survives) and it builds heavier units (name them in
   `set_production`; without a mix it waits for four upgrades first). The bot starts it by itself at metal income 22 and
