@@ -228,6 +228,12 @@ Pawns at minute 2 and 12 at minute 3 with metal income held at 6, BARb's first e
 same shape with expansion beside it: 3 / 7 / 10 / 15 Pawns at minutes 2-5 while extractors go 2 to 9 by minute 6
 (income 6 to 16); BARb, raided from 2:25, never left 2 extractors and income 6, had 2-5 Pawns and 3 LLTs, and its
 commander died at 6:08; Ben lost 22 Pawns and one resurrection bot. Neither player's commander left its base.
+**Update 2026-09-20 night (matt-plan, matt-search).** Matt's order transcribed and played by the bot gives his Pawn
+count (21 by 5:00) and the same 3-9 as the searched opening: BARb in our arena games has 1-4 soldiers and 1-3 towers at
+3:00 and 5-9 soldiers with 3 towers at 4:00 in ten games of twelve (in Matt's replay it had no soldier and two towers,
+the variant two of our twelve met), and our pressure rule waits where Matt went in with twelve and paid seven for the
+lab and every tower. "The handful is enough to win outright" holds for the soft variant; against the usual one the
+question is the party's commitment, not its size.
 **Would be wrong if.** Experienced players opened with constructors and a turret against each other on this map and
 raided only from minute 4; or the same rush lost to BARb medium in half of a batch.
 **Used by.** (candidates) the opening search's army term: raiders early, weighted by a first-contact time near 2:30

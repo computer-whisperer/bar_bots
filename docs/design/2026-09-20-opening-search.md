@@ -133,3 +133,9 @@ time lost to walking, by minute, across settings of the knobs in arena batches; 
   the plan's queue is wound back one step (and the extractor's spot claim released) and the idle path plans as before.
   A stationed commander is not queued. Heuristic fallbacks (`plan_for`) stay unqueued: they depend on the state at the
   moment. Measure: the finished-to-next-nanoframe gap, lab time, Pawns by minute 3 (rush-18).
+- 2026-09-20 night: the executor skipped `assist` steps until now (the searched plans' three assists were never
+  played); fixed, and `WITHIN_REASON_OPENING_PLAN` plays a plan from a file. Matt's order transcribed
+  (`run/plans/matt-quicksilver-north.txt`) against the search, 12 + 12: his Pawn count reproduced (21 by 5:00 against
+  15.5), same 3-9. The opening is not what separates us from Matt's 4:45 kill; the party's commitment at the base is
+  (ledger: matt-plan, matt-search). Open for the search: why it prefers three solars to winds at a wind mean of 12.7,
+  and why its assists come last.
