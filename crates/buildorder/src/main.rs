@@ -6,7 +6,7 @@ use std::sync::Arc;
 use buildorder::game::{Game, Ground, Straight};
 use buildorder::plan::Plan;
 use buildorder::record;
-use buildorder::sim::{simulate, Outcome, Sample, Scenario, Wind};
+use buildorder::sim::{simulate, Outcome, Sample, Scenario, State, Wind};
 
 const USAGE: &str = "usage: (the game, that is map, start, faction and unit numbers, comes from a match record's header)
   buildorder optimize  --game RECORD.jsonl [--factory lab|vp] [--objective income|army|mix|tempo] [--contact WALK[,AT,WEIGHT]] [--minutes 10]
@@ -15,7 +15,8 @@ const USAGE: &str = "usage: (the game, that is map, start, faction and unit numb
                                                                         in place of the map's own ground)
   buildorder simulate  --game RECORD.jsonl --plan FILE [--minutes ..] [--wind ..] [--detour X] [--csv FILE]
   buildorder walks     RECORD.jsonl... [--minutes 6]      (builders' ways between builds: recorded against predicted)
-  buildorder calibrate RECORD.jsonl... [--minutes 10] [--detour X] [--constant-wind] [--trace] [--csv-dir DIR]";
+  buildorder calibrate RECORD.jsonl... [--minutes 10] [--from SECONDS] [--detour X] [--constant-wind] [--trace] [--csv-dir DIR]
+                       (--from S: replay from the record's own state at second S with what was started after it)";
 
 struct Args(Vec<String>);
 
@@ -143,7 +144,7 @@ fn optimize(args: &Args) {
         hot: args.number("--hot", 0.02),
         start: None,
     };
-    let found = anneal_restarts(units, &scenario, &palette, &search, args.number("--restarts", 8));
+    let found = anneal_restarts(units, &scenario, &State::start(&scenario), &palette, &search, args.number("--restarts", 8));
     println!("# {} {factory} from {:.0},{:.0}, objective {} at {minutes} min, score {:.1}", game.side(), game.home.0, game.home.1, objective.name(), found.score);
     print!("{}", found.plan.to_text(units));
     print!("\n{MILESTONE_HEADER}{}", milestone_rows("best", &found.outcome));
@@ -161,7 +162,8 @@ fn run_plan(args: &Args) {
     let path = args.value("--plan").unwrap_or_else(|| die("--plan FILE is required"));
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| die(&format!("{path}: {e}")));
     let plan = Plan::from_text(&text, game.side(), units).unwrap_or_else(|e| die(&e));
-    let outcome = simulate(units, &scenario(&game, args), &plan, args.number("--minutes", 10.0) * 60.0);
+    let scenario = scenario(&game, args);
+    let outcome = simulate(units, &scenario, &State::start(&scenario), &plan, args.number("--minutes", 10.0) * 60.0);
     print!("{MILESTONE_HEADER}{}", milestone_rows(path, &outcome));
     for done in &outcome.finished {
         println!("{:6.1} s  {}  (queue {})", done.t, units.list[done.unit].name, done.queue);
@@ -173,6 +175,7 @@ fn run_plan(args: &Args) {
 
 fn calibrate(args: &Args) {
     let minutes: f64 = args.number("--minutes", 10.0);
+    let from: f64 = args.number("--from", 0.0);
     let records = args.positional(&["--constant-wind", "--trace"]);
     if records.is_empty() {
         die("calibrate needs at least one record");
@@ -191,14 +194,27 @@ fn calibrate(args: &Args) {
             let mut last = game.mean_wind();
             scenario.wind = Wind::Trace(std::iter::once(last).chain(replay.wind.iter().map(|w| { last = w.unwrap_or(last); last })).collect());
         }
-        let outcome = simulate(units, &scenario, &replay.plan, minutes * 60.0);
+        let (state, plan) = if from > 0.0 {
+            replay.state_at(from, &scenario).unwrap_or_else(|| die(&format!("{path}: no sample at {from} s")))
+        } else {
+            (State::start(&scenario), replay.plan.clone())
+        };
+        let outcome = simulate(units, &scenario, &state, &plan, minutes * 60.0 - state.t0);
         println!("\n## {path}\nside {}, home {:.0},{:.0}; builds outside the unit table: {:?}; started but never finished (left out): {}",
             game.side(), game.home.0, game.home.1, replay.unknown, replay.abandoned);
+        // The record's army metal counts from the start; from a snapshot the simulator counts from there.
+        let army_before = replay.observed.iter().find(|o| (o.t - from).abs() < 1e-6).map_or(0.0, |o| o.army_value);
+        if from > 0.0 {
+            println!("from {from} s: {} standing, {} builders ({} on a job), metal {:.0} energy {:.0}; army metal built counted from there", state.standing.len(), state.builders.len(), state.builders.iter().filter(|b| b.job.is_some()).count(), state.metal, state.energy);
+        }
         let sim_factory = outcome.finished.iter().find(|f| units.list[f.unit].role == buildorder::units::Role::Factory).map(|f| f.t);
         println!("first factory finished: recorded {:?} s, simulated {:?} s", replay.first_factory_finished, sim_factory);
         println!("| min | mex alive (built) rec / sim | metal/s rec/sim | energy/s rec/sim | cons rec/sim | army metal built rec/sim | units lost (rec) |\n|---|---|---|---|---|---|---|");
         for minute in 1..=minutes as usize {
             let t = minute as f64 * 60.0;
+            if t <= from {
+                continue;
+            }
             let (Some(o), Some(s)) = (replay.observed.iter().find(|o| o.t == t), outcome.samples.iter().find(|s| s.t == t)) else { continue };
             // Both incomes as 30 s means: wind and converters make single seconds noisy.
             let mean = |pick: &dyn Fn(f64) -> Option<f64>| { let v: Vec<f64> = (0..30).filter_map(|k| pick(t - k as f64)).collect(); v.iter().sum::<f64>() / v.len().max(1) as f64 };
@@ -206,18 +222,19 @@ fn calibrate(args: &Args) {
             let oe = mean(&|at| replay.observed.iter().find(|o| o.t == at).map(|o| o.energy_income));
             let sm = mean(&|at| outcome.samples.iter().find(|s| s.t == at).map(|s| s.metal_income));
             let se = mean(&|at| outcome.samples.iter().find(|s| s.t == at).map(|s| s.energy_income));
+            let army = o.army_value - army_before;
             println!("| {minute} | {} ({}) / {} | {om:.1} / {sm:.1} | {oe:.0} / {se:.0} | {} / {} | {:.0} / {:.0} | {} |",
-                o.extractors, o.extractors_built, s.extractors, o.constructors, s.constructors, o.army_value, s.army_value, o.losses);
-            recorded[minute].push([o.extractors as f64, om, oe, o.army_value]);
+                o.extractors, o.extractors_built, s.extractors, o.constructors, s.constructors, army, s.army_value, o.losses);
+            recorded[minute].push([o.extractors as f64, om, oe, army]);
             for e in errors[minute].iter_mut().take(if o.losses <= QUIET_LOSSES { 2 } else { 1 }) {
             e[0] += (s.extractors as f64 - o.extractors as f64).abs(); e[1] += o.extractors as f64;
             e[2] += (sm - om).abs(); e[3] += om;
-            e[4] += (s.army_value - o.army_value).abs(); e[5] += o.army_value;
+            e[4] += (s.army_value - army).abs(); e[5] += army;
             e[6] += sm - om; e[7] += 1.0;
             }
         }
         if args.has("--trace") {
-            print!("replayed plan:\n{}", replay.plan.to_text(units));
+            print!("replayed plan:\n{}", plan.to_text(units));
             for done in &outcome.finished {
                 println!("{:6.1} s  {}  (queue {})", done.t, units.list[done.unit].name, done.queue);
             }

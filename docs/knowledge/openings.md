@@ -196,6 +196,46 @@ the engine's own start-up of a build) is not split.
 **Would be wrong if.** Queued orders (the plan executor's) left the gap where it is: then it is the engine's and not ours.
 **Used by.** `Scenario::mobile_overhead` (3.5 s) in `crates/buildorder`.
 
+### K-open-sim-snapshot-replays
+**Claim.** The economy simulator started from a played game's own state at 3:00 (standing buildings, each builder's
+job with its nanoframe's health as its progress, the stock) and given what the builders started after that, matches
+the record to minute 6 as well as a replay from the empty start does, or better: extractors within 0-27 % (from the
+start: 27-33 %), metal income within 6-19 % (19-26 %), army metal built from there within 8 % at minute 6.
+**Status.** measured (2026-09-21), the four open-cal2 records with terrain (two a map), `buildorder calibrate --from 180`.
+**Evidence.** `buildorder calibrate <records> --minutes 6 --from 180`; `docs/design/2026-09-21-rolling-planner.md`.
+**Would be wrong if.** A snapshot mid-raid (builders dead, jobs abandoned) drifted at once: the check has no losses
+in it (0-8 units lost by minute 6). What the snapshot leaves out: builders helping another's nanoframe (their power
+is not counted), tier-2 constructors and resurrectors (not the plan's), and the army (nothing of it is modelled).
+**Used by.** H-OPEN-SEARCH, H-OPEN-PLAN (the rolling planner re-plans from such a snapshot).
+
+### K-open-five-minute-horizon-undervalues-extractors
+**Claim.** With the opening search's horizon at five minutes and 90 s of terminal income, a start whose plan
+predicts six extractors at 5:00 for one more Pawn party (4448, 1544 on Quicksilver's north box: 6 extractors, 1,960
+army metal, score 10,141) outscores one with eleven (4000, 2152: 11 extractors, 1,428 army metal, 9,993); at ten
+minutes the ranking flips (25,934 for the latter, 23,252 for the former; 16 against 12 extractors predicted at 5:00,
+24 against 22 at 10:00). Commander games 6 and 7 started at the former and had the worst economies of the series
+(five and six extractors at 6:00 against nine); game 5 started at the latter and won.
+**Status.** measured (2026-09-21): the arena's `--place` candidate scores at both horizons on the same record.
+**Evidence.** `docs/briefs/commander.md` cmd-opus-low-7; `planner-smoke-1`'s arena output (candidate lines).
+**Would be wrong if.** A batch from the ten-minute choice held fewer extractors at 5:00 than one from the five-minute
+choice; or the Pawn-heavy opening from the former start won more (the opening series found it standing outmatched).
+**Used by.** H-OPEN-SEARCH (horizon 600 s), the arena's placement (`crates/arena/src/place.rs`).
+
+### K-plan-ten-minute-horizon-trades-early-army
+**Claim.** The rolling planner with the `Tempo` objective ten minutes ahead (metal made + 90 s of terminal income
++ army metal x 1 + the 2:30 contact term) spends the first five minutes on the economy: 5 constructors and 8
+soldiers alive at 5:00 against the five-minute one-shot opening's 2 and 15, army metal built 720 against 1,327.
+It holds 10 extractors at 5:00 and 9 at 10:00 against 8 and 5, income 20.5 and 19.3 against 17.9 and 13.3, and
+loses more games (2-19-3 against 5-15-4): the raids of minutes 5-10 take the larger economy from the smaller army.
+The simulator prices every extractor at full worth to the horizon and knows no enemy, so the plan's economy is
+overbuilt for what stands against it.
+**Status.** measured (2026-09-21), 24 games an arm, Quicksilver north box, BARb medium, mirrored.
+**Evidence.** `planner-base`, `planner-1` (ledger); `docs/design/2026-09-21-rolling-planner.md` step 1.
+**Would be wrong if.** The army share were the objective's and not the horizon's: an army weight or a contact term
+that keeps 15 soldiers by 5:00 at the ten-minute horizon and holds the extractors too would show it. The
+commander's requirements (step 3) are the intended lever for the share.
+**Used by.** H-OPEN-SEARCH.
+
 ### K-open-search-beats-rules
 **Claim.** An opening found by half a second of search over a simulator of this game's economy beats our hand-ordered
 opening on every opening measure at once, on the same seeds: extractors 5.2 / 8.2 / 11.4 at minutes 3 / 4 / 5 against

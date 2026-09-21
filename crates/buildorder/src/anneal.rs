@@ -1,7 +1,7 @@
 //! Simulated annealing over `Plan`s. Deterministic for a given seed.
 
 use crate::plan::{Item, Plan, QueueKind, Step};
-use crate::sim::{simulate, Outcome, Scenario};
+use crate::sim::{simulate, Outcome, Scenario, State};
 use crate::units::{Role, Unit, Units};
 
 /// splitmix64: small, seedable, good enough for annealing.
@@ -124,6 +124,7 @@ impl Objective {
 }
 
 /// What the search may put in a queue.
+#[derive(Clone)]
 pub struct Palette {
     pub mobile: Vec<Item>,
     pub factory: Vec<Item>,
@@ -285,28 +286,32 @@ pub struct Found {
     pub outcome: Outcome,
 }
 
-pub fn anneal(units: &Units, scenario: &Scenario, palette: &Palette, search: &Search) -> Found {
+/// The best plan found from `state` (`docs/design/2026-09-21-rolling-planner.md`): the plan's queues follow the
+/// state's builders, and the search writes at least as many factory and constructor queues as the state has.
+pub fn anneal(units: &Units, scenario: &Scenario, state: &State, palette: &Palette, search: &Search) -> Found {
     let mut rng = Rng::new(search.seed);
+    let end = state.t0 + search.horizon;
     let evaluate = |plan: &Plan| {
-        let outcome = simulate(units, scenario, plan, search.horizon);
-        (search.objective.score(units, &outcome, search.horizon), outcome)
+        let outcome = simulate(units, scenario, state, plan, search.horizon);
+        (search.objective.score(units, &outcome, end), outcome)
     };
-    let mut current = search.start.clone().unwrap_or_else(|| palette.seed_plan(search.factories, search.constructors));
-    current.factories.resize(search.factories, Vec::new());
-    current.constructors.resize(search.constructors, Vec::new());
+    let (factories, constructors) = state.plan_shape(units, search.factories, search.constructors);
+    let mut current = search.start.clone().unwrap_or_else(|| palette.seed_plan(factories, constructors));
+    current.factories.resize(factories, Vec::new());
+    current.constructors.resize(constructors, Vec::new());
     let spots: Vec<(f64, f64)> = scenario.spots.iter().map(|s| s.at).collect();
     let current_queue_count = current.queue_count();
     let (mut current_score, outcome) = evaluate(&current);
     let effective = |outcome: &Outcome| Plan {
         commander: outcome.effective[0].clone(),
-        factories: outcome.effective[1..=search.factories].to_vec(),
-        constructors: outcome.effective[1 + search.factories..].to_vec(),
+        factories: outcome.effective[1..=factories].to_vec(),
+        constructors: outcome.effective[1 + factories..].to_vec(),
     };
     // Queues whose builder exists by the horizon, plus the next constructor's.
     let live = |outcome: &Outcome| -> Vec<usize> {
         let last = outcome.last();
-        let (factories, constructors) = (last.factories as usize, last.constructors as usize);
-        (0..current_queue_count).filter(|q| *q == 0 || (*q <= search.factories && *q <= factories.max(1)) || (*q > search.factories && *q - search.factories <= constructors + 1)).collect()
+        let (standing_factories, standing_constructors) = (last.factories as usize, last.constructors as usize);
+        (0..current_queue_count).filter(|q| *q == 0 || (*q <= factories && *q <= standing_factories.max(1)) || (*q > factories && *q - factories <= standing_constructors + 1)).collect()
     };
     let mut alive = live(&outcome);
     current = effective(&outcome);
@@ -333,12 +338,12 @@ pub fn anneal(units: &Units, scenario: &Scenario, palette: &Palette, search: &Se
 }
 
 /// Independent restarts on separate threads (seeds `seed`, `seed + 1`, ...); the best one wins, ties to the lower seed.
-pub fn anneal_restarts(units: &Units, scenario: &Scenario, palette: &Palette, search: &Search, restarts: usize) -> Found {
+pub fn anneal_restarts(units: &Units, scenario: &Scenario, state: &State, palette: &Palette, search: &Search, restarts: usize) -> Found {
     let mut found: Vec<Found> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..restarts)
             .map(|r| {
                 let one = Search { seed: search.seed + r as u64, ..search.clone() };
-                scope.spawn(move || anneal(units, scenario, palette, &one))
+                scope.spawn(move || anneal(units, scenario, state, palette, &one))
             })
             .collect();
         handles.into_iter().map(|h| h.join().expect("annealing thread")).collect()
@@ -354,9 +359,9 @@ pub fn anneal_restarts(units: &Units, scenario: &Scenario, palette: &Palette, se
 
 /// The best plan found in about `budget` of wall time on `threads` threads: the iteration count is set from how long
 /// this scenario's simulations take on this machine.
-pub fn anneal_within(units: &Units, scenario: &Scenario, palette: &Palette, search: &Search, budget: std::time::Duration, threads: usize) -> Found {
+pub fn anneal_within(units: &Units, scenario: &Scenario, state: &State, palette: &Palette, search: &Search, budget: std::time::Duration, threads: usize) -> Found {
     let started = std::time::Instant::now();
-    let mut best = anneal(units, scenario, palette, &Search { iterations: 30, ..search.clone() });
+    let mut best = anneal(units, scenario, state, palette, &Search { iterations: 30, ..search.clone() });
     // Wall time an iteration costs, measured again after every round: the probe's figure carries the first round's
     // set-up, and a budget spent by it alone used a third of itself (rush-budget-500: 320 ms of 500).
     let mut per_iteration = started.elapsed().as_secs_f64() / 31.0;
@@ -368,7 +373,7 @@ pub fn anneal_within(units: &Units, scenario: &Scenario, palette: &Palette, sear
         }
         let began = std::time::Instant::now();
         let again = Search { iterations, seed: search.seed + round, start: Some(best.plan.clone()), ..search.clone() };
-        let found = anneal_restarts(units, scenario, palette, &again, threads.max(1));
+        let found = anneal_restarts(units, scenario, state, palette, &again, threads.max(1));
         per_iteration = began.elapsed().as_secs_f64() / iterations as f64;
         if found.score > best.score {
             best = found;

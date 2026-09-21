@@ -13,7 +13,9 @@ use buildorder::start::{choose, scenario_from, Rect};
 
 const BUDGET: Duration = Duration::from_secs(4);
 const THREADS: usize = 4;
-const HORIZON: f64 = 300.0;
+/// Ten minutes: at five with 90 s of terminal income the search took a start with six extractors at 5:00 over one
+/// with eleven for a Pawn party more (commander games 6 and 7, `docs/design/2026-09-21-rolling-planner.md`).
+const HORIZON: f64 = 600.0;
 
 /// The latest record of a match on `map` that has its terrain beside it and whose opponent started inside `theirs`
 /// (an earlier match may have had the corners the other way round), with that start.

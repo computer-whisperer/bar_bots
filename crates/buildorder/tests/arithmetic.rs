@@ -6,7 +6,7 @@ use std::sync::Arc;
 use buildorder::anneal::{anneal, Objective, Palette, Search};
 use buildorder::game::{Game, Spot, Straight};
 use buildorder::plan::{Item, Plan, Step};
-use buildorder::sim::{simulate, Scenario};
+use buildorder::sim::{simulate, Outcome, Scenario, State};
 use buildorder::units::{Role, Units};
 
 const HOME: (f64, f64) = (1000.0, 1000.0);
@@ -27,11 +27,16 @@ fn bare(game: &Game) -> Scenario {
     scenario
 }
 
+/// The plan from the empty start.
+fn run(units: &Units, scenario: &Scenario, plan: &Plan, seconds: f64) -> Outcome {
+    simulate(units, scenario, &State::start(scenario), plan, seconds)
+}
+
 fn at_home(units: &Units, names: &[&str]) -> Vec<Step> {
     names.iter().map(|n| Step { item: Item::Build(units.index(n).unwrap()), site: Some(HOME) }).collect()
 }
 
-fn finish_time(units: &Units, outcome: &buildorder::sim::Outcome, name: &str) -> f64 {
+fn finish_time(units: &Units, outcome: &Outcome, name: &str) -> f64 {
     outcome.finished.iter().find(|f| units.list[f.unit].name == name).unwrap_or_else(|| panic!("{name} never finished")).t
 }
 
@@ -60,7 +65,7 @@ fn build_time_is_buildtime_over_build_power_and_cost_is_paid_once() {
     let units = &game.units;
     let mut plan = Plan::empty(1, 0);
     plan.commander = at_home(units, &["armwin"]);
-    let outcome = simulate(units, &bare(&game), &plan, 20.0);
+    let outcome = run(units, &bare(&game), &plan, 20.0);
     // 1600 / 300 = 5.33 s, after the 0.1 s step in which the order is taken up.
     assert!((finish_time(units, &outcome, "armwin") - 5.43).abs() < 0.11);
     let end = outcome.last();
@@ -77,7 +82,7 @@ fn a_stalled_build_runs_at_the_speed_of_the_scarce_resource() {
     scenario.start_energy = 0.0;
     let mut plan = Plan::empty(1, 0);
     plan.commander = at_home(units, &["armmex"]);
-    let outcome = simulate(units, &scenario, &plan, 30.0);
+    let outcome = run(units, &scenario, &plan, 30.0);
     // 500 E at the commander's 30 E/s: 16.7 s instead of 1800 / 300 = 6 s.
     assert!((finish_time(units, &outcome, "armmex") - 16.8).abs() < 0.3);
     let stalled = &outcome.samples[5];
@@ -92,7 +97,7 @@ fn walking_takes_distance_beyond_reach_over_speed() {
     let units = &game.units;
     let mut plan = Plan::empty(1, 0);
     plan.commander = vec![Step { item: Item::Build(units.index("armmex").unwrap()), site: Some((1000.0, 3000.0)) }];
-    let outcome = simulate(units, &bare(&game), &plan, 80.0);
+    let outcome = run(units, &bare(&game), &plan, 80.0);
     let expected = (2000.0 - 145.0) / 37.5 + 6.0;
     assert!((finish_time(units, &outcome, "armmex") - expected).abs() < 0.3);
 }
@@ -103,7 +108,7 @@ fn converters_burn_only_energy_above_three_quarters_of_storage() {
     let units = &game.units;
     let mut plan = Plan::empty(1, 0);
     plan.commander = at_home(units, &["armmakr", "armsolar", "armsolar", "armsolar"]);
-    let outcome = simulate(units, &bare(&game), &plan, 200.0);
+    let outcome = run(units, &bare(&game), &plan, 200.0);
     let built = finish_time(units, &outcome, "armmakr");
     // Right after the converter finishes, stored energy is below 750 (1150 was just spent): no conversion.
     let early = outcome.samples.iter().find(|s| s.t > built + 1.0).unwrap();
@@ -126,7 +131,7 @@ fn construction_turrets_add_their_build_power_to_the_factory() {
         plan.commander = at_home(units, &["armlab"]);
         plan.factories[0] = at_home(units, &[&["armck"][..], &["armpw"; 20][..]].concat());
         plan.constructors[0] = at_home(units, if with_nano { &["armnanotc"] } else { &[] });
-        let outcome = simulate(units, &scenario, &plan, 400.0);
+        let outcome = run(units, &scenario, &plan, 400.0);
         let pawns: Vec<f64> = outcome.finished.iter().filter(|f| units.list[f.unit].name == "armpw").map(|f| f.t).collect();
         pawns[19] - pawns[18]
     };
@@ -152,12 +157,12 @@ fn annealing_is_deterministic_and_beats_its_seed_plan() {
     scenario.constructors_default_to_extractors = true;
     let palette = Palette::new(units, game.commander, game.factory("lab").unwrap(), true, units.index("armllt"));
     let search = Search { objective: Objective::Mix, horizon: 300.0, iterations: 1500, seed: 7, factories: 2, constructors: 6, hot: 0.02, start: None };
-    let seed_outcome = simulate(units, &scenario, &palette.seed_plan(2, 6), 300.0);
-    let (a, b) = (anneal(units, &scenario, &palette, &search), anneal(units, &scenario, &palette, &search));
+    let seed_outcome = run(units, &scenario, &palette.seed_plan(2, 6), 300.0);
+    let (a, b) = (anneal(units, &scenario, &State::start(&scenario), &palette, &search), anneal(units, &scenario, &State::start(&scenario), &palette, &search));
     assert_eq!(a.plan, b.plan);
     assert_eq!(a.score, b.score);
     assert!(a.score > Objective::Mix.score(&game.units, &seed_outcome, 300.0));
     // The plan handed back reproduces its score when simulated afresh.
-    let again = simulate(units, &scenario, &a.plan, 300.0);
+    let again = run(units, &scenario, &a.plan, 300.0);
     assert!((Objective::Mix.score(&game.units, &again, 300.0) - a.score).abs() < 1e-9);
 }

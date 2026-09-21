@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitDefId, UnitId, Vec3};
 
-use super::opening::Planned;
+use super::planner::Planned;
 use super::roster::Kit;
 use crate::strategist::shared::{OutpostRule, OutpostTurrets};
 use super::territory::Ground;
@@ -172,6 +172,7 @@ impl Brain {
         for (bot, raised) in std::mem::take(&mut self.reclaim.to_mend) {
             commands.push(Command::Repair { unit: bot, target: raised, queue: false });
         }
+        self.run_planner(tick, kit);
         self.queue_next_steps(tick, kit, commands);
         // Idle, or on the plan's assist step and its chunk is up (a guarding builder is never idle).
         let assist_over: Vec<UnitId> = own.iter().filter(|u| !u.idle && !u.being_built).map(|u| u.id).filter(|id| self.assist_over(*id, tick.frame)).collect();
@@ -223,7 +224,7 @@ impl Brain {
                 continue;
             }
             if is_builder && is_mobile {
-                let (plan, rule) = match self.opening_step(unit, tick, kit) {
+                let (plan, rule) = match self.plan_step(unit, tick, kit) {
                     Some(Planned::Extractor(spot)) => (Plan::Extractor(spot), "H-OPEN-PLAN"),
                     Some(Planned::Building(def_id, Some(site))) => (Plan::Near(def_id, site), "H-OPEN-PLAN"),
                     Some(Planned::Building(def_id, None)) => (self.place_planned(def_id, unit, own, kit), "H-OPEN-PLAN"),
@@ -318,7 +319,7 @@ impl Brain {
                 }
             } else if unit.def == kit.lab
                 && self.production_weights.is_empty()
-                && let Some(batch) = self.opening_factory_batch(unit, tick, kit)
+                && let Some(batch) = self.plan_factory_batch(unit, tick, kit)
             {
                 // A production mix from the commander outranks the plan's factory queue.
                 self.fire("H-OPEN-PLAN");
@@ -424,7 +425,7 @@ impl Brain {
             .cloned()
             .collect();
         for unit in &busy {
-            let Some(planned) = self.opening_step(unit, tick, kit) else { continue };
+            let Some(planned) = self.plan_step(unit, tick, kit) else { continue };
             let plan = match planned {
                 Planned::Extractor(spot) => Plan::Extractor(spot),
                 Planned::Building(def_id, Some(site)) => Plan::Near(def_id, site),
@@ -439,6 +440,17 @@ impl Brain {
             self.fire("H-OPEN-QUEUE");
             self.queued.insert(unit.id, (def_id, site.near, tick.frame));
             commands.push(Command::Build { unit: unit.id, def: def_id, site: Some(site), queue: true });
+        }
+        // A busy lab keeps one unit of its queue behind the current one (the plan's factory batch), so that a re-plan
+        // finds little committed beyond what is on the pad.
+        if self.production_weights.is_empty() {
+            let labs: Vec<OwnUnit> = own.iter().filter(|u| u.def == kit.lab && !u.being_built && !u.idle).cloned().collect();
+            for lab in &labs {
+                if let Some(batch) = self.plan_factory_batch(lab, tick, kit) {
+                    self.fire("H-OPEN-PLAN");
+                    commands.extend(batch.into_iter().map(|def_id| Command::Build { unit: lab.id, def: def_id, site: None, queue: true }));
+                }
+            }
         }
     }
 
@@ -819,7 +831,7 @@ impl Brain {
     /// runs: its extractor steps are the search's, walks priced (com-trip-ab: the cap on the plan's own steps from
     /// the first constructor at 41 s cost two extractors by 3:00).
     fn commander_has_help(&self, own: &[OwnUnit], kit: &Kit) -> bool {
-        self.enabled("H-COM-TRIP") && self.opening.is_none() && own.iter().any(|u| u.def == kit.constructor && !u.being_built)
+        self.enabled("H-COM-TRIP") && self.planner.is_none() && own.iter().any(|u| u.def == kit.constructor && !u.being_built)
     }
 
     /// What this constructor should mend: the commander first (the game ends with it), then the nearest damaged

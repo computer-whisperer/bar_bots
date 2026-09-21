@@ -6,8 +6,9 @@ use std::collections::HashMap;
 use bot_protocol::{Converter, MoveClass, MoveKind, Terrain, UnitDefId, UnitDefInfo};
 use serde_json::Value;
 
-use crate::game::Game;
-use crate::plan::{Plan, Step};
+use crate::game::{distance, Game};
+use crate::plan::{Item, Plan, Step};
+use crate::sim::{Job, Scenario, Standing, State, StateBuilder};
 use crate::units::{Role, Units};
 
 /// What the record says about one game second.
@@ -16,6 +17,8 @@ pub struct Observed {
     pub t: f64,
     pub metal: f64,
     pub energy: f64,
+    pub metal_storage: f64,
+    pub energy_storage: f64,
     pub metal_income: f64,
     pub energy_income: f64,
     pub extractors: u32,
@@ -42,10 +45,39 @@ pub struct Trip {
     pub first: bool,
 }
 
+/// One build the record shows started and finished: who started it, when, what and where.
+#[derive(Clone, Copy, Debug)]
+pub struct Started {
+    pub at: f64,
+    pub builder: u64,
+    pub unit: usize,
+    pub site: (f64, f64),
+}
+
+/// One own unit in a sample: id, type, place, health as a share of its maximum, whether it is still being built.
+#[derive(Clone, Copy, Debug)]
+pub struct Seen {
+    pub id: u64,
+    pub unit: usize,
+    pub at: (f64, f64),
+    pub health: f64,
+    pub being_built: bool,
+}
+
 pub struct Replay {
     pub game: Game,
     pub trips: Vec<Trip>,
     pub plan: Plan,
+    /// Every finished build in the window, in the order started (the plan's steps with their times and builders).
+    pub steps: Vec<Started>,
+    /// Who built each unit (unit id to builder id), for everything the record shows created by a builder.
+    pub built_by: HashMap<u64, u64>,
+    /// When each unit finished (unit id to seconds).
+    pub finished_at: HashMap<u64, f64>,
+    /// Each unit's type (unit id to index in the unit table), for everything created in the window.
+    pub types: HashMap<u64, usize>,
+    /// Our units as each whole second's sample lists them.
+    pub seen: Vec<(f64, Vec<Seen>)>,
     pub observed: Vec<Observed>,
     /// Wind per turbine, per second, inferred from energy income; `None` where no turbine stood.
     pub wind: Vec<Option<f64>>,
@@ -160,6 +192,9 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
     // Mobile builders between builds: unit id -> (its type, where and when it became free); and who builds what.
     let mut free: HashMap<u64, (usize, (f64, f64), f64)> = HashMap::new();
     let mut built_by: HashMap<u64, u64> = HashMap::new();
+    let mut every_builder: HashMap<u64, u64> = HashMap::new();
+    let mut types: HashMap<u64, usize> = HashMap::new();
+    let mut steps: Vec<Started> = Vec::new();
     let mut trips = Vec::new();
     let (mut home, mut commander, mut unknown, mut abandoned, mut first_factory_finished) = (None, None, Vec::new(), 0, None);
     for r in records.iter().filter(|r| r["t"] == "ev") {
@@ -168,11 +203,15 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
         let site = (r["x"].as_f64().unwrap_or(0.0), r["z"].as_f64().unwrap_or(0.0));
         match r["k"].as_str() {
             Some("created") => {
+                if let Some(unit) = units.index(&name) {
+                    types.insert(id, unit);
+                }
                 let Some(by) = r["by"].as_u64() else {
                     home.get_or_insert(site);
                     commander = commander.or(units.index(&name));
                     continue;
                 };
+                every_builder.insert(id, by);
                 if let Some((builder, from, since)) = free.remove(&by) {
                     trips.push(Trip { builder, from, to: site, took: r["f"].as_f64().unwrap_or(0.0) / 30.0 - since, first: trips.is_empty() });
                     built_by.insert(id, by);
@@ -183,7 +222,10 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
                     continue;
                 }
                 match units.index(&name) {
-                    Some(unit) => pending.entry(by).or_default().push(Step { item: crate::plan::Item::Build(unit), site: Some(site) }),
+                    Some(unit) => {
+                        pending.entry(by).or_default().push(Step { item: Item::Build(unit), site: Some(site) });
+                        steps.push(Started { at: r["f"].as_f64().unwrap_or(0.0) / 30.0, builder: by, unit, site });
+                    }
                     None => unknown.push(name),
                 }
             }
@@ -230,7 +272,7 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
     let cost = |name: &str| units.index(name).map(|u| &units.list[u]);
     let mut alive: HashMap<u64, String> = HashMap::new();
     let (mut army_value, mut losses, mut extractors_built) = (0.0, 0u32, 0u32);
-    let (mut observed, mut wind) = (Vec::new(), Vec::new());
+    let (mut observed, mut wind, mut seen) = (Vec::new(), Vec::new(), Vec::new());
     for r in &records {
         let id = r["u"].as_u64().unwrap_or(0);
         match (r["t"].as_str(), r["k"].as_str()) {
@@ -259,10 +301,23 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
                 let steady: f64 = defs.iter().map(|d| d.energy_make.max(0.0)).sum();
                 let energy_income = r["e"][1].as_f64().unwrap_or(0.0);
                 wind.push((turbines > 0).then(|| ((energy_income - steady) / turbines as f64).clamp(0.0, 25.0)));
+                let listed: Vec<Seen> = r["own"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|u| {
+                        let unit = units.index(names.get(u[1].as_i64()? as usize)?)?;
+                        let flags = u[5].as_i64().unwrap_or(0);
+                        Some(Seen { id: u[0].as_u64()?, unit, at: (u[2].as_f64()?, u[3].as_f64()?), health: u[4].as_f64().unwrap_or(100.0) / 100.0, being_built: flags & 1 != 0 })
+                    })
+                    .collect();
+                seen.push((frame / 30.0, listed));
                 observed.push(Observed {
                     t: frame / 30.0,
                     metal: r["m"][0].as_f64().unwrap_or(0.0),
                     energy: r["e"][0].as_f64().unwrap_or(0.0),
+                    metal_storage: r["m"][3].as_f64().unwrap_or(0.0),
+                    energy_storage: r["e"][3].as_f64().unwrap_or(0.0),
                     metal_income: r["m"][1].as_f64().unwrap_or(0.0),
                     energy_income,
                     extractors: defs.iter().filter(|d| d.extracts_metal > 0.0).count() as u32,
@@ -285,5 +340,75 @@ pub fn read(path: &str, seconds: f64) -> Result<Replay, String> {
         units: table,
         terrain: terrain(path, &header),
     };
-    Ok(Replay { game, trips, plan, observed, wind, unknown, abandoned, first_factory_finished })
+    Ok(Replay { game, trips, plan, steps, built_by: every_builder, finished_at: finished_ids, types, seen, observed, wind, unknown, abandoned, first_factory_finished })
+}
+
+impl Replay {
+    /// The game as it stood at second `t` of the record, and the plan of what its builders started after that: the
+    /// check of the snapshot simulation (`docs/design/2026-09-21-rolling-planner.md`). Builders alive at `t` come
+    /// first in the state's order; factories and constructors finished later get the queues after them, in the
+    /// order they finished. A nanoframe at `t` is the job of whoever started it, its progress its health.
+    pub fn state_at(&self, t: f64, scenario: &Scenario) -> Option<(State, Plan)> {
+        let units = &self.game.units;
+        let (_, listed) = self.seen.iter().min_by(|a, b| (a.0 - t).abs().total_cmp(&(b.0 - t).abs())).filter(|(at, _)| (at - t).abs() < 1.0)?;
+        let observed = self.observed.iter().find(|o| (o.t - t).abs() < 1e-6)?;
+        let pays = |unit: usize, site: (f64, f64)| {
+            if units.list[unit].extracts_metal == 0.0 {
+                return 0.0;
+            }
+            scenario.spots.iter().find(|s| distance(s.at, site) < 100.0).map_or(0.0, |s| s.metal)
+        };
+        let standing: Vec<Standing> = listed
+            .iter()
+            .filter(|u| !u.being_built && matches!(units.list[u.unit].role, Role::Eco | Role::Turret | Role::Nano))
+            .map(|u| Standing { unit: u.unit, site: u.at, pays: pays(u.unit, u.at) })
+            .collect();
+        let mut builders: Vec<Seen> = listed.iter().copied().filter(|u| !u.being_built && matches!(units.list[u.unit].role, Role::Commander | Role::Factory | Role::Builder)).collect();
+        let rank = |role: Role| match role {
+            Role::Commander => 0,
+            Role::Factory => 1,
+            _ => 2,
+        };
+        builders.sort_by_key(|b| (rank(units.list[b.unit].role), b.id));
+        let job_of = |builder: u64| {
+            listed.iter().find(|u| u.being_built && self.built_by.get(&u.id) == Some(&builder)).map(|u| Job { unit: u.unit, site: u.at, progress: u.health, pays: pays(u.unit, u.at) })
+        };
+        let state = State {
+            t0: t,
+            metal: observed.metal,
+            energy: observed.energy,
+            metal_storage: observed.metal_storage,
+            energy_storage: observed.energy_storage,
+            standing,
+            builders: builders.iter().map(|b| StateBuilder { unit: b.unit, place: b.at, job: job_of(b.id) }).collect(),
+        };
+        // Queues: the standing builders' in the state's order, then those of the factories and constructors that
+        // finished after t, in finish order.
+        let mut later: Vec<(f64, u64, Role)> = self
+            .finished_at
+            .iter()
+            .filter(|(_, at)| **at > t)
+            .filter_map(|(id, at)| {
+                let role = units.list[*self.types.get(id)?].role;
+                matches!(role, Role::Factory | Role::Builder).then_some((*at, *id, role))
+            })
+            .collect();
+        later.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        let queue_for = |builder: u64| -> Vec<Step> { self.steps.iter().filter(|s| s.at > t && s.builder == builder).map(|s| Step { item: Item::Build(s.unit), site: Some(s.site) }).collect() };
+        let mut plan = Plan::empty(0, 0);
+        for b in &builders {
+            match units.list[b.unit].role {
+                Role::Commander => plan.commander = queue_for(b.id),
+                Role::Factory => plan.factories.push(queue_for(b.id)),
+                _ => plan.constructors.push(queue_for(b.id)),
+            }
+        }
+        for (_, id, role) in later {
+            match role {
+                Role::Factory => plan.factories.push(queue_for(id)),
+                _ => plan.constructors.push(queue_for(id)),
+            }
+        }
+        Some((state, plan))
+    }
 }

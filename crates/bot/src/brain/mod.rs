@@ -14,7 +14,7 @@ mod economy;
 pub mod journal;
 mod march;
 mod micro;
-mod opening;
+mod planner;
 mod raid;
 mod scout;
 mod reclaim;
@@ -66,9 +66,9 @@ pub struct Brain {
     routes: Option<routes::Routes>,
     /// Wrecks seen, the fields they lie in and who works them (`reclaim.rs`).
     reclaim: reclaim::Reclaim,
-    /// H-OPEN-PLAN: the opening plan while it lasts, and whether one was made this game.
-    opening: Option<opening::Opening>,
-    opening_tried: bool,
+    /// The rolling economy plan (`planner.rs`), and whether planning is over for this game (the commander is gone).
+    planner: Option<planner::Planner>,
+    planner_off: bool,
     /// Whose ground is whose (`territory.rs`).
     territory: territory::Territory,
     /// Units a constructor has been sent to repair, and when, so that one goes to each.
@@ -174,8 +174,8 @@ impl Brain {
             spot_claims: HashMap::new(),
             routes: None,
             reclaim: Default::default(),
-            opening: None,
-            opening_tried: false,
+            planner: None,
+            planner_off: false,
             territory: Default::default(),
             repair_claims: HashMap::new(),
             upgrade_claims: HashMap::new(),

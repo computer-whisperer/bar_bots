@@ -6,7 +6,7 @@
 use buildorder::anneal::{Palette, Search, Objective};
 use buildorder::game::Game;
 use buildorder::plan::{Item, Plan, Step};
-use buildorder::sim::simulate;
+use buildorder::sim::{simulate, State};
 
 fn game() -> Game {
     buildorder::record::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/quicksilver-nw.jsonl"), 60.0).unwrap().game
@@ -56,7 +56,7 @@ fn both_players_openings_simulate_without_a_step_passed_over() {
     // a human's: a player queues orders and loses nothing.
     scenario.mobile_overhead = 0.0;
     for (who, plan) in openings(&game) {
-        let outcome = simulate(&game.units, &scenario, &plan, 300.0);
+        let outcome = simulate(&game.units, &scenario, &State::start(&scenario), &plan, 300.0);
         for q in 0..plan.queue_count() {
             let planned = plan.queue(q);
             let taken = &outcome.effective[q];

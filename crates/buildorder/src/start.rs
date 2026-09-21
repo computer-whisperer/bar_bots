@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use crate::anneal::{anneal_within, Found, Palette, Search};
 use crate::game::{distance, Game, Ground, Spot};
-use crate::sim::Scenario;
+use crate::sim::{Scenario, State};
 
 /// A start box, in elmos.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -84,7 +84,9 @@ pub fn choose(
     let mut best: Option<((f64, f64), Found)> = None;
     for start in points {
         let scenario = scenario_for(start);
-        let found = anneal_within(&game.units, &scenario, palette, search, each, threads);
+        let found = anneal_within(&game.units, &scenario, &State::start(&scenario), palette, search, each, threads);
+        let at = |minute: f64| found.outcome.samples.iter().find(|s| s.t == minute * 60.0).map_or((0, 0.0, 0.0), |s| (s.extractors, s.metal_income, s.army_value));
+        eprintln!("candidate start ({:.0}, {:.0}): score {:.0}; predicted extractors / metal per s / army metal at 5 and 10 min: {:?} {:?}", start.0, start.1, found.score, at(5.0), at(10.0));
         if best.as_ref().is_none_or(|(_, b)| found.score > b.score) {
             best = Some((start, found));
         }
