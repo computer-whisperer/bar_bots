@@ -124,7 +124,12 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   extractors went to fifteen then nineteen, income from 55 to 127 in six minutes, and at 35:01 everything (123
   units, 22 rockets) went for the base. The pattern of game 6 again: hold ground that can be held, judge the curve,
   then the whole army together. The cost: the win took 37 minutes on a start where the player's Pawns end the game at
-  4:45, and the mid-game stalemate was sixteen minutes of the opponent's income growing beside ours.
+  4:45, and the mid-game stalemate was sixteen minutes of the opponent's income growing beside ours. The user, who
+  watched the game (2026-09-21): too much went into static defence and too little into mobile units, and the early
+  raids on the outposts were light probes (Pawns, Ticks, a few heavier bots), not a block. Standing instruction for
+  the games after it: fewer turrets, more mobile squads posted around the map where the raids come through, moved as
+  the raids move; a turret only where a squad cannot be. By minute 10 game 5 had spent 765 metal on nine turrets and
+  2,608 on soldiers, with 1,975 on energy and 990 on constructors.
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.
