@@ -120,6 +120,8 @@ fn tool_list() -> Value {
                   "description": "Factories keep at least this many constructors alive (the bot's own floor is 3)." },
               "min_converters": { "type": ["integer", "null"], "minimum": 0, "maximum": 40,
                   "description": "Constructors build energy-to-metal converters up to this count before expanding further, energy permitting." },
+              "max_converters": { "type": ["integer", "null"], "minimum": 0, "maximum": 40,
+                  "description": "No more converters than this, whatever energy is banked (each takes 70 energy a second to run and costs 1150 to build; the bot's own rule builds one only when energy income exceeds usage by that much and stops at 40). 0 stops them." },
               "expansion_radius": { "type": ["integer", "null"], "minimum": 500, "maximum": 20000,
                   "description": "Constructors build extractors only on metal spots within this walking distance of home (see walk_from_home in the map). Use it to stop expansion into places you cannot defend." },
               "tier2": { "type": ["boolean", "null"],
@@ -355,6 +357,9 @@ fn set_directives(arguments: &Value, shared: &Shared) -> Result<String, String> 
             }
             "min_converters" => {
                 directives.min_converters = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
+            }
+            "max_converters" => {
+                directives.max_converters = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });
             }
             "expansion_radius" => {
                 directives.expansion_radius = parse::<usize>(value)?.map(|value| Timed { value, expires_frame });

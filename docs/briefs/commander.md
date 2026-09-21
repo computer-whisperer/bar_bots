@@ -57,9 +57,11 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
 
 **This map, from the north start (the lobby's boxes: we start in a strip across the north, the opponent across the
 south).** [K-maps-terrain-not-straight-lines, the terrain picture the bot prints at the start]
-- Our commander stands at about (3810, 2081), E3, on a high plateau ringed by cliffs (the `O` block at E2-G3 in the
-  picture). The plateau's ways down are west, onto the low ground at D3-E3, and south-east through the middle-height
-  slope at F4-G5; behind the base (north) is sea. Anything walking to the base comes up one of those two ways.
+- Where we start inside the strip is chosen by the bot's opening search and varies from game to game: read it from
+  the `map` tool. Two starts seen so far: the E3 plateau at about (3810, 2081), high ground ringed by cliffs (the `O`
+  block at E2-G3 in the picture) with its ways down west onto the low ground at D3-E3 and south-east through the
+  middle-height slope at F4-G5, sea behind; and the west end at about (2136, 2258), C3, low ground with the near
+  spots at C3/C4 and the D4 approach open to the middle.
 - The opponent starts on the mirror plateau in the south-west, B6-C7 (its buildings have been seen at (3320-3660,
   5300-5800), D6/D7): about 3,950 on foot from our start, 3,750 in a straight line, over the open middle (C4-F6).
 - 38 of the 44 spots can be walked to; six on islets cannot (the `map` tool's `walk_from_home` is null for them).
@@ -90,6 +92,13 @@ off the commander and turrets on its own; what it cannot do is crack a turret li
   "needed line units on the D4/E5 approach from minute 4 and turrets at every forward mex". On this start the safe
   spots are the plateau and its foot (F2, E2, E3, G3, F4, about 1,500 on foot); anything in the middle rows needs a
   squad posted on the D4/E5 approach and a turret first, and the radius set only as far as that squad covers.
+- cmd-opus-low-2 (2026-09-20, Opus at low effort, the C3 start, lost at 18 minutes): the Pawn party of eleven stood
+  "outmatched, waiting for more" at C5 for two minutes while raiders ate the east extractors; pressure was turned
+  off at 5:04 and the Pawns massed at D4, but the middle extractors were already gone and nine Maces at D4 traded
+  3.5 to 1 against a Pawn army. The `pressure` line saying the party waits with more than about eight Pawns means it
+  will not get in: turn it off then, at once, and post those Pawns on the D4/E5 approach with a turret. The bot also
+  built fifteen converters on four extractors while the base was overrun (an energy sink that darkened the lasers
+  twice); its rule now builds one only out of an income surplus, and `max_converters` caps them.
 - The bot alone against this opponent on this start (the rush series, 2026-09-20): the opening is at the players'
   level (lab at 25 s, first Pawn at 65-70 s, seven extractors by 3:00), the Pawns take two or three of its
   buildings by minute 10 and lose about as much as they kill; the game is decided by what comes behind them.

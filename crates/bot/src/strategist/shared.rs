@@ -117,6 +117,9 @@ pub struct Directives {
     pub army_station: Option<Timed<Vec3>>,
     pub min_constructors: Option<Timed<usize>>,
     pub min_converters: Option<Timed<usize>>,
+    /// No more energy-to-metal converters than this, whatever the energy surplus (cmd-opus-low-2: fifteen were
+    /// built on four extractors and the commander asked for the lever).
+    pub max_converters: Option<Timed<usize>>,
     /// Constructors take no metal spot farther than this from home, on foot.
     pub expansion_radius: Option<Timed<usize>>,
     /// Where the commander stands and builds, instead of roaming its leash around home.
@@ -145,6 +148,7 @@ impl Directives {
         lapse(&mut self.army_station, frame);
         lapse(&mut self.min_constructors, frame);
         lapse(&mut self.min_converters, frame);
+        lapse(&mut self.max_converters, frame);
         lapse(&mut self.expansion_radius, frame);
         lapse(&mut self.commander_station, frame);
         lapse(&mut self.tier2, frame);
@@ -176,6 +180,9 @@ impl Directives {
         }
         if let Some(t) = self.min_converters {
             lines.push(format!("min_converters={} ({})", t.value, left(t.expires_frame)));
+        }
+        if let Some(t) = self.max_converters {
+            lines.push(format!("max_converters={} ({})", t.value, left(t.expires_frame)));
         }
         if let Some(t) = self.expansion_radius {
             lines.push(format!("expansion_radius={} ({})", t.value, left(t.expires_frame)));

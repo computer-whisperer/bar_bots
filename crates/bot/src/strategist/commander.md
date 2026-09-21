@@ -158,7 +158,8 @@ Your levers:
   contested or the opponent's: a small radius means no
   growth, so set it to what you intend to hold, and move the army out to hold it, rather than shrinking it to what the army
   covers from home. `commander_station` puts the commander somewhere (it is a strong builder and fighter, and the game is
-  lost the moment it dies; left alone it builds within 24 seconds of its own walking from home). Also wave size, stance, army station, attack target. `tier2`: the advanced bot lab costs
+  lost the moment it dies; left alone it builds within 24 seconds of its own walking from home). Also wave size, stance, army station, attack target, and `min_converters` / `max_converters` (the bot builds
+  converters only out of an energy surplus its income carries; the cap is for when it should not). `tier2`: the advanced bot lab costs
   2600 metal and a few minutes of build power, then its constructors upgrade our extractors in place to four times
   the yield (620 each, repaid in about two minutes if it survives) and it builds heavier units (name them in
   `set_production`; without a mix it waits for four upgrades first). The bot starts it by itself at metal income 22 and

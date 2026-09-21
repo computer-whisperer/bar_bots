@@ -705,7 +705,12 @@ impl Brain {
                     }
                 }
                 // Not with metal in the bank: a converter then buys metal we already cannot spend.
-                Step::Convert if energy_rich && planned(kit.converter) < MAX_CONVERTERS && snapshot.metal.current < FLOATING_METAL => {
+                // And only when the energy income carries another one: a converter takes its capacity every second it
+                // runs, so on a small economy they flip the store between full and empty and the lasers go dark
+                // (cmd-opus-low-2: fifteen on four extractors, two energy stalls). The commander's `max_converters`
+                // caps them below the bot's own ceiling.
+                Step::Convert if energy_rich && planned(kit.converter) < self.directives.max_converters.map_or(MAX_CONVERTERS, |d| d.value.min(MAX_CONVERTERS)) && snapshot.metal.current < FLOATING_METAL
+                    && energy.income - energy.usage >= self.world.def(kit.converter).and_then(|d| d.converter).map_or(0.0, |c| c.capacity) => {
                     return (Plan::Near(kit.converter, base), "H-ECO-CONVERT-SURPLUS");
                 }
                 _ => {}
