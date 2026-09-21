@@ -215,16 +215,20 @@ impl Brain {
                 commitment.insert(*id, Commitment::All);
             }
         }
-        // The pianist's groups: one holding, advancing or engaging stands against mobile units and flees turrets
-        // and the commander; one walking without fighting flees everything.
+        // The pianist's groups (H-HANDS-GROUPS): one advancing (`fight_to`) is committed to everything, turrets and the
+        // commander included, as a wave is: priced against no turret, a ball of eighty stood at the edge of the enemy
+        // base's laser towers inside a Guardian's reach for five minutes while Jev said "continue" every ten seconds
+        // (pianist-player-2). One holding or engaging stands against mobile units and steps out of turret reach; one
+        // walking without fighting flees everything.
         if let Some(pianist) = &self.pianist {
             for group in &pianist.groups {
-                let fights = match &group.task {
-                    super::pianist::GroupTask::Hold { .. } | super::pianist::GroupTask::Engage { .. } => true,
-                    super::pianist::GroupTask::Move { fight, .. } => *fight,
+                let commitment_of = match &group.task {
+                    super::pianist::GroupTask::Hold { .. } | super::pianist::GroupTask::Engage { .. } => Commitment::Priced { turrets: Vec::new(), commander: false },
+                    super::pianist::GroupTask::Move { fight: true, .. } => Commitment::All,
+                    super::pianist::GroupTask::Move { fight: false, .. } => Commitment::None,
                 };
                 for id in &group.members {
-                    commitment.insert(*id, if fights { Commitment::Priced { turrets: Vec::new(), commander: false } } else { Commitment::None });
+                    commitment.insert(*id, commitment_of.clone());
                 }
             }
         }

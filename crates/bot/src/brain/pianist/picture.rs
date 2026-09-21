@@ -608,8 +608,14 @@ impl Brain {
             if !scouts.is_empty() && group.members.len() > 1 {
                 entry["scouts_out"] = json!(scouts);
             }
-            if units.iter().any(|u| damaged_by.contains_key(&u.id)) {
-                entry["under_fire"] = json!("yes, this second");
+            let shooters: Vec<&String> = units.iter().filter_map(|u| damaged_by.get(&u.id)).flatten().collect();
+            if !shooters.is_empty() {
+                let mut kinds: BTreeMap<&str, usize> = BTreeMap::new();
+                for who in shooters {
+                    *kinds.entry(who.as_str()).or_default() += 1;
+                }
+                let words: Vec<String> = kinds.iter().map(|(who, n)| if *who == "something unseen" { format!("something out of our sight, {n} hits: a turret or artillery that outranges us") } else { format!("{who} ({n} hits)") }).collect();
+                entry["under_fire"] = json!(format!("yes, this second, by {}", words.join(", ")));
             }
             actors.insert(format!("group_{}", group.name), entry);
         }

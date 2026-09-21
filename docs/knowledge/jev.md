@@ -69,3 +69,15 @@ raider and ordered anti-air. Fixed the same day: `Brain::abandoned` (a destroyed
 last look, with no attacker) is accounted as abandoned everywhere.
 **Would be wrong if.** The engine reported an attacker for decayed frames, or never destroyed them.
 **Used by.** `brain/briefing.rs` `track_losses`, `territory.rs`, `pianist/mod.rs`.
+
+### K-hands-advance-stopped-at-turret-reach
+**Claim.** Under the pianist a group advancing with `fight_to` was committed to no turret, so the control lane stepped
+every soldier out of the first turret's reach and held it at the edge while its way to the goal crossed one: an attack
+on a base could not be carried out whatever Jev or the player said. Committed to everything (as the heuristic waves
+are) the advance walks in; whether it should is the odds question the menu words put to Jev.
+**Status.** demonstrated (2026-09-21; the fix's effect is pianist-player-3's to show)
+**Evidence.** pianist-player-2: the ball of 82 stood 2,255 short of enemy_base from 21:00 to 22:40 with `continue`
+(advance) answered on every ask; the record shows 275 `move` and 2 `fight` commands to its units in the stall minute;
+the truth file puts a Guardian 1,002 from it and the nearest laser tower at 1,584.
+**Would be wrong if.** The ball had walked in under the same commitment, or the flee steps had another source.
+**Used by.** H-HANDS-GROUPS (`micro.rs` `note_commitments`).

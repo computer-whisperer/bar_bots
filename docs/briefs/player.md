@@ -80,3 +80,12 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   in turn, and met the first real raid (ten Flashes at 7:48) with three Maces. Both harness faults are fixed
   (H-HANDS-STARTED; abandoned frames are reported as abandoned). Its lesson: write the packet as states that hold
   ("the commander stays at home and builds the lab there"), never as a sequence of commands to be done once.
+- pianist-player-2 (2026-09-21, Opus at low effort, lost at 27 minutes): the best economy and army of the series (14
+  extractors by 6:00, a hundred soldiers by 18:00) and a loss all the same. Three waves went at enemy_base one after
+  another and were ground down piecemeal; the whole ball of 82 stood short of the base for five minutes under
+  artillery while the hands answered "continue": the hands of that day would not walk a group into a turret's reach
+  (fixed: `fight_to` now fights its way through turrets, so it is the attack, and the odds words on the option say
+  what it faces). Meanwhile the raids took the middle spots behind the attack (16 extractors to 8) and every field
+  constructor died: an attack needs a home guard on the passage the raids use, and constructors told to rebuild
+  behind it. The ball also chased single Flashes when told to engage parties it outweighs: name a small raider-hunting
+  group for that and keep the ball's instruction to holding and advancing.

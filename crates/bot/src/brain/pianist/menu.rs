@@ -103,11 +103,8 @@ impl Brain {
                 .collect();
             Question::Choice { instructions: json!(premise.to_string()), criteria }
         };
-        let e = &tick.snapshot.energy;
-        let m = &tick.snapshot.metal;
         let energy_words = picture.state["economy"]["energy"].as_str().unwrap_or_default().to_string();
         let metal_words = picture.state["economy"]["metal"].as_str().unwrap_or_default().to_string();
-        let _ = (e, m);
 
         // Builders.
         let under_fire: Vec<UnitId> = tick.events.iter().filter_map(|e| if let bot_protocol::Event::UnitDamaged { unit, .. } = e { Some(*unit) } else { None }).collect();
@@ -318,9 +315,9 @@ impl Brain {
                     if self.found_enemy_base().is_none() { "not found yet, what stands there is unknown: scout it first (`scout`)" } else if ratio >= 2.5 { "we outweigh it heavily" } else if ratio >= 1.3 { "we outweigh it" } else if ratio >= 0.8 { "an even fight" } else { "it outweighs us" }
                 )
             };
-            offer("hold", Pick::Hold, "Stand where it is; fight whatever comes within reach. Nothing beyond reach is protected by this.".into());
+            offer("hold", Pick::Hold, "Stand where it is; fight whatever mobile comes within reach and step out of turret reach. Nothing beyond reach is protected by this.".into());
             offer("move_to", Pick::MoveTo { fight: false }, "Walk to the place in `where` without stopping to fight on the way (it runs from everything).".into());
-            offer("fight_to", Pick::MoveTo { fight: true }, format!("Advance to the place in `where`, arriving together and fighting what it meets. Against {base_words}."));
+            offer("fight_to", Pick::MoveTo { fight: true }, format!("Advance to the place in `where`, arriving together and fighting everything on the way and there, turrets included: it does not stop at a turret's reach, so it is the attack. Against {base_words}."));
             if !picture.parties.is_empty() {
                 offer("engage", Pick::Engage, format!("Attack the enemy party named in `whom` now and follow it. In sight: {}.", parties_words.join("; ")));
             }

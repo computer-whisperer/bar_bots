@@ -3,13 +3,13 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use bot_protocol::{BuildSite, Command, OwnUnit, Tick, UnitId, Vec3};
+use bot_protocol::{Command, OwnUnit, Tick, UnitId};
 use jev::Answer;
 use serde_json::json;
 
 use super::super::economy::Plan;
 use super::super::roster::Kit;
-use super::super::{Brain, FRAMES_PER_SECOND};
+use super::super::Brain;
 use super::menu::{Actor, Menu, Pick, nearest_of};
 use super::picture::Picture;
 use super::{Group, GroupTask, SWITCH_MARGIN, Task};
@@ -255,14 +255,7 @@ impl Brain {
             }
             _ => {}
         }
-        let _ = FRAMES_PER_SECOND;
         self.pianist = Some(pianist);
         did
     }
-}
-
-/// A site exactly at a point, for what the shim places without searching.
-#[allow(dead_code)]
-pub(crate) fn exact(at: Vec3) -> BuildSite {
-    BuildSite { near: at, search_radius: 0.0, min_dist: 0 }
 }
