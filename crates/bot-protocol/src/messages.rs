@@ -45,6 +45,8 @@ pub struct Hello {
     /// Where each ally team may start, for the ally teams whose box the start script gives.
     pub start_boxes: Vec<StartBox>,
     pub frame: i32,
+    /// Frames between ticks (the sim runs 30 a second): the shim's setting, so that nothing in the bot assumes one.
+    pub tick_frames: i32,
     pub map: MapInfo,
     pub unit_defs: Vec<UnitDefInfo>,
     pub metal_spots: Vec<Vec3>,
@@ -171,9 +173,19 @@ pub struct Converter {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Tick {
     pub frame: i32,
+    /// Frames this tick was sent after the frame it was due at, for want of the bot's answer to the previous one
+    /// (always 0 in lockstep). `frame - late` is the due frame, which the bot's own schedule keys on.
+    pub late: i32,
     /// Everything that happened since the previous tick, in order.
     pub events: Vec<Event>,
     pub snapshot: Snapshot,
+}
+
+impl Tick {
+    /// The frame this tick fell due at: what the bot's schedule keys on, so that a late tick is not a missed one.
+    pub fn due(&self) -> i32 {
+        self.frame - self.late
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -213,11 +225,15 @@ pub struct OwnUnit {
     pub id: UnitId,
     pub def: UnitDefId,
     pub pos: Vec3,
+    /// Elmos a frame.
+    pub vel: Vec3,
     pub health: f32,
     pub max_health: f32,
     pub being_built: bool,
     /// Command queue is empty.
     pub idle: bool,
+    /// The frame at which its first weapon can next fire; 0 for a unit without one. For the control lane's kiting.
+    pub reload_frame: i32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -235,6 +251,8 @@ pub struct EnemyUnit {
     /// Unknown for radar-only contacts.
     pub def: Option<UnitDefId>,
     pub pos: Vec3,
+    /// Elmos a frame, for where it will be next.
+    pub vel: Vec3,
     pub health: f32,
     /// Whose it is, when the engine tells (it does for units in sight).
     pub team: Option<i32>,

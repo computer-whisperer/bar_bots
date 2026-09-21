@@ -76,7 +76,7 @@ impl Engine {
         engine
     }
 
-    pub fn hello(&mut self, frame: i32) -> Hello {
+    pub fn hello(&mut self, frame: i32, tick_frames: i32) -> Hello {
         let map = MapInfo {
             name: self.string(call!(self, Map_getName())),
             width: call!(self, Map_getWidth()) as f32 * SQUARE_SIZE,
@@ -158,6 +158,7 @@ impl Engine {
             teams,
             start_boxes,
             frame,
+            tick_frames,
             map,
             unit_defs,
             metal_spots,
@@ -256,10 +257,12 @@ impl Engine {
                 id: UnitId(id),
                 def: UnitDefId(call!(self, Unit_getDef(id))),
                 pos: self.unit_pos(id),
+                vel: self.unit_vel(id),
                 health: call!(self, Unit_getHealth(id)),
                 max_health: call!(self, Unit_getMaxHealth(id)),
                 being_built: call!(self, Unit_isBeingBuilt(id)),
                 idle: call!(self, Unit_getCurrentCommands(id)) == 0,
+                reload_frame: self.reload_frame(id),
             })
             .collect();
 
@@ -288,6 +291,7 @@ impl Engine {
                     id: UnitId(id),
                     def: (def >= 0).then_some(UnitDefId(def)),
                     pos: self.unit_pos(id),
+                    vel: self.unit_vel(id),
                     health: call!(self, Unit_getHealth(id)),
                     team: Some(call!(self, Unit_getTeam(id))).filter(|team| *team >= 0),
                 }
@@ -340,6 +344,24 @@ impl Engine {
         let mut pos = [0f32; 3];
         call!(self, Unit_getPos(unit, pos.as_mut_ptr()));
         Vec3 { x: pos[0], y: pos[1], z: pos[2] }
+    }
+
+    fn unit_vel(&self, unit: c_int) -> Vec3 {
+        let mut vel = [0f32; 3];
+        call!(self, Unit_getVel(unit, vel.as_mut_ptr()));
+        Vec3 { x: vel[0], y: vel[1], z: vel[2] }
+    }
+
+    /// The frame the unit's first weapon can next fire (`Weapon::reloadStatus`); 0 for a unit without weapons.
+    fn reload_frame(&self, unit: c_int) -> i32 {
+        if call!(self, Unit_getWeapons(unit)) <= 0 {
+            return 0;
+        }
+        let weapon = call!(self, Unit_getWeapon(unit, 0));
+        if weapon < 0 {
+            return 0;
+        }
+        call!(self, Unit_Weapon_getReloadFrame(unit, weapon))
     }
 
     /// A legal position for `def` near `site`, if the map has one.

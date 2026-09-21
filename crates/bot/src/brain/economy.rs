@@ -97,8 +97,6 @@ const OPENING_GENERATORS: usize = 2;
 const FIRST_ORDER_FRAME: i32 = 60;
 /// A builder is not judged idle for this long after an order: the order has to reach it first.
 const ORDER_GRACE_FRAMES: i32 = 45;
-/// Frames between ticks (the shim's tick interval).
-const TICK_FRAMES: i32 = 15;
 
 /// The rules a builder tries once the opening stands and energy is not short.
 #[derive(Clone, Copy)]
@@ -274,7 +272,7 @@ impl Brain {
                 // An order whose builder is idle again within two ticks never started: count it and say where.
                 // (The window is the first re-plan after the order grace: a shorter one never fired.)
                 if let Some((frame, earlier, near)) = self.last_orders.insert(unit.id, (tick.frame, def_id, site.near))
-                    && tick.frame - frame <= ORDER_GRACE_FRAMES + TICK_FRAMES
+                    && tick.frame - frame <= ORDER_GRACE_FRAMES + super::BRAIN_FRAMES
                 {
                     self.dropped_orders += 1;
                     // An extractor refused off its centre: that spot takes the exact centre from now on.

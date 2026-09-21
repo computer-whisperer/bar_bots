@@ -13,6 +13,7 @@ mod contact;
 mod economy;
 pub mod journal;
 mod march;
+mod micro;
 mod opening;
 mod raid;
 mod scout;
@@ -34,7 +35,10 @@ use crate::world::World;
 use roster::{Kit, ROSTERS};
 
 const FRAMES_PER_SECOND: i32 = 30;
-/// The static map description is published during the first few ticks, once home is known.
+/// Frames between runs of the whole brain (`think`), 2 Hz: the shim's ticks come more often than that, for the
+/// control lane (`micro.rs`), and must divide this (`docs/design/2026-09-20-micro-lane.md`).
+pub(crate) const BRAIN_FRAMES: i32 = 15;
+/// The static map description is published during the first few seconds, once home is known.
 const TICK_FRAMES_HINT: i32 = 10 * FRAMES_PER_SECOND;
 
 pub struct Brain {
@@ -139,6 +143,10 @@ pub struct Brain {
     last_trigger_frame: HashMap<&'static str, i32>,
     /// Decisions since `main` last collected them for the match record.
     journal: journal::Journal,
+    /// Events from the ticks since `think` last ran, in order, for its next run.
+    carried_events: Vec<Event>,
+    /// Ticks that came late (`Tick::late`) and the most frames one waited, since the last per-minute line.
+    late_ticks: (u32, i32),
 }
 
 impl Brain {
@@ -207,10 +215,34 @@ impl Brain {
             disabled: std::env::var("WITHIN_REASON_DISABLE").map_or_else(|_| Vec::new(), |ids| ids.split(',').map(str::to_string).collect()),
             last_trigger_frame: HashMap::new(),
             journal: Default::default(),
+            carried_events: Vec::new(),
+            late_ticks: (0, 0),
         }
     }
 
+    /// One tick: the control lane every time, the whole brain (`think`) on the frames due at its own interval, with
+    /// every event since it last ran.
     pub fn decide(&mut self, tick: &Tick) -> Vec<Command> {
+        if tick.late > 0 {
+            self.late_ticks = (self.late_ticks.0 + 1, self.late_ticks.1.max(tick.late));
+        }
+        if tick.due() % BRAIN_FRAMES != 0 {
+            self.carried_events.extend(tick.events.iter().cloned());
+            return self.micro(tick);
+        }
+        let mut commands = if self.carried_events.is_empty() {
+            self.think(tick)
+        } else {
+            let mut events = std::mem::take(&mut self.carried_events);
+            events.extend(tick.events.iter().cloned());
+            let whole = Tick { frame: tick.frame, late: tick.late, events, snapshot: tick.snapshot.clone() };
+            self.think(&whole)
+        };
+        commands.extend(self.micro(tick));
+        commands
+    }
+
+    fn think(&mut self, tick: &Tick) -> Vec<Command> {
         if self.kit.is_none() {
             self.adopt_faction(&tick.snapshot.own_units);
         }
@@ -349,7 +381,7 @@ impl Brain {
                 _ => {}
             }
         }
-        if tick.frame % (60 * FRAMES_PER_SECOND) == 0 {
+        if tick.due() % (60 * FRAMES_PER_SECOND) == 0 {
             let s = &tick.snapshot;
             let count = |def: UnitDefId| s.own_units.iter().filter(|u| u.def == def).count();
             eprintln!(
@@ -370,6 +402,10 @@ impl Brain {
                 eprintln!("[ai {}] f={} fights: {}", self.ai(), tick.frame, ledger.join(", "));
             }
             eprintln!("[ai {}] f={} dropped build orders so far: {}, move failures: {}", self.ai(), tick.frame, self.dropped_orders, self.move_failures);
+            if self.late_ticks.0 > 0 {
+                let (count, most) = std::mem::take(&mut self.late_ticks);
+                eprintln!("[ai {}] f={} ticks late this minute: {count}, the latest by {most} frames", self.ai(), tick.frame);
+            }
             let rules: Vec<String> = self.fired.iter().map(|(rule, n)| format!("{rule}={n}")).collect();
             eprintln!("[ai {}] f={} rules: {}", self.ai(), tick.frame, rules.join(" "));
             self.fired.clear();

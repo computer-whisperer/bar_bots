@@ -118,6 +118,13 @@ opening search's half second, a commander's turn) costs game time that it does n
 half a second of search was twenty game seconds of a standing commander. Batches before this date ran the heuristic
 without it (orders landed a frame or two late, nothing more).
 
+**Tick rate (since 2026-09-20 evening).** The shim sends a tick every 3 frames (10 Hz) for the control lane; the whole
+brain still runs every 15. In lockstep that is five times the round trips, each paid in wall time (measured: see the
+tick-smoke and tick-cost rows of `docs/experiments.md`). `WITHIN_REASON_TICK_FRAMES=15` in the arena's environment
+(the engine inherits it) restores the old rate for a comparison; the value must divide 15. Outside lockstep a slow
+answer makes the next tick late rather than dropping it; the record's `late` field and the per-minute `ticks late`
+line say how often.
+
 ## Placing our commander (`--place`)
 With `--place` the arena chooses where our commander spawns inside its box (a 1v1 only): the opening search's best
 start (`crates/buildorder/src/start.rs`, ranked first by the user's rule of thumb, within reach of two extractor spots

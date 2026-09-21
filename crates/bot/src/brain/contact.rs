@@ -407,7 +407,7 @@ impl Brain {
                 response.ordered_to = response.at;
             }
         }
-        if tick.frame % (60 * FRAMES_PER_SECOND) == 0 && self.contacts.spent.0 > 0 {
+        if tick.due() % (60 * FRAMES_PER_SECOND) == 0 && self.contacts.spent.0 > 0 {
             let (questions, total, longest) = std::mem::take(&mut self.contacts.spent);
             eprintln!("[ai {}] f={} contact simulator this minute: {questions} questions, {total:.0} ms, longest {longest:.1} ms", self.ai(), tick.frame);
         }

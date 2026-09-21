@@ -38,6 +38,8 @@ pub struct Recorder {
     rules: BTreeMap<&'static str, u32>,
     damage: BTreeMap<UnitId, f32>,
     slowest_decide_ms: f32,
+    /// The most frames a tick of the interval arrived late by (`Tick::late`).
+    latest_tick: i32,
     intent: Option<Intent>,
 }
 
@@ -63,6 +65,7 @@ impl Recorder {
                 rules: BTreeMap::new(),
                 damage: BTreeMap::new(),
                 slowest_decide_ms: 0.0,
+                latest_tick: 0,
                 intent: None,
             }),
             Err(e) => {
@@ -109,6 +112,7 @@ impl Recorder {
         }
         self.commands(tick.frame, commands);
         self.slowest_decide_ms = self.slowest_decide_ms.max(decide_ms);
+        self.latest_tick = self.latest_tick.max(tick.late);
         if tick.frame >= self.next_sample {
             self.next_sample = tick.frame - tick.frame % SAMPLE_FRAMES + SAMPLE_FRAMES;
             self.sample(tick, role);
@@ -229,7 +233,7 @@ impl Recorder {
             let comma = if i == 0 { "" } else { "," };
             let _ = write!(self.buffer, "{comma}[{},{damage:.0}]", unit.0);
         }
-        let _ = writeln!(self.buffer, "],\"ms\":{:.2}}}", std::mem::take(&mut self.slowest_decide_ms));
+        let _ = writeln!(self.buffer, "],\"ms\":{:.2},\"late\":{}}}", std::mem::take(&mut self.slowest_decide_ms), std::mem::take(&mut self.latest_tick));
         if !self.rules.is_empty() {
             let rules = std::mem::take(&mut self.rules);
             self.line(&json!({ "t": "d", "f": tick.frame, "source": "heuristic", "kind": "rules", "inputs": null, "outputs": rules }));
@@ -292,7 +296,7 @@ fn header(hello: &Hello, mode: &str) -> Value {
     json!({
         "t": "header", "format": "within-reason-record", "version": FORMAT_VERSION,
         "ai_id": hello.ai_id, "team": hello.team, "ally_team": hello.ally_team, "start_frame": hello.frame,
-        "frames_per_second": 30, "sample_frames": SAMPLE_FRAMES, "mode": mode,
+        "frames_per_second": 30, "sample_frames": SAMPLE_FRAMES, "tick_frames": hello.tick_frames, "mode": mode,
         "wall_start": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
         "map": { "name": map.name, "width": map.width, "height": map.height, "wind_min": map.wind_min, "wind_max": map.wind_max, "extractor_radius": map.extractor_radius },
         "grid": { "columns": 8, "rows": 8 },

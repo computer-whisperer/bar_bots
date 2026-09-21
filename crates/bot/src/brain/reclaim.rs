@@ -95,7 +95,7 @@ impl Brain {
             fields.push(WreckField { at, metal, safe, wrecks: inside.iter().map(|w| w.id).collect() });
         }
         self.reclaim.fields = fields;
-        if tick.frame % (60 * FRAMES_PER_SECOND) < 3 * FRAMES_PER_SECOND {
+        if tick.due() % (60 * FRAMES_PER_SECOND) < 3 * FRAMES_PER_SECOND {
             let safe: f32 = self.reclaim.fields.iter().filter(|f| f.safe).map(|f| f.metal).sum();
             let all: f32 = self.reclaim.fields.iter().map(|f| f.metal).sum();
             eprintln!(

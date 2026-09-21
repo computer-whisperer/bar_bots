@@ -19,8 +19,11 @@ use recoil_ai_sys as sys;
 use engine::Engine;
 use link::Link;
 
-/// Frames between ticks sent to the bot (the sim runs 30 per second).
-const TICK_INTERVAL: i32 = 15;
+/// Frames between ticks sent to the bot (the sim runs 30 per second): 10 Hz, the control lane's rate
+/// (`docs/design/2026-09-20-micro-lane.md`). `WITHIN_REASON_TICK_FRAMES` overrides it with another divisor of the
+/// brain's own interval (15 frames).
+const TICK_FRAMES: i32 = 3;
+const BRAIN_FRAMES: i32 = 15;
 const RECONNECT_INTERVAL: i32 = 30;
 /// Frames between heartbeat lines in the engine log; the arena reads game time from them.
 const HEARTBEAT_INTERVAL: i32 = 30 * 30;
@@ -28,7 +31,7 @@ const HEARTBEAT_INTERVAL: i32 = 30 * 30;
 const CENSUS_INTERVAL: i32 = 60 * 30;
 /// Frames between ground-truth samples of the opponent's units (`WITHIN_REASON_OBSERVE` with `WITHIN_REASON_TRUTH_DIR`).
 const TRUTH_INTERVAL: i32 = 2 * 30;
-/// Frames between looks at the map's features (wrecks); a multiple of the tick interval.
+/// Frames between looks at the map's features (wrecks); a multiple of the brain's interval.
 const WRECKS_INTERVAL: i32 = 3 * 30;
 
 struct Instance {
@@ -37,6 +40,10 @@ struct Instance {
     link: Option<Link>,
     /// The bot has answered the previous message, so it may be sent another.
     has_credit: bool,
+    tick_frames: i32,
+    /// The frame a tick fell due at and has not been sent, for want of credit: sent as soon as the answer comes,
+    /// marked late by the frames it waited.
+    tick_due: Option<i32>,
     lockstep: bool,
     /// Where the opponent's true state is written for post-game analysis; the bot never sees it.
     truth: Option<std::io::BufWriter<std::fs::File>>,
@@ -94,12 +101,15 @@ impl Instance {
             Ok(None) => {}
             Err(e) => return self.disconnect(e),
         }
-        if self.has_credit && frame % TICK_INTERVAL == 0 {
+        if frame % self.tick_frames == 0 && self.tick_due.is_none() {
+            self.tick_due = Some(frame);
+        }
+        if self.has_credit && let Some(due) = self.tick_due.take() {
             let mut snapshot = self.engine.snapshot();
-            if frame % WRECKS_INTERVAL == 0 {
+            if due % WRECKS_INTERVAL == 0 {
                 snapshot.wrecks = Some(self.engine.wrecks());
             }
-            let tick = Tick { frame, events: std::mem::take(&mut self.events), snapshot };
+            let tick = Tick { frame, late: frame - due, events: std::mem::take(&mut self.events), snapshot };
             self.send(ToBot::Tick(tick));
             // Lockstep (`WITHIN_REASON_LOCKSTEP`, headless study runs only): the engine waits here for the answer,
             // so a bot that holds its reply while a language model thinks has in effect paused the game.
@@ -120,7 +130,7 @@ impl Instance {
         let Ok(link) = Link::connect() else { return };
         self.link = Some(link);
         self.log(format_args!("connected to bot at frame {frame}"));
-        let hello = self.engine.hello(frame);
+        let hello = self.engine.hello(frame, self.tick_frames);
         self.send(ToBot::Hello(hello));
     }
 
@@ -136,6 +146,7 @@ impl Instance {
         self.log(format_args!("lost bot connection: {error}"));
         self.link = None;
         self.has_credit = false;
+        self.tick_due = None;
     }
 
     fn apply(&mut self, commands: Commands) {
@@ -229,6 +240,19 @@ impl Instance {
     }
 }
 
+/// `WITHIN_REASON_TICK_FRAMES` when it divides the brain's interval, else the default.
+fn tick_frames() -> i32 {
+    let wanted = std::env::var("WITHIN_REASON_TICK_FRAMES").ok().and_then(|v| v.parse::<i32>().ok());
+    match wanted {
+        Some(n) if n >= 1 && BRAIN_FRAMES % n == 0 => n,
+        Some(n) => {
+            eprintln!("[wreason] WITHIN_REASON_TICK_FRAMES={n} does not divide {BRAIN_FRAMES}; using {TICK_FRAMES}");
+            TICK_FRAMES
+        }
+        None => TICK_FRAMES,
+    }
+}
+
 /// Runs `body` so that a panic cannot unwind into the engine.
 fn guarded(ai_id: c_int, body: impl FnOnce() -> c_int) -> c_int {
     catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|_| {
@@ -247,6 +271,8 @@ pub unsafe extern "C" fn init(skirmish_ai_id: c_int, callback: *const sys::SSkir
             engine: unsafe { Engine::new(skirmish_ai_id, callback) },
             link: None,
             has_credit: false,
+            tick_frames: tick_frames(),
+            tick_due: None,
             lockstep: std::env::var_os("WITHIN_REASON_LOCKSTEP").is_some(),
             truth: std::env::var_os("WITHIN_REASON_OBSERVE")
                 .and(std::env::var_os("WITHIN_REASON_TRUTH_DIR"))

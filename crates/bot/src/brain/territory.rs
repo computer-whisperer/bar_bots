@@ -175,7 +175,7 @@ impl Brain {
             return;
         }
         self.territory.updated = tick.frame;
-        if tick.frame % (60 * FRAMES_PER_SECOND) < UPDATE_FRAMES && self.territory.width > 0 {
+        if tick.due() % (60 * FRAMES_PER_SECOND) < UPDATE_FRAMES && self.territory.width > 0 {
             let spots = &self.world.hello.metal_spots;
             let count = |ground: Ground| spots.iter().filter(|s| self.ground(**s) == ground).count();
             eprintln!(

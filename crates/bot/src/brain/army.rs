@@ -503,7 +503,7 @@ impl Brain {
         let odds = self.odds(&ours, &defenders);
         let outweighs = !self.enabled("H-ARMY-WAVE-GATE") || odds >= WAVE_ADVANTAGE;
         let ordered_attack = stance == Some(Stance::Attack) || kill.is_some();
-        if may_launch && wave.len() >= wave_size && !ordered_attack && (!quiet || !outweighs) && tick.frame % (30 * FRAMES_PER_SECOND) == 0 {
+        if may_launch && wave.len() >= wave_size && !ordered_attack && (!quiet || !outweighs) && tick.due() % (30 * FRAMES_PER_SECOND) == 0 {
             eprintln!(
                 "[ai {}] f={} wave held: {} soldiers at odds {odds:.2} against what is known at ({:.0}, {:.0}){}",
                 self.ai(), tick.frame, wave.len(), target.x, target.z, if quiet { "" } else { "; losses at home in the last 30 s" }
@@ -568,7 +568,7 @@ impl Brain {
             commands.extend(stragglers.map(|u| Command::Move { unit: u.id, to: rally, queue: false }));
         }
 
-        if tick.frame % (60 * FRAMES_PER_SECOND) == 0 && !attackers.is_empty() {
+        if tick.due() % (60 * FRAMES_PER_SECOND) == 0 && !attackers.is_empty() {
             let n = attackers.len() as f32;
             let (cx, cz) = attackers.iter().fold((0.0, 0.0), |(x, z), u| (x + u.pos.x / n, z + u.pos.z / n));
             let idle = attackers.iter().filter(|u| u.idle).count();
@@ -581,7 +581,7 @@ impl Brain {
         // H-ARMY-RETREAT: attackers facing a fight they are predicted to lose break off before they are spent. Judged
         // from the leading group: the attackers within contact range of the nearest enemy in sight, against every
         // enemy soldier and remembered turret within the same range of it.
-        if self.enabled("H-ARMY-RETREAT") && !attackers.is_empty() && tick.frame % RETREAT_CHECK_FRAMES == 0 && stance != Some(Stance::Attack) {
+        if self.enabled("H-ARMY-RETREAT") && !attackers.is_empty() && tick.due() % RETREAT_CHECK_FRAMES == 0 && stance != Some(Stance::Attack) {
             let contact = snapshot
                 .enemies
                 .iter()

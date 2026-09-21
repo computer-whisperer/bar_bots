@@ -32,9 +32,17 @@ The bot process never calls into the engine; everything it knows arrives in `Hel
    connection. `teams` is every seat with its ally team and faction; `start_boxes` come from the setup script (the interface
    has no call for them); `game_id` is a hash of that script, by which the bot process finds the sessions that play together.
 2. bot → shim `Commands(vec)` — also serves as "ready for next tick" credit.
-3. shim → bot `Tick { frame, events, snapshot }` — only when it holds credit and `frame % tick_interval == 0`. Events that occur
-   while waiting are buffered, not dropped. Snapshot = economy, own units, allied units (seen, never commanded), visible enemies with their team.
+3. shim → bot `Tick { frame, late, events, snapshot }` — due every `tick_frames` frames (3, 10 Hz, since 2026-09-20; `Hello`
+   carries the setting, `WITHIN_REASON_TICK_FRAMES` overrides it with another divisor of 15) and sent at the first UPDATE at
+   which the shim holds credit, `late` being the frames it waited. Events that occur while waiting are buffered, not
+   dropped. Snapshot = economy, own units (with velocity and the frame each can next fire), allied units (seen, never
+   commanded), visible enemies with their team and velocity.
 4. Shim reads the socket non-blocking at each UPDATE and applies any `Commands` on the engine thread.
+
+The bot runs two passes on every tick (`brain/mod.rs` `decide`): the control lane (`brain/micro.rs`) every tick, and the
+whole brain (`think`) on the ticks due at multiples of `BRAIN_FRAMES` (15, 2 Hz), fed every event since it last ran. The
+brain's schedule keys on the due frame (`Tick::due`), so a late tick is not a missed one.
+Design: `docs/design/2026-09-20-micro-lane.md`.
 
 If the bot is absent or dies, the shim keeps the game running and retries the connection about once a second, re-sending `Hello`.
 Socket path: `$WITHIN_REASON_SOCKET`, else `$XDG_RUNTIME_DIR/within-reason.sock`.
