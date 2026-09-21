@@ -34,6 +34,9 @@ pub(super) const SWITCH_MARGIN: f64 = 0.15;
 /// Events the picture shows, and for how long.
 const RECENT_EVENTS: usize = 12;
 const RECENT_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
+/// H-HANDS-REFUSED: a spot where the engine refused an extractor is left off every menu for this long (smoke-4: the
+/// commander asked for the same refused spot thirty times running beside the enemy base, and died there).
+const REFUSED_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 /// The player is woken when Jev says the game needs it for this many calls running, at most this often.
 const NEEDS_PLAYER_PROBABILITY: f64 = 0.8;
 const NEEDS_PLAYER_CALLS: u32 = 3;
@@ -83,6 +86,8 @@ pub struct Pianist {
     pub(super) lab_queue: HashMap<UnitId, Vec<(UnitDefId, i32)>>,
     pub(super) groups: Vec<Group>,
     next_group: usize,
+    /// Spots where the engine refused an extractor, and until when they are left off the menus (H-HANDS-REFUSED).
+    pub(super) refused_spots: HashMap<usize, i32>,
     /// What the last picture named, so an answer's place or party can be looked up.
     pub(super) places: Vec<Place>,
     pub(super) parties: Vec<Party>,
@@ -115,6 +120,7 @@ impl Pianist {
             lab_queue: HashMap::new(),
             groups: Vec::new(),
             next_group: 0,
+            refused_spots: HashMap::new(),
             places: Vec::new(),
             parties: Vec::new(),
             recent: VecDeque::new(),
@@ -293,8 +299,12 @@ impl Brain {
                 self.centre_only.insert(i);
             }
             let name = self.name(def).to_string();
+            let refused_spot = (def == kit.extractor).then(|| self.world.hello.metal_spots.iter().position(|s| s.dist2d(near) < super::economy::MEX_PATCH + 1.0)).flatten();
             let pianist = self.pianist.as_mut().expect("pianist mode");
             pianist.tasks.remove(&unit);
+            if let Some(i) = refused_spot {
+                pianist.refused_spots.insert(i, frame + REFUSED_FRAMES);
+            }
             pianist.note(frame, format!("the engine refused a {name} at {}: the site was bad", self.world.grid(near)));
             eprintln!("[ai {}] f={frame} pianist: {name} order for unit {} near ({:.0}, {:.0}) never started", self.world.hello.ai_id, unit.0, near.x, near.z);
         }

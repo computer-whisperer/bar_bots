@@ -545,8 +545,11 @@ impl Brain {
             if builder {
                 entry["health"] = json!(format!("{} ({:.0}%)", health_words(unit.health / unit.max_health), unit.health / unit.max_health * 100.0));
                 entry["doing"] = json!(self.task_words(pianist.tasks.get(&unit.id), unit, &places, frame, kit));
-                if let Some(words) = self.party_words(&parties, unit.pos) {
-                    entry["enemies_near"] = json!(words);
+                let from_home = unit.pos.dist2d(self.home);
+                entry["from_home"] = json!(format!("{} ({from_home:.0}); ground {}", distance_words(from_home), match self.ground(unit.pos) { Ground::Held => "held by us", Ground::Contested => "contested", Ground::Theirs => "theirs" }));
+                if let Some(party) = parties.iter().filter(|p| p.at.dist2d(unit.pos) < NEAR).min_by(|a, b| a.at.dist2d(unit.pos).total_cmp(&b.at.dist2d(unit.pos))) {
+                    let alone: Vec<&OwnUnit> = vec![unit];
+                    entry["enemies_near"] = json!(format!("{} ({}) {:.0} away: against this unit alone, {}", party.name, party.composition, party.at.dist2d(unit.pos), self.odds_words(&alone, party, &snapshot.enemies)));
                 }
                 if let Some(by) = damaged_by.get(&unit.id) {
                     entry["under_fire"] = json!(format!("yes, hit this second by {}", by.join(", ")));
@@ -563,6 +566,18 @@ impl Brain {
             }
             actors.insert(name, entry);
         }
+        let scouts: Vec<String> = pianist
+            .groups
+            .iter()
+            .filter(|g| g.members.len() == 1)
+            .filter_map(|g| match &g.task {
+                GroupTask::Move { place, to, fight: false, .. } => {
+                    let unit = g.units(own).first().copied()?;
+                    Some(format!("group_{} ({}) walking to look at {place}, {:.0} to go", g.name, self.name(unit.def), unit.pos.dist2d(*to)))
+                }
+                _ => None,
+            })
+            .collect();
         for group in &pianist.groups {
             let units = group.units(own);
             let Some(centre) = super::groups::centre_of(&units) else { continue };
@@ -578,7 +593,7 @@ impl Brain {
                 }
             };
             let mut entry = json!({
-                "units": format!("{} ({} soldiers worth {metal:.0} metal)", self.composition_words(&units), units.len()),
+                "units": format!("{}: {} ({} soldiers worth {metal:.0} metal)", soldier_words(units.len(), metal), self.composition_words(&units), units.len()),
                 "at": self.place_words(&places, centre),
                 "health": format!("{} on average", health_words(health)),
                 "doing": doing,
@@ -589,6 +604,9 @@ impl Brain {
             let threats = self.threats_words(&parties, &places, own, kit, centre);
             if !threats.is_empty() {
                 entry["enemies_at_our_extractors"] = json!(threats);
+            }
+            if !scouts.is_empty() && group.members.len() > 1 {
+                entry["scouts_out"] = json!(scouts);
             }
             if units.iter().any(|u| damaged_by.contains_key(&u.id)) {
                 entry["under_fire"] = json!("yes, this second");

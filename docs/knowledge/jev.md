@@ -37,3 +37,14 @@ choice can flip. Between calls minutes apart the wobble is a few hundredths.
 both days; scenarios 02 and 03 moved by 0.02-0.03.
 **Would be wrong if.** A re-run reproduced the first day's numbers.
 **Used by.** H-HANDS-SWITCH.
+
+### K-jev-where-needs-its-premise
+**Claim.** A parallel parameter question ("where, if the action needs a place; otherwise answer home") is answered with
+the fallback nearly every time, since it cannot see which action the other question chose; a speculative question works
+only with its premise stated ("suppose the group sends a scout: where should it look?"), one per kind of action.
+**Status.** conjectured (2026-09-21; the per-action form is smoke-6's test)
+**Evidence.** pianist-smoke-5: `where` answered `home` on all but a handful of 1,300 asks; scouts sent home, advances to
+home, forty one-unit groups. TypeSafe's own fan-out pattern says to state each speculative premise explicitly.
+**Would be wrong if.** The per-premise questions still answered the same fallback whatever the chosen action.
+**Used by.** H-HANDS-MENU.
+

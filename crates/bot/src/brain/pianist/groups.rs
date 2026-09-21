@@ -9,8 +9,10 @@ use bot_protocol::{Command, OwnUnit, Tick, UnitId, Vec3};
 use super::super::roster::Kit;
 use super::super::{Brain, FRAMES_PER_SECOND};
 
-/// H-HANDS-GROUPS: a new soldier joins a group whose centre is this close, else forms a new one.
+/// H-HANDS-GROUPS: a new soldier joins the largest group whose centre is this close, else forms a new one; two holding
+/// groups whose centres are this close merge, the smaller into the larger (smoke-5: forty one-unit groups round home).
 const ADOPT_RADIUS: f32 = 400.0;
+const MERGE_RADIUS: f32 = 300.0;
 /// A moving group has arrived when its centre is this close to its destination.
 const ARRIVED: f32 = 300.0;
 /// An engaged group is sent on when its party has moved this far, and no more often than this.
@@ -81,13 +83,32 @@ impl Brain {
                 .iter_mut()
                 .filter_map(|g| centre_of(&g.units(own)).map(|c| (c.dist2d(unit.pos), g)))
                 .filter(|(d, _)| *d < ADOPT_RADIUS)
-                .min_by(|a, b| a.0.total_cmp(&b.0));
+                .max_by(|a, b| a.1.members.len().cmp(&b.1.members.len()).then(b.0.total_cmp(&a.0)));
             match nearest {
                 Some((_, group)) => group.members.push(unit.id),
                 None => {
                     let name = pianist.new_group_name();
                     pianist.groups.push(Group { name, members: vec![unit.id], task: GroupTask::Hold { since: frame }, held: HashSet::new(), last_order: frame, enemies_near: false });
                 }
+            }
+        }
+        // Holding groups standing together are one group.
+        let mut merged = true;
+        while merged {
+            merged = false;
+            let centres: Vec<Option<Vec3>> = pianist.groups.iter().map(|g| centre_of(&g.units(own))).collect();
+            let pair = (0..pianist.groups.len()).flat_map(|a| (0..pianist.groups.len()).map(move |b| (a, b))).find(|(a, b)| {
+                a != b
+                    && !pianist.groups[*a].task.busy()
+                    && !pianist.groups[*b].task.busy()
+                    && pianist.groups[*a].members.len() <= pianist.groups[*b].members.len()
+                    && matches!((centres[*a], centres[*b]), (Some(x), Some(y)) if x.dist2d(y) < MERGE_RADIUS)
+            });
+            if let Some((small, large)) = pair {
+                let members = std::mem::take(&mut pianist.groups[small].members);
+                pianist.groups[large].members.extend(members);
+                pianist.groups.remove(small);
+                merged = true;
             }
         }
         // Standing orders.

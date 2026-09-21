@@ -50,6 +50,8 @@ pub(crate) enum Pick {
     MoveTo { fight: bool },
     Engage,
     Split,
+    /// One soldier, a raider if there is one, walks to `where` and stands there.
+    Scout,
     Join(String),
     Retreat,
 }
@@ -85,15 +87,19 @@ impl Brain {
             .iter()
             .map(|p| (p.name.clone(), format!("{} ({})", picture.state["places"][&p.name]["what"].as_str().unwrap_or_default(), self.world.grid(p.at))))
             .collect();
-        let where_question = |what: &str, spots: &[(usize, f32)]| {
+        // One place question per kind of action, each with its premise stated: a single "where, if the action needs a
+        // place, else home" was answered "home" nearly every time, since it cannot see which action was chosen
+        // (pianist-smoke-5: scouts sent home, advances to home, forty one-unit groups).
+        let where_question = |premise: &str, spots: &[(usize, f32)], only_spots: bool| {
             let criteria: BTreeMap<String, Value> = place_names
                 .iter()
+                .filter(|(n, _)| !only_spots || spots.iter().any(|(i, _)| format!("spot_{i}") == *n))
                 .map(|(n, d)| {
                     let walk = spots.iter().find(|(i, _)| format!("spot_{i}") == *n).map_or(String::new(), |(_, s)| format!("; {s:.0} s of walking for this builder"));
                     (n.clone(), json!(format!("{d}{walk}")))
                 })
                 .collect();
-            Question::Choice { instructions: json!(format!("{what} Answer for the case that the chosen action needs a place; otherwise answer home.")), criteria }
+            Question::Choice { instructions: json!(premise.to_string()), criteria }
         };
         let e = &tick.snapshot.energy;
         let m = &tick.snapshot.metal;
@@ -133,7 +139,7 @@ impl Brain {
                     .places
                     .iter()
                     .filter_map(|p| p.spot.map(|i| (i, p.at)))
-                    .filter(|(i, _)| !taken.contains(i))
+                    .filter(|(i, _)| !taken.contains(i) && !pianist.refused_spots.get(i).is_some_and(|until| *until > frame))
                     .filter(|(_, at)| !own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(*at) < 100.0))
                     .filter(|(i, _)| picture.state["places"][format!("spot_{i}")]["what"].as_str().is_some_and(|w| w.starts_with("free")))
                     .map(|(i, _)| (i, self.seconds_to_spot(unit.def, i, unit.pos)))
@@ -143,7 +149,17 @@ impl Brain {
                 if !spots.is_empty() {
                     // One option, the spot in `where`: six spot options split the vote and lost to any single
                     // alternative (pianist-smoke-2: constructors helped the lab on four extractors).
-                    let list: Vec<String> = spots.iter().map(|(i, s)| format!("spot_{i} ({:.0} s of walking{})", s, picture.state["places"][format!("spot_{i}")]["enemies_near"].as_str().map_or(String::new(), |e| format!(", enemies near: {e}")))).collect();
+                    let list: Vec<String> = spots
+                        .iter()
+                        .map(|(i, s)| {
+                            let place = &picture.state["places"][format!("spot_{i}")];
+                            format!(
+                                "spot_{i} ({:.0} s of walking, ground {}{})",
+                                s, place["ground"].as_str().unwrap_or_default(),
+                                place["enemies_near"].as_str().map_or(String::new(), |e| format!(", enemies near: {e}"))
+                            )
+                        })
+                        .collect();
                     offer("extractor", Pick::Extractor, format!("Build a metal extractor (income) at the free spot answered in `where`; the nearest free spots for it: {}.", list.join(", ")));
                 }
             }
@@ -194,13 +210,17 @@ impl Brain {
             let instructions = json!(format!(
                 "Given `actors.{name}` and the player's `instructions`, what should {name} do next? Prefer what the instructions say; keep to the plan unless the situation has changed. Energy now: {energy_words}. Metal now: {metal_words}."
             ));
+            let mut questions = vec![
+                (format!("{name}.do"), Question::Choice { instructions, criteria }),
+                (format!("{name}.where"), where_question(&format!("Suppose {name} builds a turret or a radar, or walks somewhere: at which place? Choose the place the instructions and the situation call for."), &spots, false)),
+            ];
+            if !spots.is_empty() {
+                questions.push((format!("{name}.where_extractor"), where_question(&format!("Suppose {name} builds a metal extractor next: at which of these free spots? Nearer is sooner; ground held by us is safer; enemies near a spot get the builder killed."), &spots, true)));
+            }
             pianist.last_asked.insert(name.clone(), frame);
             menus.push(Menu {
                 actor: Actor::Builder(unit.id),
-                questions: vec![
-                    (format!("{name}.do"), Question::Choice { instructions, criteria }),
-                    (format!("{name}.where"), where_question(&format!("Where should {name} go or build, if its action needs a place? For an extractor, which free spot?"), &spots)),
-                ],
+                questions,
                 name,
                 busy,
                 options,
@@ -249,6 +269,7 @@ impl Brain {
 
         // Groups.
         let group_names: Vec<(String, Option<Vec3>)> = pianist.groups.iter().map(|g| (g.name.clone(), super::groups::centre_of(&g.units(own)))).collect();
+        let scout_out = pianist.groups.iter().any(|g| g.members.len() == 1 && matches!(g.task, super::GroupTask::Move { fight: false, .. }));
         for group in &mut pianist.groups {
             let name = format!("group_{}", group.name);
             let units = group.units(own);
@@ -280,7 +301,7 @@ impl Brain {
                 let turrets = self.enemy_buildings.values().filter(|(def, pos, _)| pos.dist2d(base) < 1500.0 && self.world.def(*def).is_some_and(|d| d.weapon_count > 0)).count();
                 format!(
                     "the enemy base as we know it ({turrets} turrets known, its soldiers seen there lately): {}",
-                    if self.found_enemy_base().is_none() { "not found yet; what stands there is unknown" } else if ratio >= 2.5 { "we outweigh it heavily" } else if ratio >= 1.3 { "we outweigh it" } else if ratio >= 0.8 { "an even fight" } else { "it outweighs us" }
+                    if self.found_enemy_base().is_none() { "not found yet, what stands there is unknown: scout it first (`scout`)" } else if ratio >= 2.5 { "we outweigh it heavily" } else if ratio >= 1.3 { "we outweigh it" } else if ratio >= 0.8 { "an even fight" } else { "it outweighs us" }
                 )
             };
             offer("hold", Pick::Hold, "Stand where it is; fight whatever comes within reach. Nothing beyond reach is protected by this.".into());
@@ -292,6 +313,10 @@ impl Brain {
             offer("retreat", Pick::Retreat, "Fall back to our base.".into());
             if units.len() >= 2 {
                 offer("split", Pick::Split, "Send a detachment, the number in `how_many` of the nearest soldiers, to advance to the place in `where`; the rest carry on as they were.".into());
+                // One scout out at a time (smoke-6: a raider every ten seconds to the enemy base, five dead by 5:00).
+                if !scout_out {
+                    offer("scout", Pick::Scout, "Send one soldier (a raider if the group has one) to look at the place in `where_scout` and stand there watching; the rest carry on. This is how the enemy base and its army get seen.".into());
+                }
             }
             if let Some((other, _)) = group_names.iter().filter(|(n, c)| *n != group.name && c.is_some()).min_by(|a, b| a.1.unwrap().dist2d(centre).total_cmp(&b.1.unwrap().dist2d(centre))) {
                 offer(&format!("join_group_{other}"), Pick::Join(other.clone()), format!("Merge into group_{other} and take its task."));
@@ -299,7 +324,8 @@ impl Brain {
             let instructions = json!(format!("Given `actors.{name}`, `enemy` and the player's `instructions`, what should {name} do next?"));
             let mut questions = vec![
                 (format!("{name}.do"), Question::Choice { instructions, criteria }),
-                (format!("{name}.where"), where_question(&format!("Where should {name} go, if its action needs a place?"), &[])),
+                (format!("{name}.where"), where_question(&format!("Suppose {name} advances, moves or sends a detachment: to which place? Choose where the instructions and the situation call for it to stand or fight."), &[], false)),
+                (format!("{name}.where_scout"), where_question(&format!("Suppose {name} sends one soldier to look at a place: which place needs looking at? The enemy base if it is not found or not seen lately, else the spots we know least about."), &[], false)),
                 (format!("{name}.how_many"), Question::choice(format!("If {name} sends a detachment, how many soldiers go?"), [("2", "two"), ("4", "four"), ("8", "eight"), ("half", "half of the group")])),
             ];
             if !picture.parties.is_empty() {

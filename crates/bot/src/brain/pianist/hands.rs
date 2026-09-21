@@ -42,7 +42,10 @@ impl Brain {
             chosen = "continue".into();
             kept = true;
         }
-        let where_ = answers.get(&format!("{name}.where")).and_then(|a| if let Answer::Choice { choice, .. } = a { Some(choice.clone()) } else { None });
+        let answered = |q: &str| answers.get(&format!("{name}.{q}")).and_then(|a| if let Answer::Choice { choice, .. } = a { Some(choice.clone()) } else { None });
+        let where_ = answered("where");
+        let where_extractor = answered("where_extractor");
+        let where_scout = answered("where_scout");
         let whom = answers.get(&format!("{name}.whom")).and_then(|a| if let Answer::Choice { choice, .. } = a { Some(choice.clone()) } else { None });
         let how_many = answers.get(&format!("{name}.how_many")).and_then(|a| if let Answer::Choice { choice, .. } = a { Some(choice.clone()) } else { None });
         let place = |named: &Option<String>| named.as_ref().and_then(|n| picture.places.iter().find(|p| p.name == *n)).cloned();
@@ -62,7 +65,7 @@ impl Brain {
                     Pick::Continue | Pick::Wait => {}
                     Pick::Extractor => {
                         // The spot answered in `where` when it is one of the free ones offered, else the nearest.
-                        let asked = place(&where_).and_then(|p| p.spot).filter(|i| menu.spots.contains(i));
+                        let asked = place(&where_extractor).and_then(|p| p.spot).filter(|i| menu.spots.contains(i));
                         if let Some(i) = asked.or_else(|| menu.spots.first().copied()) {
                             did = build(Plan::Extractor(self.world.hello.metal_spots[i]), Some(i));
                         }
@@ -128,7 +131,7 @@ impl Brain {
                 }
             }
             Actor::Group(ref group_name) => {
-                did = self.play_group(tick, kit, picture, group_name, pick, &where_, &whom, &how_many, commands);
+                did = self.play_group(tick, kit, picture, group_name, pick, &where_, &where_scout, &whom, &how_many, commands);
             }
             Actor::Global => {}
         }
@@ -148,12 +151,12 @@ impl Brain {
             Actor::Global => "global",
         };
         let inputs = json!({ "actor": name, "options": menu.options.keys().collect::<Vec<_>>(), "busy": menu.busy });
-        let outputs = json!({ "choice": choice, "played": chosen, "probability": p(choice), "confidence": confidence, "where": where_, "whom": whom, "how_many": how_many, "did": did });
+        let outputs = json!({ "choice": choice, "played": chosen, "probability": p(choice), "confidence": confidence, "where": where_, "where_extractor": where_extractor, "where_scout": where_scout, "whom": whom, "how_many": how_many, "did": did });
         self.journal.note_from("jev", frame, kind, inputs, outputs);
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn play_group(&mut self, tick: &Tick, kit: &Kit, picture: &Picture, group_name: &str, pick: Pick, where_: &Option<String>, whom: &Option<String>, how_many: &Option<String>, commands: &mut Vec<Command>) -> Option<String> {
+    fn play_group(&mut self, tick: &Tick, kit: &Kit, picture: &Picture, group_name: &str, pick: Pick, where_: &Option<String>, where_scout: &Option<String>, whom: &Option<String>, how_many: &Option<String>, commands: &mut Vec<Command>) -> Option<String> {
         let frame = tick.frame;
         let own = &tick.snapshot.own_units;
         let home = self.home;
@@ -225,6 +228,20 @@ impl Brain {
                     pianist.groups.push(Group { name, members: detached, task: GroupTask::Move { to, place: p.name.clone(), fight: true, since: frame }, held: HashSet::new(), last_order: frame, enemies_near: false });
                 }
             }
+            Pick::Scout => {
+                // A scout to where the group stands looks at nothing.
+                if let Some(p) = place(where_scout).filter(|p| centre.is_none_or(|c| c.dist2d(p.at) > 600.0)) {
+                    let to = self.snap_to_reachable(p.at);
+                    let scout = units.iter().copied().filter(|u| u.def == kit.raider).min_by(|a, b| a.pos.dist2d(to).total_cmp(&b.pos.dist2d(to))).or_else(|| nearest_of(&units, to, 1).first().copied());
+                    if let Some(scout) = scout {
+                        pianist.groups[index].members.retain(|id| *id != scout.id);
+                        commands.push(Command::Move { unit: scout.id, to, queue: false });
+                        let name = pianist.new_group_name();
+                        did = Some(format!("send a {} as group_{name} to look at {}", self.name(scout.def), p.name));
+                        pianist.groups.push(Group { name, members: vec![scout.id], task: GroupTask::Move { to, place: p.name.clone(), fight: false, since: frame }, held: HashSet::new(), last_order: frame, enemies_near: false });
+                    }
+                }
+            }
             Pick::Join(other) => {
                 if let Some(target) = pianist.groups.iter().position(|g| g.name == other) {
                     let members = std::mem::take(&mut pianist.groups[index].members);
@@ -237,7 +254,7 @@ impl Brain {
             }
             _ => {}
         }
-        let _ = (kit, FRAMES_PER_SECOND);
+        let _ = FRAMES_PER_SECOND;
         self.pianist = Some(pianist);
         did
     }
