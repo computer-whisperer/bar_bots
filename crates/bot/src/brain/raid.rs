@@ -151,6 +151,14 @@ impl Brain {
         self.enemy_commander_seen.is_some_and(|(pos, _)| pos.dist2d(at) < COMMANDER_REACH + 300.0)
     }
 
+    /// Whether the straight walk from `from` to `to` keeps clear of every known turret's reach and the commander's
+    /// ground: an alternative or a ring point on the far side of the base is reached through the base (tick-smoke:
+    /// a party sent to the ring point behind the base walked under a tower nobody had seen yet and lost four Pawns).
+    fn approach_is_clear(&self, from: Vec3, to: Vec3) -> bool {
+        let commander_clear = self.enemy_commander_seen.is_none_or(|(pos, _)| super::contact::to_segment(pos, from, to) >= COMMANDER_REACH + 300.0);
+        commander_clear && self.turrets_bearing(from, to, 0.0).is_empty()
+    }
+
     /// Whether `t` is one of the spots nobody has looked at lately (`unscouted_box_spots`).
     fn is_unscouted(&self, t: Vec3, frame: i32) -> bool {
         self.spots_to_look_at(t, frame, 0.0, 1.0).iter().any(|s| s.dist2d(t) < 1.0)
@@ -204,6 +212,7 @@ impl Brain {
             // Not where the party already stands: a candidate within arrival distance of the centre counted as
             // reached the next tick and was dropped for the next (raid-debug: every alternative "arrived" at once).
             .filter(|t| t.dist2d(target) > TARGET_RADIUS && t.dist2d(centre) > TARGET_RADIUS && !armed.iter().any(|a| a.dist2d(*t) < TARGET_RADIUS) && !self.commander_ground(*t) && self.reachable_on_foot(*t))
+            .filter(|t| self.approach_is_clear(centre, *t))
             .collect();
         candidates.sort_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)));
         // Priced as the party's target will be, over the same radius (rush-16: a target priced won at 600 and lost at
@@ -225,6 +234,8 @@ impl Brain {
             })
             .filter(|p| self.reachable_on_foot(*p) && !self.commander_ground(*p) && !armed.iter().any(|a| a.dist2d(*p) < TURRET_BERTH))
             .filter(|p| !self.raid.probed.iter().any(|(q, _)| q.dist2d(*p) < 1.0) && p.dist2d(centre) > TARGET_RADIUS)
+            // Walked round from this side: a point behind the base is reached through it.
+            .filter(|p| self.approach_is_clear(centre, *p))
             .min_by(|a, b| a.dist2d(centre).total_cmp(&b.dist2d(centre)))
     }
 
@@ -384,18 +395,25 @@ impl Brain {
                 // Outmatched here: an extractor of theirs elsewhere, or wait out of reach of the nearest threat for
                 // the Pawns still coming. Home is for a party with nobody left.
                 if let Some(next) = self.harass_elsewhere(&body, target, centre, tick) {
-                    if self.raid.target.is_none_or(|t| t.dist2d(next) > 1.0) {
+                    // The same alternative again (a ring point is not priced, so the party stays outmatched while
+                    // walking to it) keeps its hold and its orders; a new one is ordered at once, with Fight so that
+                    // the party shoots back on the way (tick-smoke: Moves re-issued every tick for 22 s, under fire).
+                    let same = self.raid.target.is_some_and(|t| t.dist2d(next) <= 1.0);
+                    if !same {
                         eprintln!("[ai {}] f={} pressure: party of {} outmatched at ({:.0}, {:.0}), goes for ({:.0}, {:.0}) instead", self.ai(), tick.frame, body.len(), target.x, target.z, next.x, next.z);
+                        self.raid.mode = Mode::Elsewhere;
+                        self.raid.target = Some(next);
+                        self.raid.hold_until = tick.frame + ALTERNATIVE_FRAMES;
+                        self.raid.last_order_frame = 0;
+                        self.raid.waiting = false;
+                        self.raid.outmatched = false;
+                        self.raid.priced_at = 0;
+                        self.raid.held.clear();
                     }
-                    self.raid.mode = Mode::Elsewhere;
-                    self.raid.target = Some(next);
-                    self.raid.hold_until = tick.frame + ALTERNATIVE_FRAMES;
-                    self.raid.last_order_frame = tick.frame;
-                    self.raid.waiting = false;
-                    self.raid.outmatched = false;
-                    self.raid.priced_at = 0;
-                    self.raid.held.clear();
-                    commands.extend(party.iter().map(|u| Command::Move { unit: u.id, to: next, queue: false }));
+                    if tick.frame - self.raid.last_order_frame >= REPRICE_FRAMES {
+                        self.raid.last_order_frame = tick.frame;
+                        commands.extend(party.iter().map(|u| Command::Fight { unit: u.id, to: next, queue: false }));
+                    }
                 } else {
                     let threats = armed_in_sight_at.iter().copied()
                         .chain(self.enemy_buildings.values().filter(|(def, pos, _)| pos.dist2d(target) < CONTACT_RADIUS && self.world.def(*def).is_some_and(|d| d.weapon_count > 0)).map(|(_, pos, _)| *pos));

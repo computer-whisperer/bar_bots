@@ -137,3 +137,9 @@ Each step is a commit.
 
 ## Status
 - 2026-09-20: written; nothing built.
+- 2026-09-20, part 1 built (f54e3d7): ticks every 3 frames, `WITHIN_REASON_TICK_FRAMES` override, late ticks instead
+  of dropped ones (`Tick::late`, `Tick::due`; the record's `late`, a per-minute log line), velocities and the reload
+  frame in the snapshot, `think` at multiples of 15 with carried events and an empty `micro`. Smoke and timing runs
+  (tick-smoke, tick-cost-3/15 in the ledger): nothing the brain does changed, lockstep cost nil (20.1 against 20.3
+  game minutes a wall second). Narrowing for part 2: constructors stay out of the lane in its first version (giving a
+  Build order back after a flee would cross the economy's order tracking); soldiers only.
