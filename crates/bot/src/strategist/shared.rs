@@ -403,11 +403,13 @@ pub struct Wake {
     pub extractor_lost: bool,
     /// Unit name to count: woken when that many of the type stand unassigned.
     pub pool_reaches: BTreeMap<String, usize>,
+    /// A person in the game says something.
+    pub chat: bool,
 }
 
 impl Default for Wake {
     fn default() -> Self {
-        Wake { max_seconds: 30, enemy_near_extractor: true, squad_engaged: true, extractor_lost: true, pool_reaches: BTreeMap::new() }
+        Wake { max_seconds: 30, enemy_near_extractor: true, squad_engaged: true, extractor_lost: true, pool_reaches: BTreeMap::new(), chat: true }
     }
 }
 
@@ -528,6 +530,10 @@ pub struct Shared {
     /// names; a lab not listed builds anything.
     pub allowed: Mutex<BTreeMap<String, Vec<String>>>,
     pub wake: Mutex<Wake>,
+    /// Chat from people in the game, unread by the player: (frame, player number, text).
+    pub chat_in: Mutex<Vec<(i32, i32, String)>>,
+    /// What the player wants said in the game chat (`say` tool), sent by the brain on its next tick.
+    pub chat_out: Mutex<Vec<String>>,
     /// True when turns are taken in lockstep with the game (the field commander, the player in arena study runs).
     pub lockstep: std::sync::atomic::AtomicBool,
     /// True when a commander or player session takes turns at the brain's request at all (either way of holding).

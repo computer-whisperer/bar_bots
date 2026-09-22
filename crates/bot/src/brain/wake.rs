@@ -98,6 +98,10 @@ impl Brain {
         if wake.extractor_lost && self.extractor_losses.back() == Some(&tick.frame) {
             reasons.push("an extractor was destroyed".into());
         }
+        // A person spoke: news once, when the line arrives (the report carries the words).
+        if wake.chat && tick.events.iter().any(|e| matches!(e, bot_protocol::Event::Chat { .. })) {
+            reasons.push("someone in the game said something (see the chat lines)".into());
+        }
         let pool_met = !wake.pool_reaches.is_empty()
             && wake.pool_reaches.iter().all(|(name, n)| field.unassigned.iter().any(|(have, count)| have == name && count >= n));
         if pool_met && !self.wake.pool_met {

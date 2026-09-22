@@ -249,7 +249,7 @@ fn extractor_lines(seen: &mut Seen, field: &Field, full: bool, lines: &mut Vec<S
 
 /// The player's report: the front, then its hands: every actor as the picture has it (in full at first, then the
 /// ones whose entry changed), Jev's judgements when they are high, and what the hands did since the last turn.
-pub fn player_report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[String], hands: &Hands, full: bool) -> String {
+pub fn player_report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights: &[String], hands: &Hands, chat: &[String], full: bool) -> String {
     let mut lines = front(briefing, field, fights);
     lines.extend(contact(briefing, field));
     extractor_lines(seen, field, full, &mut lines);
@@ -299,6 +299,10 @@ pub fn player_report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights
     let high: Vec<String> = hands.globals.iter().filter(|(_, p)| **p >= 0.5).map(|(q, p)| format!("{q} {p:.2}")).collect();
     if !high.is_empty() {
         lines.push(format!("your hands judge (yes-probability): {}", high.join(", ")));
+    }
+    if !chat.is_empty() {
+        lines.push("chat since your last turn (people in the game; `say` answers them):".to_string());
+        lines.extend(chat.iter().map(|c| format!("  {c}")));
     }
     if !hands.done.is_empty() {
         let skipped = hands.done.len().saturating_sub(DONE_LINES);

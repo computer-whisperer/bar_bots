@@ -119,7 +119,8 @@ fn tool_list(mode: Mode) -> Value {
             "enemy_near_extractor": { "type": "boolean", "description": "Enemies appear within 600 of an extractor that had none near." },
             "squad_engaged": { "type": "boolean", "description": engaged },
             "extractor_lost": { "type": "boolean" },
-            "pool_reaches": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": pool } } } });
+            "pool_reaches": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": pool },
+            "chat": { "type": "boolean", "description": "A person in the game says something (default on)." } } } });
     let orders = |tools: &[&str], what: &str| json!({ "name": "orders",
         "description": format!("Your whole turn in one call, and it ENDS the turn: {what}, carried out in the order listed, then the game resumes. Each entry names one of the other tools and its arguments, exactly as you would call it alone. Include a `wait` entry to change when you are next woken; without one the wake settings in force stand. Call nothing and write nothing after it."),
         "inputSchema": { "type": "object", "additionalProperties": false, "required": ["calls"], "properties": {
@@ -144,7 +145,10 @@ fn tool_list(mode: Mode) -> Value {
             { "name": "produce",
               "description": "What each lab may build: an object of lab name (lab_N) or \"all\" to a list of unit names (as the report writes them: armpw, armham, armck), or null to lift the restriction. A lab with a list is offered only those units and nothing else, every time it is asked; your instructions still say which of them and when. Use it when the packet's words are not getting the mix you want. A list naming nothing the lab can build leaves that lab unrestricted; the lab's entry in the picture shows its list.",
               "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "string" } }, { "type": "null" } ] }, "description": "Lab name or \"all\" to unit names, or null." } },
-            orders(&["instruct", "lane", "mark", "produce", "note", "wait"], "your instructions, footwork settings, marked places, what labs may build, a note and when to be woken"),
+            { "name": "say",
+              "description": "Say something in the game's chat, to everyone playing. Short lines. The report shows what people say to you; when an experienced player offers advice or asks what you are doing, answer, and ask them what they would do: their feedback is what this project learns from.",
+              "inputSchema": { "type": "object", "additionalProperties": false, "required": ["text"], "properties": { "text": { "type": "string", "maxLength": 240 } } } },
+            orders(&["instruct", "lane", "mark", "produce", "say", "note", "wait"], "your instructions, footwork settings, marked places, what labs may build, a chat line, a note and when to be woken"),
             wait("A group of ours starts fighting an enemy party.", "Woken when this many soldiers of each named unit type are alive, e.g. {\"armham\": 6}. {} clears it."),
             note,
         ]),
@@ -224,7 +228,7 @@ fn tool_list(mode: Mode) -> Value {
 /// What `orders` may batch in a mode.
 fn batchable(mode: Mode) -> &'static [&'static str] {
     match mode {
-        Mode::Player => &["instruct", "lane", "mark", "produce", "note", "wait"],
+        Mode::Player => &["instruct", "lane", "mark", "produce", "say", "note", "wait"],
         Mode::Strategist | Mode::Commander => &["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"],
     }
 }
@@ -298,6 +302,7 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared, mode: Mode) -> Resu
             flag("enemy_near_extractor", &mut wake.enemy_near_extractor);
             flag("squad_engaged", &mut wake.squad_engaged);
             flag("extractor_lost", &mut wake.extractor_lost);
+            flag("chat", &mut wake.chat);
             if let Some(pool) = arguments["pool_reaches"].as_object() {
                 wake.pool_reaches = pool.iter().map(|(name, n)| (name.clone(), n.as_u64().unwrap_or(1) as usize)).collect();
             }
@@ -396,6 +401,12 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared, mode: Mode) -> Resu
                 }
             }
             Ok(format!("marked: {}; your hands see the place from their next look", said.join("; ")))
+        }
+        "say" => {
+            let text = arguments["text"].as_str().map(str::trim).filter(|t| !t.is_empty()).ok_or("say needs text")?;
+            let text: String = text.chars().take(240).collect();
+            shared.chat_out.lock().unwrap().push(text.clone());
+            Ok(format!("said: {text}"))
         }
         "produce" => {
             let lists = arguments.as_object().filter(|o| !o.is_empty()).ok_or("produce takes an object: lab name (lab_N) or \"all\" to a list of unit names, or null to lift it")?;
@@ -577,7 +588,7 @@ mod tests {
     fn the_player_has_its_lever_and_none_of_the_commanders() {
         let names = |mode: Mode| tool_list(mode).as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
         let player = names(Mode::Player);
-        assert_eq!(player, ["overview", "map", "situation", "instruct", "lane", "mark", "produce", "orders", "wait", "note"]);
+        assert_eq!(player, ["overview", "map", "situation", "instruct", "lane", "mark", "produce", "say", "orders", "wait", "note"]);
         let commander = names(Mode::Commander);
         assert!(commander.contains(&"squad".to_string()) && !commander.contains(&"instruct".to_string()));
         for tool in batchable(Mode::Player) {

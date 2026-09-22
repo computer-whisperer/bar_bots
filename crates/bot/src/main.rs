@@ -100,13 +100,14 @@ fn session(mut stream: UnixStream, mode: Option<(Mode, bool)>, pianist: bool) ->
     let setting = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
     let mut banner = format!("Within Reason {} | {mode_name}", env!("WITHIN_REASON_COMMIT"));
     if strategist.is_some() {
-        banner += &format!(" ({}{})", setting("WITHIN_REASON_MODEL").unwrap_or_else(|| "default model".into()), setting("WITHIN_REASON_EFFORT").map_or(String::new(), |e| format!(", effort {e}")));
+        let cli = std::process::Command::new("claude").arg("--version").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|v| !v.is_empty());
+        banner += &format!(" ({}{}{})", setting("WITHIN_REASON_MODEL").unwrap_or_else(|| "claude-opus-5".into()), setting("WITHIN_REASON_EFFORT").map_or(String::new(), |e| format!(", effort {e}")), cli.map_or(String::new(), |v| format!(", {v}")));
     }
     if let Some(disabled) = setting("WITHIN_REASON_DISABLE") {
         banner += &format!(" | off: {disabled}");
     }
     if pianist.is_some() {
-        banner += &format!(" | pianist {}", pianist.as_ref().map_or("", |p| p.model()));
+        banner += &format!(" | hands: Jev {}", pianist.as_ref().map_or("", |p| p.model()));
     }
     let mut brain = Brain::new(World::new(hello), strategist.as_ref().map(|s| s.shared.clone()), board, banner, pianist);
     write_frame(&mut stream, &Commands::default())?;

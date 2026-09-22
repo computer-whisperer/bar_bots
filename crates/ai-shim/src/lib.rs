@@ -237,6 +237,14 @@ impl Instance {
             }
             sys::EVENT_ENEMY_ENTER_LOS => Event::EnemyEnterLos { enemy: UnitId(event!(SEnemyEnterLOSEvent).enemy) },
             sys::EVENT_ENEMY_LEAVE_LOS => Event::EnemyLeaveLos { enemy: UnitId(event!(SEnemyLeaveLOSEvent).enemy) },
+            sys::EVENT_MESSAGE => {
+                let e = event!(SMessageEvent);
+                let text = if e.message.is_null() { String::new() } else { unsafe { std::ffi::CStr::from_ptr(e.message) }.to_string_lossy().into_owned() };
+                if text.trim().is_empty() {
+                    return;
+                }
+                Event::Chat { player: e.player, text }
+            }
             sys::EVENT_ENEMY_DESTROYED => {
                 Event::EnemyDestroyed { enemy: UnitId(event!(SEnemyDestroyedEvent).enemy) }
             }

@@ -380,9 +380,10 @@ fn player_prompt(game_time: &str, headline: &str, shared: &Shared, seen: &mut re
         prompt += &format!("Map: {}\n\n", shared.map.lock().unwrap());
     }
     let wake = serde_json::to_string(&*shared.wake.lock().unwrap()).unwrap_or_default();
+    let chat: Vec<String> = std::mem::take(&mut *shared.chat_in.lock().unwrap()).into_iter().map(|(frame, player, text)| format!("{} player {player}: {text}", crate::brain::pianist::clock(frame))).collect();
     prompt += &format!(
         "[{game_time}] Woken because: {headline}\n{}\nwake conditions in force: {wake}",
-        report::player_report(seen, &briefing, &field, &fights, &hands, fresh_session)
+        report::player_report(seen, &briefing, &field, &fights, &hands, &chat, fresh_session)
     );
     prompt
 }

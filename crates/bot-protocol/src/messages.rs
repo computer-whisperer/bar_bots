@@ -278,6 +278,8 @@ pub enum Event {
     /// no attacker (a collision, a crash).
     UnitDamaged { unit: UnitId, attacker: Option<UnitId>, damage: f32, #[serde(default)] from: Option<Vec3>, #[serde(default)] weapon: Option<Weapon> },
     UnitDestroyed { unit: UnitId, attacker: Option<UnitId> },
+    /// A chat line from a player in the game (the engine's message event), by player number.
+    Chat { player: i32, text: String },
     EnemyEnterLos { enemy: UnitId },
     EnemyLeaveLos { enemy: UnitId },
     EnemyDestroyed { enemy: UnitId },

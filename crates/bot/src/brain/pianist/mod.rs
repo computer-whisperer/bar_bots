@@ -23,7 +23,8 @@ use super::economy::FIRST_ORDER_FRAME;
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
 pub(super) use groups::{Group, GroupTask};
-pub(super) use picture::{clock, Party, Place};
+pub(super) use picture::{Party, Place};
+pub(crate) use picture::clock;
 
 /// Game seconds between calls (`WITHIN_REASON_JEV_INTERVAL` overrides).
 const INTERVAL_SECONDS: f32 = 1.0;
@@ -113,6 +114,8 @@ pub struct Pianist {
     /// What the hands did with this call's answers (`hands.rs`), for the log line.
     pub(super) played: Vec<serde_json::Value>,
     stats: Stats,
+    /// The versioned model has been said in the game chat (once, after the first answer).
+    announced: bool,
 }
 
 /// The pianist's log format version (`docs/harness/record-format.md`).
@@ -181,6 +184,7 @@ impl Pianist {
             logged_instructions: String::new(),
             played: Vec::new(),
             stats: Stats::default(),
+            announced: false,
         })
     }
 
@@ -258,6 +262,7 @@ impl Brain {
             }
         }
         let request = jev::Request { state: picture.state.clone(), questions };
+        let status_due = tick.due() % (60 * FRAMES_PER_SECOND) < self.pianist.as_ref().expect("pianist mode").interval_frames;
         {
             let pianist = self.pianist.as_mut().expect("pianist mode");
             if pianist.stats.calls == 0 && pianist.logged_instructions.is_empty() {
@@ -266,11 +271,14 @@ impl Brain {
             }
             pianist.stats.calls += 1;
             pianist.stats.questions += request.questions.len() as u32;
-            if let Some(worker) = &pianist.worker {
+            if pianist.worker.is_some() {
                 let id = pianist.next_request;
                 pianist.next_request += 1;
-                if worker.to.send((id, request.clone())).is_ok() {
+                if pianist.worker.as_ref().expect("checked").to.send((id, request.clone())).is_ok() {
                     pianist.pending = Some(Pending { id, frame: tick.frame, picture, menus, request });
+                }
+                if status_due {
+                    self.pianist_status_line(tick.frame);
                 }
                 return;
             }
@@ -289,6 +297,7 @@ impl Brain {
                     pianist.stats.latencies_ms.push(response.latency.as_secs_f32() * 1000.0);
                     pianist.stats.tokens += response.usage["input_tokens"].as_u64().unwrap_or(0);
                 }
+                self.announce_hands(&response, commands);
                 self.play(tick, kit, &picture, menus, &response.answers, commands);
                 self.pianist_globals(tick, &response.answers);
                 self.publish_hands(&picture, &response.answers);
@@ -306,6 +315,17 @@ impl Brain {
         if tick.due() % (60 * FRAMES_PER_SECOND) < self.pianist.as_ref().expect("pianist mode").interval_frames {
             self.pianist_status_line(tick.frame);
         }
+    }
+
+    /// The hands' versioned model, said in the game chat once the first answer names it (the start banner can only
+    /// give the alias asked for).
+    fn announce_hands(&mut self, response: &jev::Response, commands: &mut Vec<Command>) {
+        let pianist = self.pianist.as_mut().expect("pianist mode");
+        if pianist.announced {
+            return;
+        }
+        pianist.announced = true;
+        commands.push(Command::Say { text: format!("{{name}}'s hands: Jev {} ({} ms to the first answer)", response.model, response.latency.as_millis()) });
     }
 
     /// Realtime: plays the answer to the request in flight when it has come, and drops a request whose answer is too
@@ -347,6 +367,7 @@ impl Brain {
                     pianist.parties = pending.picture.parties.clone();
                     pianist.played.clear();
                 }
+                self.announce_hands(&response, commands);
                 self.play(tick, kit, &pending.picture, pending.menus, &response.answers, commands);
                 self.pianist_globals(tick, &response.answers);
                 self.publish_hands(&pending.picture, &response.answers);

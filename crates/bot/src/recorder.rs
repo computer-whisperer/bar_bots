@@ -144,6 +144,7 @@ impl Recorder {
         let record = match *event {
             // Idle is a unit flag in the samples; damage is summed into the next sample.
             Event::UnitIdle { .. } => return,
+            Event::Chat { player, ref text } => json!({ "t": "ev", "f": frame, "k": "chat", "player": player, "text": text }),
             Event::UnitDamaged { unit, damage, .. } => {
                 *self.damage.entry(unit).or_default() += damage;
                 return;

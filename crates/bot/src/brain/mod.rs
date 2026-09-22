@@ -242,6 +242,22 @@ impl Brain {
         }
     }
 
+    /// Chat from the people in the game goes to the player's next report; what the player said goes into the game
+    /// (the user, 2026-09-22: in human games, letting Opus talk "could actually help gain direct feedback from
+    /// experienced players").
+    fn relay_chat(&mut self, tick: &Tick, commands: &mut Vec<Command>) {
+        let Some(shared) = &self.strategist else { return };
+        for event in &tick.events {
+            if let Event::Chat { player, text } = event {
+                eprintln!("[ai {}] f={} chat from player {player}: {text}", self.world.hello.ai_id, tick.frame);
+                shared.chat_in.lock().unwrap().push((tick.frame, *player, text.clone()));
+            }
+        }
+        for text in std::mem::take(&mut *shared.chat_out.lock().unwrap()) {
+            commands.push(Command::Say { text });
+        }
+    }
+
     /// One tick: the control lane every time, the whole brain (`think`) on the frames due at its own interval, with
     /// every event since it last ran.
     pub fn decide(&mut self, tick: &Tick) -> Vec<Command> {
@@ -281,6 +297,7 @@ impl Brain {
         self.track_wrecks(tick);
         self.track_losses(tick, &kit);
         let mut commands = Vec::new();
+        self.relay_chat(tick, &mut commands);
         // The game names AIs at random (ai_namer.lua), so the bot says who it is, once the engine takes orders.
         if tick.frame >= 2 * FRAMES_PER_SECOND
             && let Some(banner) = self.banner.take()

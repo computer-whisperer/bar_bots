@@ -46,6 +46,9 @@ setting while it is not the default.
 `produce` restricts what a lab, or every lab, may build to a list of unit names: the lab is then offered those and
 nothing else, so the mix is exactly what you allow and the packet's words only order among them. It is the sure way
 to get a unit built (raiders against raiders, constructors after losses) when the words alone are not doing it.
+People: in a game with people, what they say in the chat comes in your report, and `say` answers them (short lines,
+to everyone). An experienced player watching you is the best feedback this project gets: answer their questions,
+say what you are trying to do, and ask what they would do in your place.
 Places: the picture lists home, enemy_base, the spots we hold or are taking, the nearest free spots, the nearest of
 theirs, and the narrowest passages; a spot or passage you name in the packet is listed too, however far, so a deep
 attack is ordered by naming the spots along its way. For a place that is not a spot, `mark` names map coordinates or a
