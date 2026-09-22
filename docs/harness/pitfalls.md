@@ -61,6 +61,6 @@ of a strip's extractor clusters. `--boxes standard` (the default) reads the lobb
   `HangTimeout = 600` into the match's springsettings.cfg, and the driver abandons a turn after 45 s and replaces the
   session (`strategist/mod.rs` `TURN_CAP`).
 
-- A game against people is realtime: start the bot with `WITHIN_REASON_REALTIME=1` beside `--pianist --player`, or
+- A game against people is realtime: `run/human_game.sh` (`WITHIN_REASON_REALTIME=1` beside `--pianist --player`), or
   nothing waits for it and nothing pauses. In lockstep runs (the arena's default) a wall-clock wait costs game time at
   the arena's speed, which is why the pianist's Jev call stays in place there.

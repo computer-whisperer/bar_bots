@@ -12,4 +12,4 @@ and an arena that runs headless batches against the stock BARb AI.
 - `upstream/`, `run/engines/`, `run/data/`, `run/matches/` are git-ignored working data.
 
 Build: `cargo build --release`. Evaluate: `target/release/arena --matches 24 --parallel 8 --speed 50 --label <what-you-test>`.
-Never touch `~/.local/state/Beyond All Reason` except through `run/install_to_bar.sh`, and only when the user asks.
+Never touch `~/.local/share/BeyondAllReason` (the user's BAR install) except through `run/install_to_bar.sh`, and only when the user asks.
