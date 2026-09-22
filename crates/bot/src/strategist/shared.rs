@@ -528,8 +528,10 @@ pub struct Shared {
     /// names; a lab not listed builds anything.
     pub allowed: Mutex<BTreeMap<String, Vec<String>>>,
     pub wake: Mutex<Wake>,
-    /// True when turns are taken in lockstep with the game (the field commander).
+    /// True when turns are taken in lockstep with the game (the field commander, the player in arena study runs).
     pub lockstep: std::sync::atomic::AtomicBool,
+    /// True when a commander or player session takes turns at the brain's request at all (either way of holding).
+    pub gated: std::sync::atomic::AtomicBool,
     pub gate: Mutex<Gate>,
     pub gate_changed: Condvar,
     /// WITHIN_REASON_THINK_PENALTY: the commander's orders take effect this many game seconds late per wall second
@@ -569,6 +571,18 @@ impl Shared {
             );
             *self.delayed.lock().unwrap() = Some((frame + delay, ordered.0, ordered.1, ordered.2));
         }
+    }
+
+    /// Brain side, realtime: ask for a turn and go on; the game does not wait (the user, 2026-09-22: "the main
+    /// requirement for realtime is to disable pausing"). A request while a turn is in hand is dropped: the next
+    /// report carries the state anyway.
+    pub fn request_turn(&self, reason: String) {
+        let mut gate = self.gate.lock().unwrap();
+        if gate.closed || gate.in_progress || gate.requested.is_some() {
+            return;
+        }
+        gate.requested = Some(reason);
+        self.gate_changed.notify_all();
     }
 
     /// Brain side, every tick: puts a delayed turn's orders into force when their time has come. True while one waits.

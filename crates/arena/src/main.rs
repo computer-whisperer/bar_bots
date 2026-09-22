@@ -2,7 +2,7 @@
 //! and reports win rates. Each match gets its own directory under `run/matches/<batch>/` holding
 //! the start script, engine log, bot log and replay.
 //!
-//! usage: arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive]
+//! usage: arena [--matches N] [--parallel N] [--speed N] [--realtime] [--profile easy|medium|hard|hard_aggressive]
 //!              [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out]
 //!              [--side armada|cortex] [--corner nw|se]   (default: alternate; `nw` is the first start box of the layout, W on Comet)
 //!              [--ours N] [--allies N] [--enemies N] [--ffa]   (seats of ours, allied BARb seats, enemy BARb seats, default 1 0 1;
@@ -54,6 +54,8 @@ struct Options {
     parallel: usize,
     speed: u32,
     profile: String,
+    /// Speed 1, no lockstep, the bot in `WITHIN_REASON_REALTIME`: the game never waits for a turn or a Jev answer.
+    realtime: bool,
     map: String,
     max_minutes: u32,
     label: String,
@@ -159,7 +161,7 @@ fn main() -> io::Result<()> {
         serde_json::to_string_pretty(&serde_json::json!({
             "label": options.label, "commit": commit, "opponent": format!("BARb {}", options.profile),
             "map": options.map, "matches": options.matches, "parallel": options.parallel, "speed": options.speed,
-            "max_minutes": options.max_minutes, "mirror": options.mirror, "place": options.place, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "commander_each": options.commander_each, "pianist": options.pianist, "player": options.player, "commander_model": options.commander_model, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opening_plan": options.opening_plan, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
+            "max_minutes": options.max_minutes, "realtime": options.realtime, "mirror": options.mirror, "place": options.place, "call_settled": options.call_settled, "swap_corners": options.swap_corners, "strategist": options.strategist, "commander": options.commander, "commander_each": options.commander_each, "pianist": options.pianist, "player": options.player, "commander_model": options.commander_model, "effort": options.effort, "think_penalty": options.think_penalty, "seed_base": options.seed_base, "opening_plan": options.opening_plan, "opponent_opening": options.opponent_opening, "side": options.side, "corner": options.corner.map(|first| if first { "first box" } else { "second box" }), "ours": options.ours, "allies": options.allies, "enemies": options.enemies, "ffa": options.free_for_all, "boxes": format!("{:?}", options.boxes), "bot": options.bot, "disable": options.disable, "ab_disable": options.ab_disable,
         }))?,
     )?;
 
@@ -306,6 +308,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .envs(options.effort.as_ref().map(|effort| ("WITHIN_REASON_EFFORT", effort)))
         .envs(options.commander_model.as_ref().map(|model| ("WITHIN_REASON_MODEL", model)))
         .envs(options.think_penalty.as_ref().map(|penalty| ("WITHIN_REASON_THINK_PENALTY", penalty)))
+        .envs(options.realtime.then_some(("WITHIN_REASON_REALTIME", "1")))
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
     // The engine's watchdog kills a game whose main thread stalls for HangTimeout seconds (60 by default). In lockstep
@@ -325,7 +328,7 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         // The shim waits for each of the bot's answers. At arena speed a frame is under a millisecond, so any thinking
         // the bot does (a commander's turn, the opening search's few hundred milliseconds) would otherwise cost game
         // time it does not cost in a game played at speed 1.
-        .env("WITHIN_REASON_LOCKSTEP", "1")
+        .envs((!options.realtime).then_some(("WITHIN_REASON_LOCKSTEP", "1")))
         .env("WITHIN_REASON_TRACE_BUILDS", "1")
         // Every match leaves the opponent's ground truth and a census for study (the shim reads them with cheat access
         // for the length of the query; the bot never sees them). It used to take the caller's environment to switch on,
@@ -390,7 +393,7 @@ fn referee(
     let mut playing = false;
     let mut settled = Settled::default();
     // The game clock stands still during the commander's turns, and the log only shows it once a game minute.
-    let stall_allowance = if options.commander { 10 * STALL_ALLOWANCE } else { STALL_ALLOWANCE };
+    let stall_allowance = if (options.commander || options.player) && !options.realtime { 10 * STALL_ALLOWANCE } else { STALL_ALLOWANCE };
     let mut deadline = Instant::now() + LOAD_ALLOWANCE;
     let frame_limit = options.max_minutes * 60 * 30;
     let mut last_seen_frame = 0;
@@ -545,6 +548,7 @@ fn parse_args() -> Options {
         parallel: 8,
         speed: 50,
         profile: "easy".into(),
+        realtime: false,
         map: "Quicksilver Remake 1.24".into(),
         max_minutes: 40,
         label: "batch".into(),
@@ -619,6 +623,10 @@ fn parse_args() -> Options {
                 (options.pianist, options.player) = (true, true);
                 continue;
             }
+            "--realtime" => {
+                (options.realtime, options.speed) = (true, 1);
+                continue;
+            }
             _ => {}
         }
         let mut value = || args.next().unwrap_or_else(|| usage(&format!("{flag} needs a value")));
@@ -683,7 +691,7 @@ fn parse_args() -> Options {
 }
 
 fn usage(problem: &str) -> ! {
-    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--pianist] [--player] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes standard|corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--opening-plan PATH] [--base-port N]");
+    eprintln!("{problem}\nusage: arena [--matches N] [--parallel N] [--speed N] [--profile NAME] [--map NAME] [--max-minutes N] [--label TEXT] [--mirror] [--place] [--swap-corners] [--play-out] [--strategist | --commander | --commander-each] [--pianist] [--player] [--realtime] [--commander-model ID] [--side armada|cortex] [--corner nw|se] [--ours N] [--allies N] [--enemies N] [--ffa] [--boxes standard|corners|north-south|west-east] [--bot PATH] [--disable H-ID,H-ID] [--ab-disable H-ID,H-ID] [--claude-config-dir DIR] [--effort LEVEL] [--think-penalty X] [--opponent-opening any|bots|vehicles] [--seed-base N] [--opening-plan PATH] [--base-port N]");
     std::process::exit(2)
 }
 

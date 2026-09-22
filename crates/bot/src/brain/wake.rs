@@ -58,7 +58,7 @@ impl Brain {
 
     pub(super) fn wake_commander_if_due(&mut self, tick: &Tick, kit: &Kit) {
         let Some(shared) = self.strategist.clone() else { return };
-        if !shared.lockstep.load(Ordering::Relaxed) {
+        if !shared.gated.load(Ordering::Relaxed) {
             return;
         }
         // Of several seats under one commander only the lead asks for turns (held, it holds the engine and so every
@@ -141,6 +141,10 @@ impl Brain {
             return;
         }
         shared.last_turn_frame.store(tick.frame, Ordering::Relaxed);
-        shared.hold_for_turn(reasons.join("; "), tick.frame);
+        if shared.lockstep.load(Ordering::Relaxed) {
+            shared.hold_for_turn(reasons.join("; "), tick.frame);
+        } else {
+            shared.request_turn(reasons.join("; "));
+        }
     }
 }

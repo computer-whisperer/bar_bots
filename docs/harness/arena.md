@@ -1,6 +1,6 @@
 # Arena — batch evaluation
 
-`target/release/arena [--matches N] [--parallel N] [--speed N] [--profile easy|medium|hard|hard_aggressive] [--map NAME]
+`target/release/arena [--matches N] [--parallel N] [--speed N] [--realtime] [--profile easy|medium|hard|hard_aggressive] [--map NAME]
 [--max-minutes N] [--label TEXT] [--base-port N]`
 
 Per match: a directory `run/matches/<unix-stamp>-<label>/NN/` holding `script.txt`, `engine.log`, `bot.log`, the match record
@@ -138,3 +138,6 @@ places an AI, so the bot itself never chooses: it plans from where it stands (th
 prints: `com: mex mex win lab assist`, `fac0: ck pw pw`, `con0: mex mex`) instead of searching one. `run/replay_plan.py
 run/matches/<replay>/record-<team>.jsonl` transcribes a player's opening from a replayed game; `run/plans/` keeps them.
 
+
+
+`--realtime`: speed 1, the engine not in lockstep, the bot in `WITHIN_REASON_REALTIME` (the player's turns and Jev's answers land while the game runs). The rehearsal for a game against people; a 20-minute game is 20 minutes of wall time.

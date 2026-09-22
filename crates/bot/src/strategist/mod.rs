@@ -66,6 +66,9 @@ impl Mode {
 
     /// Turns are taken with the game held still (the brain asks for them, `brain/wake.rs`).
     fn lockstep(self) -> bool {
+        if realtime() {
+            return false;
+        }
         matches!(self, Mode::Commander | Mode::Player)
     }
 
@@ -106,6 +109,7 @@ impl Strategist {
     pub fn start(dir: &Path, ai_id: i32, mode: Mode) -> std::io::Result<Self> {
         let shared = Arc::new(Shared::default());
         shared.lockstep.store(mode.lockstep(), Ordering::Relaxed);
+        shared.gated.store(matches!(mode, Mode::Commander | Mode::Player), Ordering::Relaxed);
         // How late the commander's orders land, in game seconds per wall second of thought (arena `--think-penalty`).
         *shared.think_penalty.lock().unwrap() = std::env::var("WITHIN_REASON_THINK_PENALTY").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0);
         let transcript = Arc::new(Transcript::create(&dir.join(format!("strategist-{ai_id}.jsonl")))?);
@@ -271,7 +275,7 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
                     // A turn that has held the game this long is a hung session (pianist-player-10: the first turn
                     // never returned, and the engine's watchdog killed the game at three minutes): the game goes on
                     // and the session is replaced.
-                    Err(RecvTimeoutError::Timeout) if mode.lockstep() && started.elapsed() > TURN_CAP => {
+                    Err(RecvTimeoutError::Timeout) if matches!(mode, Mode::Commander | Mode::Player) && started.elapsed() > turn_cap(mode) => {
                         abandoned = true;
                         break true;
                     }
@@ -309,9 +313,17 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
     session.end();
 }
 
-/// A lockstep turn is abandoned after this long with no answer (the engine's watchdog, HangTimeout, is 60 s by default
-/// and the arena raises it to 600; turns run 1 to 11 s).
-const TURN_CAP: Duration = Duration::from_secs(45);
+/// A turn is abandoned after this long with no answer: in lockstep 45 s (the engine's watchdog, HangTimeout, is 60 s by
+/// default and the arena raises it to 600; turns run 1 to 11 s), in real time 120 s (the game runs on meanwhile).
+fn turn_cap(mode: Mode) -> Duration {
+    Duration::from_secs(if mode.lockstep() { 45 } else { 120 })
+}
+
+/// `WITHIN_REASON_REALTIME`: the game is never held for a turn or an answer (a game against people; the arena's
+/// `--realtime` rehearsal). The player is told; the pianist asks Jev on a thread and plays the answers when they come.
+pub(crate) fn realtime() -> bool {
+    std::env::var_os("WITHIN_REASON_REALTIME").is_some()
+}
 
 /// The commander is shown the picture outright (a tool call to look would double its turn), in full at the start of
 /// a session and as changes afterwards.
@@ -321,6 +333,9 @@ fn commander_prompt(game_time: &str, headline: &str, shared: &Shared, seen: &mut
     let fights: Vec<String> =
         std::mem::take(&mut *shared.fights.lock().unwrap()).into_iter().map(|(what, n)| format!("{what} x{n}")).collect();
     let mut prompt = String::new();
+    if fresh_session && realtime() {
+        prompt.push_str("This game runs in real time: it does not pause while you take a turn, and your orders land when the turn ends, five to ten seconds later. Decide from the report, write states that hold, and keep turns short.\n\n");
+    }
     if fresh_session {
         let notes = shared.notes.lock().unwrap();
         if !notes.is_empty() {
@@ -350,6 +365,9 @@ fn player_prompt(game_time: &str, headline: &str, shared: &Shared, seen: &mut re
         snapshot
     };
     let mut prompt = String::new();
+    if fresh_session && realtime() {
+        prompt.push_str("This game runs in real time: it does not pause while you take a turn, and your orders land when the turn ends, five to ten seconds later. Decide from the report, write states that hold, and keep turns short.\n\n");
+    }
     if fresh_session {
         let notes = shared.notes.lock().unwrap();
         if !notes.is_empty() {

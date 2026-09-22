@@ -148,3 +148,8 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
 - pianist-player-12 (2026-09-22, Opus at low effort, WON at 11 minutes against HARD): the same shape again. The
   `shelling` place moves with each hit and vanishes when the hits stop; send the ball onto it once, not as a
   standing destination, and name the next spot beyond it.
+- pianist-player-13 (2026-09-22, Opus at low effort, WON at 16 minutes against HARD_AGGRESSIVE, their commander
+  killed): the top tier falls to the same shape, and its commander hides: never seen for 15 minutes, rebuilt in the
+  far south-east corner with a hover plant. Sweep the far corners spot by spot with marks once their first base is
+  empty, and keep the home guard on the raids, not chasing. Wind is unreliable here: when energy is at zero with
+  windmills standing, build solar.

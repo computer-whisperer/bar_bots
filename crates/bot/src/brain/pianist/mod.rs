@@ -68,6 +68,8 @@ impl Task {
 struct Stats {
     calls: u32,
     errors: u32,
+    /// Realtime: requests whose answer had not come after `STALE_FRAMES`, dropped unplayed.
+    dropped: u32,
     latencies_ms: Vec<f32>,
     tokens: u64,
     questions: u32,
@@ -77,6 +79,11 @@ struct Stats {
 
 pub struct Pianist {
     client: jev::Client,
+    /// Realtime (`WITHIN_REASON_REALTIME`): the call runs on this thread and its answer is played on the tick it
+    /// arrives, so the game and the control lane never wait on Jev; in lockstep the call is made in place.
+    worker: Option<Worker>,
+    pending: Option<Pending>,
+    next_request: u64,
     interval_frames: i32,
     last_ask_frame: i32,
     /// Builders' and labs' tasks, by unit.
@@ -110,6 +117,36 @@ pub struct Pianist {
 
 /// The pianist's log format version (`docs/harness/record-format.md`).
 const LOG_VERSION: u32 = 1;
+/// Realtime: an answer older than this judges a picture too old to play.
+const STALE_FRAMES: i32 = 3 * FRAMES_PER_SECOND;
+
+/// The thread that talks to Jev in real time: requests in, answers out, each with the request's number.
+struct Worker {
+    to: std::sync::mpsc::Sender<(u64, jev::Request)>,
+    from: std::sync::mpsc::Receiver<(u64, Result<jev::Response, jev::Error>)>,
+}
+
+/// A request in flight: what it was built from, so its answers can be played when they come.
+struct Pending {
+    id: u64,
+    frame: i32,
+    picture: picture::Picture,
+    menus: Vec<menu::Menu>,
+    request: jev::Request,
+}
+
+fn spawn_worker(client: jev::Client) -> Worker {
+    let (to, requests) = std::sync::mpsc::channel::<(u64, jev::Request)>();
+    let (answers, from) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for (id, request) in requests {
+            if answers.send((id, client.ask(&request))).is_err() {
+                break;
+            }
+        }
+    });
+    Worker { to, from }
+}
 
 impl Pianist {
     /// The client from the environment (the key file or `TYPESAFE_API_KEY`); `Err` says why there is none.
@@ -120,8 +157,12 @@ impl Pianist {
             Some(_) => File::create(log_dir.join(format!("jev-{ai_id}.jsonl"))).ok(),
             None => None,
         };
+        let worker = if crate::strategist::realtime() { jev::Client::from_env().ok().map(spawn_worker) } else { None };
         Ok(Pianist {
             client,
+            worker,
+            pending: None,
+            next_request: 0,
             interval_frames: ((seconds * FRAMES_PER_SECOND as f32) as i32).max(super::BRAIN_FRAMES),
             last_ask_frame: i32::MIN / 2,
             tasks: HashMap::new(),
@@ -193,9 +234,13 @@ impl Brain {
         if tick.frame < FIRST_ORDER_FRAME {
             return;
         }
+        if self.pianist.as_ref().expect("pianist mode").worker.is_some() {
+            self.collect_answer(tick, kit, commands);
+        }
         let due = {
             let pianist = self.pianist.as_ref().expect("pianist mode");
-            tick.frame - pianist.last_ask_frame >= pianist.interval_frames
+            // Realtime: one request in flight at a time; this second's ask waits for the answer.
+            pianist.pending.is_none() && tick.frame - pianist.last_ask_frame >= pianist.interval_frames
         };
         if !due {
             return;
@@ -213,16 +258,27 @@ impl Brain {
             }
         }
         let request = jev::Request { state: picture.state.clone(), questions };
-        let (response, ai) = {
+        {
             let pianist = self.pianist.as_mut().expect("pianist mode");
             if pianist.stats.calls == 0 && pianist.logged_instructions.is_empty() {
                 let rules = picture.state["rules"].as_str().unwrap_or_default().to_string();
                 pianist.log_header(self.world.hello.ai_id, &rules);
             }
-            pianist.places = picture.places.clone();
-            pianist.parties = picture.parties.clone();
             pianist.stats.calls += 1;
             pianist.stats.questions += request.questions.len() as u32;
+            if let Some(worker) = &pianist.worker {
+                let id = pianist.next_request;
+                pianist.next_request += 1;
+                if worker.to.send((id, request.clone())).is_ok() {
+                    pianist.pending = Some(Pending { id, frame: tick.frame, picture, menus, request });
+                }
+                return;
+            }
+        }
+        let (response, ai) = {
+            let pianist = self.pianist.as_mut().expect("pianist mode");
+            pianist.places = picture.places.clone();
+            pianist.parties = picture.parties.clone();
             pianist.played.clear();
             (pianist.client.ask(&request), self.world.hello.ai_id)
         };
@@ -249,6 +305,61 @@ impl Brain {
         }
         if tick.due() % (60 * FRAMES_PER_SECOND) < self.pianist.as_ref().expect("pianist mode").interval_frames {
             self.pianist_status_line(tick.frame);
+        }
+    }
+
+    /// Realtime: plays the answer to the request in flight when it has come, and drops a request whose answer is too
+    /// late to judge the picture it was built from.
+    fn collect_answer(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
+        let ai = self.world.hello.ai_id;
+        let arrived = {
+            let pianist = self.pianist.as_mut().expect("pianist mode");
+            let Some(worker) = &pianist.worker else { return };
+            let mut got = None;
+            while let Ok((id, result)) = worker.from.try_recv() {
+                // An answer to a request already dropped is not played.
+                if pianist.pending.as_ref().is_some_and(|p| p.id == id) {
+                    got = Some(result);
+                }
+            }
+            match got {
+                Some(result) => Some((pianist.pending.take().expect("a matched request is pending"), result)),
+                None => {
+                    if let Some(p) = &pianist.pending
+                        && tick.frame - p.frame > STALE_FRAMES
+                    {
+                        pianist.stats.dropped += 1;
+                        eprintln!("[ai {ai}] f={} pianist: the answer to the request of frame {} has not come in {} s; dropped", tick.frame, p.frame, STALE_FRAMES / FRAMES_PER_SECOND);
+                        pianist.pending = None;
+                    }
+                    None
+                }
+            }
+        };
+        let Some((pending, result)) = arrived else { return };
+        match result {
+            Ok(response) => {
+                {
+                    let pianist = self.pianist.as_mut().expect("pianist mode");
+                    pianist.stats.latencies_ms.push(response.latency.as_secs_f32() * 1000.0);
+                    pianist.stats.tokens += response.usage["input_tokens"].as_u64().unwrap_or(0);
+                    pianist.places = pending.picture.places.clone();
+                    pianist.parties = pending.picture.parties.clone();
+                    pianist.played.clear();
+                }
+                self.play(tick, kit, &pending.picture, pending.menus, &response.answers, commands);
+                self.pianist_globals(tick, &response.answers);
+                self.publish_hands(&pending.picture, &response.answers);
+                self.log_call(tick, &pending.request, &response);
+            }
+            Err(e) => {
+                let pianist = self.pianist.as_mut().expect("pianist mode");
+                pianist.stats.errors += 1;
+                if let Some(log) = &mut pianist.log {
+                    let _ = writeln!(log, "{}", json!({ "t": "error", "f": tick.frame, "error": e.to_string() }));
+                }
+                eprintln!("[ai {ai}] f={} pianist: {e}; every actor keeps its task", tick.frame);
+            }
         }
     }
 
@@ -451,8 +562,8 @@ impl Brain {
         let median = latencies.get(latencies.len() / 2).copied().unwrap_or(0.0);
         let max = latencies.last().copied().unwrap_or(0.0);
         eprintln!(
-            "[ai {}] f={frame} pianist this minute: {} calls ({} failed), median {median:.0} ms, longest {max:.0}, {} tokens in, {} questions; busy actors changed course {} times, kept {}; groups {}, tasks {}",
-            self.world.hello.ai_id, stats.calls, stats.errors, stats.tokens, stats.questions, stats.switches, stats.kept, pianist.groups.len(), pianist.tasks.len()
+            "[ai {}] f={frame} pianist this minute: {} calls ({} failed, {} dropped), median {median:.0} ms, longest {max:.0}, {} tokens in, {} questions; busy actors changed course {} times, kept {}; groups {}, tasks {}",
+            self.world.hello.ai_id, stats.calls, stats.errors, stats.dropped, stats.tokens, stats.questions, stats.switches, stats.kept, pianist.groups.len(), pianist.tasks.len()
         );
     }
 }
