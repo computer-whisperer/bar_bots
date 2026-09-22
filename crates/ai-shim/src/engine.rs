@@ -299,7 +299,7 @@ impl Engine {
             })
             .collect();
 
-        Snapshot { metal: self.resource(self.metal), energy: self.resource(self.energy), own_units, allies, enemies, wrecks: None }
+        Snapshot { metal: self.resource(self.metal), energy: self.resource(self.energy), wind: call!(self, Map_getCurWind()), own_units, allies, enemies, wrecks: None }
     }
 
     /// The reclaimable features in sight that hold metal worth a walk, the richest first.

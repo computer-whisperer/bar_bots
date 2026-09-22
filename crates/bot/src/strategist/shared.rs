@@ -13,6 +13,9 @@ pub struct Briefing {
     pub frame: i32,
     pub metal: Resource,
     pub energy: Resource,
+    /// The wind now, and the map's range (the people build solar when the wind happens to be low, human-4).
+    pub wind: f32,
+    pub wind_range: (f32, f32),
     pub counts: Counts,
     pub home: Place,
     pub presumed_enemy_start: Place,

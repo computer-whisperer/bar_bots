@@ -201,6 +201,8 @@ impl Tick {
 pub struct Snapshot {
     pub metal: Resource,
     pub energy: Resource,
+    /// The wind blowing now (the map's `wind_min` to `wind_max`): what a wind generator makes this second.
+    pub wind: f32,
     pub own_units: Vec<OwnUnit>,
     /// Units of the other teams on our ally team: seen, never commanded.
     pub allies: Vec<AllyUnit>,

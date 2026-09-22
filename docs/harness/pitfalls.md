@@ -56,7 +56,7 @@ of a strip's extractor clusters. `--boxes standard` (the default) reads the lobb
 `crates/arena/startboxes.dat`; a map missing there fails at argument parsing, so copy its line from BYAR-Chobby's
 `savedBoxes.dat` (or `mapDetails.lua`'s `StartboxesSet`, zlib and base64) rather than falling back to `corners`.
 
-- The bot protocol changed on 2026-09-22 (`UnitDamaged` gained `from` and `weapon`): the arena builds both sides, but
+- The bot protocol changed on 2026-09-22 (`UnitDamaged` gained `from` and `weapon`; later that day `Snapshot` gained `wind`): the arena builds both sides, but
   GUI play needs `run/install_to_bar.sh` re-run so the installed shim matches the bot.
 
 - The engine's watchdog (`HangTimeout`, 60 s by default, 600 at most) kills a game whose main thread stalls that long,

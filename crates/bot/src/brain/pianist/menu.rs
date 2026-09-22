@@ -28,6 +28,9 @@ const AWAY: f32 = 400.0;
 const ALARM: f32 = 600.0;
 /// A builder on a started build is asked again only with an enemy party this close (H-HANDS-STARTED).
 const STARTED_ALARM: f32 = 800.0;
+/// A builder whose started build is this far along is asked what comes next, and the answer is queued behind it
+/// (H-HANDS-QUEUE: human-5, a generator every 8.5 s against Matt's 6, the difference an idle pick and a walk each).
+const QUEUE_AT: f32 = 0.6;
 /// A group this small is not offered a detachment (pianist-player-14: groups of one sent one soldier at a time).
 const DETACH_FROM: usize = 4;
 /// A party bigger than this is an attack, not a raider to be met by a detachment (human-1: two soldiers sent against
@@ -80,6 +83,8 @@ pub(crate) struct Menu {
     /// The actor's name in the picture; question ids are `<name>.<what>`.
     pub name: String,
     pub busy: bool,
+    /// A builder asked what to do after the build in progress: the answer is ordered behind it, not instead of it.
+    pub queue_ahead: bool,
     pub questions: Vec<(String, Question)>,
     pub options: BTreeMap<String, Pick>,
     /// A builder's free spots, nearest by its own walking first.
@@ -135,9 +140,10 @@ impl Brain {
                 _ => None,
             };
             let threatened = under_fire.contains(&unit.id) || picture.parties.iter().any(|p| p.at.dist2d(unit.pos) < STARTED_ALARM);
+            let queue_ahead = started.as_ref().is_some_and(|(_, share)| *share >= QUEUE_AT) && !threatened && !pianist.queued.contains_key(&unit.id);
             let (free, due) = match &task {
                 None => (unit.idle || frame - last >= LAB_REVIEW_FRAMES, true),
-                Some(_) if started.is_some() && !threatened => (false, false),
+                Some(_) if started.is_some() && !threatened => (false, queue_ahead && frame - last >= LAB_REVIEW_FRAMES),
                 Some(task) => (false, frame - last >= REVIEW_FRAMES && frame - task.since() >= LAB_REVIEW_FRAMES),
             };
             if !(free || due) {
@@ -150,7 +156,11 @@ impl Brain {
                 options.insert(key.to_string(), pick);
                 criteria.insert(key.to_string(), json!(words));
             };
-            if let Some((what, share)) = &started {
+            if let Some((what, share)) = &started
+                && queue_ahead
+            {
+                offer("continue", Pick::Continue, format!("Queue nothing: finish the {what} ({:.0}% built) and be asked again when it is done.", share * 100.0));
+            } else if let Some((what, share)) = &started {
                 offer("continue", Pick::Continue, format!("Finish the {what} it has started here ({:.0}% built). Leaving it now wastes the metal already put in; the frame decays.", share * 100.0));
             } else if busy {
                 offer("continue", Pick::Continue, "Carry on with what it is doing now.".into());
@@ -158,7 +168,8 @@ impl Brain {
                 offer("wait", Pick::Wait, "Do nothing for now (only when nothing on this list is worth doing).".into());
             }
             let can = |def: UnitDefId| self.world.def(unit.def).is_some_and(|d| d.build_options.contains(&def));
-            let taken: Vec<usize> = pianist.tasks.iter().filter_map(|(id, t)| if let (true, Task::Build { spot: Some(i), .. }) = (*id != unit.id, t) { Some(*i) } else { None }).collect();
+            // Spots other builders are on or have queued (queue-ahead-smoke: two constructors queued spot_14 at once).
+            let taken: Vec<usize> = pianist.tasks.iter().chain(pianist.queued.iter()).filter_map(|(id, t)| if let (true, Task::Build { spot: Some(i), .. }) = (*id != unit.id, t) { Some(*i) } else { None }).collect();
             let mut spots: Vec<(usize, f32)> = Vec::new();
             if can(kit.extractor) {
                 spots = picture
@@ -222,7 +233,10 @@ impl Brain {
             if can(kit.radar) {
                 offer("radar_at", Pick::BuildingAt(kit.radar), "Build a radar tower (60 metal, sees 2000) at the place answered in `where`.".into());
             }
-            if let Some(lab) = own.iter().filter(|u| u.def == kit.lab && !u.being_built).min_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos))) {
+            // Helping the lab cannot be queued behind a build (the engine's guard order takes no queue flag).
+            if let Some(lab) = own.iter().filter(|u| u.def == kit.lab && !u.being_built).min_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos)))
+                && !queue_ahead
+            {
                 offer("assist_lab", Pick::AssistLab(lab.id), "Help the lab build: adds this builder's build power to whatever it makes.".into());
             }
             if let Some(field) = self.reclaim.fields.iter().filter(|f| f.metal >= 100.0 && f.at.dist2d(unit.pos) < RECLAIM_WITHIN).max_by(|a, b| a.metal.total_cmp(&b.metal)) {
@@ -249,9 +263,14 @@ impl Brain {
                     offer("attack", Pick::Attack(party.at, party.name.clone()), format!("Attack {} ({}, {:.0} away) now and come back to what it was doing: against this unit alone, {odds}.", party.name, party.composition, party.at.dist2d(unit.pos)));
                 }
             }
-            let instructions = json!(format!(
-                "Given `actors.{name}` and the player's `instructions`, what should {name} do next? Prefer what the instructions say; keep to the plan unless the situation has changed. Energy now: {energy_words}. Metal now: {metal_words}."
-            ));
+            let instructions = json!(if let Some((what, share)) = started.as_ref().filter(|_| queue_ahead) {
+                format!(
+                    "The {what} {name} is building is {:.0}% done. Given `actors.{name}` and the player's `instructions`, what should it do the moment that is finished? The answer is ordered behind it now, so it starts without a pause. Energy now: {energy_words}. Metal now: {metal_words}.",
+                    share * 100.0
+                )
+            } else {
+                format!("Given `actors.{name}` and the player's `instructions`, what should {name} do next? Prefer what the instructions say; keep to the plan unless the situation has changed. Energy now: {energy_words}. Metal now: {metal_words}.")
+            });
             let mut questions = vec![
                 (format!("{name}.do"), Question::Choice { instructions, criteria }),
                 (format!("{name}.where"), where_question(&format!("Suppose {name} builds a turret or a radar, or walks somewhere: at which place? Choose the place the instructions and the situation call for."), &spots, false)),
@@ -265,6 +284,7 @@ impl Brain {
                 questions,
                 name,
                 busy,
+                queue_ahead,
                 options,
                 spots: spots.iter().map(|(i, _)| *i).collect(),
             });
@@ -317,7 +337,7 @@ impl Brain {
                 if allowed.is_some() && buildables.len() < def.build_options.len() { " The player allows only the units offered here." } else { "" }
             ));
             pianist.last_asked.insert(name.clone(), frame);
-            menus.push(Menu { actor: Actor::Lab(unit.id), questions: vec![(format!("{name}.next"), Question::Choice { instructions, criteria })], name, busy: queued > 0, options, spots: Vec::new() });
+            menus.push(Menu { actor: Actor::Lab(unit.id), questions: vec![(format!("{name}.next"), Question::Choice { instructions, criteria })], name, busy: queued > 0, queue_ahead: false, options, spots: Vec::new() });
         }
 
         // Groups.
@@ -396,7 +416,7 @@ impl Brain {
                 questions.push((format!("{name}.whom"), Question::Choice { instructions: json!(format!("If {name} attacks an enemy party, which one?")), criteria }));
             }
             pianist.last_asked.insert(name.clone(), frame);
-            menus.push(Menu { actor: Actor::Group(group.name.clone()), name, busy, questions, options, spots: Vec::new() });
+            menus.push(Menu { actor: Actor::Group(group.name.clone()), name, busy, queue_ahead: false, questions, options, spots: Vec::new() });
         }
 
         // Global.
@@ -408,7 +428,7 @@ impl Brain {
             if self.strategist.is_some() {
                 questions.push(("global.needs_player".to_string(), Question::noul("Given everything, does the situation need the player's attention now: something the `instructions` do not cover, or a plan that has stopped fitting the game?")));
             }
-            menus.push(Menu { actor: Actor::Global, name: "global".into(), busy: false, questions, options: BTreeMap::new(), spots: Vec::new() });
+            menus.push(Menu { actor: Actor::Global, name: "global".into(), busy: false, queue_ahead: false, questions, options: BTreeMap::new(), spots: Vec::new() });
         }
         self.pianist = Some(pianist);
         menus

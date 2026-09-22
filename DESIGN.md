@@ -35,7 +35,7 @@ The bot process never calls into the engine; everything it knows arrives in `Hel
 3. shim → bot `Tick { frame, late, events, snapshot }` — due every `tick_frames` frames (3, 10 Hz, since 2026-09-20; `Hello`
    carries the setting, `WITHIN_REASON_TICK_FRAMES` overrides it with another divisor of 15) and sent at the first UPDATE at
    which the shim holds credit, `late` being the frames it waited. Events that occur while waiting are buffered, not
-   dropped. Snapshot = economy, own units (with velocity and the frame each can next fire), allied units (seen, never
+   dropped. Snapshot = economy, the wind blowing now, own units (with velocity and the frame each can next fire), allied units (seen, never
    commanded), visible enemies with their team and velocity.
 4. Shim reads the socket non-blocking at each UPDATE and applies any `Commands` on the engine thread.
 

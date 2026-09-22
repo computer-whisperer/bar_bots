@@ -227,6 +227,8 @@ impl Brain {
             frame: tick.frame,
             metal: snapshot.metal,
             energy: snapshot.energy,
+            wind: snapshot.wind,
+            wind_range: (self.world.hello.map.wind_min, self.world.hello.map.wind_max),
             counts: Counts {
                 extractors: count(kit.extractor) + count(kit.advanced_extractor),
                 generators: count(kit.solar) + count(kit.wind) + count(kit.advanced_solar),

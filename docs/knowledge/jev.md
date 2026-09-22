@@ -181,3 +181,15 @@ nothing the player wrote could get a generator that costs no energy to build whi
 the hands built wind at 1:56, 2:01, 2:26, 2:33; the opponent: "I built solar due to the low wind random chance".
 **Would be wrong if.** The hands had chosen wind over an offered solar (none was offered).
 **Used by.** H-HANDS-MENU (`wind_generator` and `solar_collector` as two options, each with its cost and draw).
+
+### K-hands-idle-gap-per-building
+**Claim.** A builder asked only when idle loses about 2.5 s per building to the ask, the answer and the walk to the
+next site: a wind generator every 8.5 s where a player queueing a batch gets one every 6.
+**Status.** demonstrated (2026-09-22, human-5 against Matt's replay)
+**Evidence.** human-5 (`run/matches/1790047251-human-3`): wind generators created 1:10, 1:16, 1:18, 1:38, 1:45, 1:53,
+2:02, 2:11, 2:18 (a solar at 1:27), 8.5 s apart on average; Matt's (`run/matches/1789930356-replay-player2-vs-medium`):
+0:53, 0:59, 1:08, 1:13, 1:19, 1:24, 1:30 from one batch of orders at 0:53 to 1:04, 6 s apart (armwin build time
+1600 at the commander's 300: 5.3 s).
+**Would be wrong if.** Our generators had been placed farther apart than his (his batch stood within 200 of each
+other; ours beside the builder, one reach away).
+**Used by.** H-HANDS-QUEUE.

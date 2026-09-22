@@ -89,6 +89,9 @@ pub struct Pianist {
     last_ask_frame: i32,
     /// Builders' and labs' tasks, by unit.
     pub(super) tasks: HashMap<UnitId, Task>,
+    /// A builder's next task, already ordered behind the one in progress (H-HANDS-QUEUE): it becomes the task when
+    /// the frame in progress is finished, or when the engine starts it.
+    pub(super) queued: HashMap<UnitId, Task>,
     /// When each builder, lab or group (by name) was last asked.
     last_asked: HashMap<String, i32>,
     /// Units a lab has been told to build and not yet started, oldest first.
@@ -159,6 +162,20 @@ fn spawn_worker(client: jev::Client) -> Worker {
 }
 
 impl Pianist {
+    /// The builder's queued task becomes its task, its clock starting now.
+    pub(super) fn promote(&mut self, builder: UnitId, frame: i32) {
+        if let Some(mut next) = self.queued.remove(&builder) {
+            match &mut next {
+                Task::Build { ordered, started, .. } => {
+                    *ordered = frame;
+                    *started = false;
+                }
+                Task::Assist { since, .. } | Task::Reclaim { since, .. } | Task::Repair { since, .. } | Task::Walk { since, .. } => *since = frame,
+            }
+            self.tasks.insert(builder, next);
+        }
+    }
+
     /// The client from the environment (the key file or `TYPESAFE_API_KEY`); `Err` says why there is none.
     pub fn from_env(log_dir: &Path, ai_id: i32) -> Result<Pianist, String> {
         let client = jev::Client::from_env().map_err(|e| e.to_string())?;
@@ -176,6 +193,7 @@ impl Pianist {
             interval_frames: ((seconds * FRAMES_PER_SECOND as f32) as i32).max(super::BRAIN_FRAMES),
             last_ask_frame: i32::MIN / 2,
             tasks: HashMap::new(),
+            queued: HashMap::new(),
             last_asked: HashMap::new(),
             lab_queue: HashMap::new(),
             groups: Vec::new(),
@@ -460,10 +478,16 @@ impl Brain {
         let mut refused: Vec<(UnitId, UnitDefId, Vec3)> = Vec::new();
         let Some(mut pianist) = self.pianist.take() else { return };
         pianist.tasks.retain(|id, _| own.iter().any(|u| u.id == *id));
+        pianist.queued.retain(|id, _| own.iter().any(|u| u.id == *id));
         pianist.lab_queue.retain(|id, _| own.iter().any(|u| u.id == *id));
         for event in &tick.events {
             match *event {
                 Event::UnitCreated { unit, builder: Some(builder) } => {
+                    // A frame appearing while the task is a started build is the queued build beginning (the
+                    // finished event promoted it already, unless the frame in progress died): promote now.
+                    if matches!(pianist.tasks.get(&builder), Some(Task::Build { started: true, .. })) {
+                        pianist.promote(builder, frame);
+                    }
                     // The frame stands where the engine put it, up to a building's width from the point ordered
                     // (pianist-player-6: two windmills 200 from their ordered point were not seen as started, and
                     // the next "generator" answer ordered a third; both decayed). The task's site is the frame.
@@ -483,6 +507,23 @@ impl Brain {
                     }
                 }
                 Event::UnitFinished { unit } => {
+                    // The builder whose started build this was moves on to what it queued (H-HANDS-QUEUE), or is
+                    // free to be asked.
+                    if let Some(done) = own.iter().find(|u| u.id == unit) {
+                        let builders: Vec<UnitId> = pianist
+                            .tasks
+                            .iter()
+                            .filter(|(_, t)| matches!(t, Task::Build { def, near, started: true, .. } if *def == done.def && near.dist2d(done.pos) < 250.0))
+                            .map(|(id, _)| *id)
+                            .collect();
+                        for builder in builders {
+                            if pianist.queued.contains_key(&builder) {
+                                pianist.promote(builder, frame);
+                            } else {
+                                pianist.tasks.remove(&builder);
+                            }
+                        }
+                    }
                     if let Some((_, name, pos)) = names.iter().find(|(id, _, _)| *id == unit)
                         && let Some(def) = own.iter().find(|u| u.id == unit).map(|u| u.def)
                         && self.world.def(def).is_some_and(|d| d.speed == 0.0)

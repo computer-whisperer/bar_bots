@@ -54,17 +54,21 @@ impl Brain {
         match menu.actor {
             Actor::Builder(id) => {
                 let Some(unit) = own.iter().find(|u| u.id == id) else { return };
+                // H-HANDS-QUEUE: asked ahead, the answer is ordered behind the build in progress and kept as the
+                // builder's next task.
+                let queue = menu.queue_ahead;
                 let mut task: Option<Task> = None;
                 let mut build = |plan: Plan, spot: Option<usize>| -> Option<String> {
                     let (def, site) = self.build_site_for(&plan, unit, kit)?;
-                    commands.push(Command::Build { unit: id, def, site: Some(site), queue: false });
+                    commands.push(Command::Build { unit: id, def, site: Some(site), queue });
                     task = Some(Task::Build { def, near: site.near, spot, ordered: frame, started: false });
                     Some(format!("build a {} at {}", self.name(def), self.place_words(&picture.places, site.near)))
                 };
                 // H-HANDS-STARTED: the kind of building already started, answered again, is the same build going
                 // on, not a second frame (pianist-player-6: "generator" three asks running, three frames, two decayed).
+                // Asked ahead, the same kind again is the next one, queued.
                 let started_def = match self.pianist.as_ref().and_then(|p| p.tasks.get(&id)) {
-                    Some(Task::Build { def, started: true, .. }) => Some(*def),
+                    Some(Task::Build { def, started: true, .. }) if !queue => Some(*def),
                     _ => None,
                 };
                 let pick = match pick {
@@ -97,36 +101,36 @@ impl Brain {
                     Pick::Reclaim(at) => {
                         let wrecks = self.wrecks_to_take(at, unit);
                         if !wrecks.is_empty() {
-                            commands.extend(wrecks.into_iter().enumerate().map(|(n, feature)| Command::ReclaimFeature { unit: id, feature, queue: n > 0 }));
+                            commands.extend(wrecks.into_iter().enumerate().map(|(n, feature)| Command::ReclaimFeature { unit: id, feature, queue: queue || n > 0 }));
                             task = Some(Task::Reclaim { at, since: frame });
                             did = Some(format!("reclaim wrecks at {}", self.place_words(&picture.places, at)));
                         }
                     }
                     Pick::Repair(target) => {
-                        commands.push(Command::Repair { unit: id, target, queue: false });
+                        commands.push(Command::Repair { unit: id, target, queue });
                         task = Some(Task::Repair { target, since: frame });
                         did = Some("repair".into());
                     }
                     Pick::WalkTo => {
                         if let Some(p) = place(&where_) {
                             let to = self.snap_to_reachable(p.at);
-                            commands.push(Command::Move { unit: id, to, queue: false });
+                            commands.push(Command::Move { unit: id, to, queue });
                             task = Some(Task::Walk { to, place: p.name.clone(), since: frame });
                             did = Some(format!("walk to {}", p.name));
                         }
                     }
                     Pick::Attack(at, ref party_name) => {
-                        commands.push(Command::Fight { unit: id, to: at, queue: false });
+                        commands.push(Command::Fight { unit: id, to: at, queue });
                         task = Some(Task::Walk { to: at, place: party_name.clone(), since: frame });
                         did = Some(format!("attack {party_name}"));
                     }
                     Pick::RetreatHome => {
                         match (unit.def == kit.commander).then(|| self.commander_waypoint_home(unit.pos)).flatten() {
                             Some(waypoint) => {
-                                commands.push(Command::Move { unit: id, to: waypoint, queue: false });
+                                commands.push(Command::Move { unit: id, to: waypoint, queue });
                                 commands.push(Command::Move { unit: id, to: self.home, queue: true });
                             }
-                            None => commands.push(Command::Move { unit: id, to: self.home, queue: false }),
+                            None => commands.push(Command::Move { unit: id, to: self.home, queue }),
                         }
                         task = Some(Task::Walk { to: self.home, place: "home".into(), since: frame });
                         did = Some("go home".into());
@@ -134,7 +138,13 @@ impl Brain {
                     _ => {}
                 }
                 if let Some(task) = task {
-                    self.pianist.as_mut().expect("pianist mode").tasks.insert(id, task);
+                    let pianist = self.pianist.as_mut().expect("pianist mode");
+                    if queue {
+                        pianist.queued.insert(id, task);
+                        did = did.map(|d| format!("next, queued: {d}"));
+                    } else {
+                        pianist.tasks.insert(id, task);
+                    }
                 } else if matches!(pick, Pick::Wait) {
                     self.pianist.as_mut().expect("pianist mode").tasks.remove(&id);
                 }
