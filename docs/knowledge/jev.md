@@ -172,3 +172,12 @@ changed meanwhile applied only after the waiting orders.
 took effect at 3:01 when the queue had drained; the lab died at 3:03.
 **Would be wrong if.** The packet had asked for four constructors (it said "constructors until we have a couple").
 **Used by.** H-HANDS-MENU (one order waiting at most; the counts include what is being made).
+
+### K-hands-one-generator-option-was-wind
+**Claim.** With one `generator` option chosen by the map's average wind, a packet asking for solar got wind, and
+nothing the player wrote could get a generator that costs no energy to build while the store was empty.
+**Status.** demonstrated (2026-09-22, human-4)
+**Evidence.** human-4 (`run/matches/1790046706-human-2`): packets at 0:12, 1:49 and 2:03 say "solar generator";
+the hands built wind at 1:56, 2:01, 2:26, 2:33; the opponent: "I built solar due to the low wind random chance".
+**Would be wrong if.** The hands had chosen wind over an offered solar (none was offered).
+**Used by.** H-HANDS-MENU (`wind_generator` and `solar_collector` as two options, each with its cost and draw).

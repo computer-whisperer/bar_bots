@@ -189,7 +189,13 @@ impl Brain {
                     offer("extractor", Pick::Extractor, format!("Build a metal extractor (income) at the free spot answered in `where`; the nearest free spots for it: {}.", list.join(", ")));
                 }
             }
-            let generator = if (self.world.hello.map.wind_min + self.world.hello.map.wind_max) / 2.0 >= 8.0 { kit.wind } else { kit.solar };
+            // Wind and solar as two options (human-4: the player asked for solar in three packets and the one
+            // "generator" option was wind, chosen by the map's average): solar costs no energy to build and works
+            // when the store is empty; wind is cheap and needs energy to build.
+            let map = &self.world.hello.map;
+            let cost = |def: UnitDefId| self.world.def(def).map_or(0.0, |d| d.metal_cost);
+            let wind_words = format!("Build a wind generator beside itself ({:.0} metal; gives {:.0} to {:.0} energy a second here, {:.0} on average; building it draws energy). Our energy now: {energy_words}.", cost(kit.wind), map.wind_min, map.wind_max, (map.wind_min + map.wind_max) / 2.0);
+            let solar_words = format!("Build a solar collector beside itself ({:.0} metal; a steady 20 energy a second; building it draws no energy, so it is the generator to build while the store is empty). Our energy now: {energy_words}.", cost(kit.solar));
             let labs = own.iter().filter(|u| u.def == kit.lab).count();
             let lab_words = match labs {
                 0 => "we have no lab yet: nothing makes soldiers or constructors without one".to_string(),
@@ -197,7 +203,8 @@ impl Brain {
                 n => format!("we have {n} labs already"),
             };
             for (key, def, words) in [
-                ("generator", generator, format!("Build an energy generator beside itself. Our energy now: {energy_words}.")),
+                ("wind_generator", kit.wind, wind_words),
+                ("solar_collector", kit.solar, solar_words),
                 ("lab", kit.lab, format!("Build a bot lab (the factory) in the base yard; 650 metal. {lab_words}. Our metal now: {metal_words}.{}", self.build_draw_words(unit, kit.lab, tick))),
                 ("converter", kit.converter, "Build an energy-to-metal converter beside itself (1150 metal; only with a large energy surplus and no free spots).".to_string()),
                 ("advanced_lab", kit.advanced_lab, "Build the advanced (tier 2) bot lab in the base yard: 2600 metal, for a strong economy only.".to_string()),

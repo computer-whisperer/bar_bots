@@ -297,3 +297,18 @@ raided only from minute 4; or the same rush lost to BARb medium in half of a bat
 rather than metal alone (the design's leftover); H-ARMY-CONTACT: the first parties to answer are 5-12 Pawns at 2:30
 with two turrets and no army of ours, which is a turret and commander question; the commander-unit rules of the
 opening design, step 4 (BARb's commander does not fight either).
+
+### K-open-matt-order-timings
+**Claim.** Matt's opening on Quicksilver, by the clock: extractors 0:03 and 0:10 on the two spots beside the start,
+wind 0:16, 0:22, 0:28, the lab 0:33 (finished 0:50) with energy at 490 and rising, then wind 0:53, solar 0:59, wind
+1:08, 1:13, 1:19, 1:24, 1:30 (ten generators by 1:30), the commander assisting the lab from then; the lab a
+constructor at 0:50 then Pawns from 1:12 every ten seconds (eleven by 2:45) and a second constructor at 1:45; far
+extractors from 1:45 with a turret beside them at 2:32; a converter at 2:55. Energy dipped to 15 once (1:01 to 1:07,
+the first constructor) and was full by 1:35; metal was spent as it came (8 in the bank at 2:00).
+**Status.** transcribed (2026-09-22, from `run/matches/1789930356-replay-player2-vs-medium/record-0.jsonl`; the
+user: copy it)
+**Evidence.** The record's created events and resource samples for the first three minutes, listed above.
+**Would be wrong if.** The replay's record misattributed the builder (it names none; the order is the commander's
+own until the first constructor stands at 0:50, and the lab's units are the lab's).
+**Used by.** the player's brief (the opening to copy, written as a packet); the hands' default instructions
+(`default.md`: two extractors, three wind, the lab, then generators; the lab one constructor then raiders).

@@ -67,6 +67,25 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
   before 3:01 and the lab dead at 3:03). Solar first when the store is empty, since building solar costs no energy.
   About twenty energy for every metal spent is the rule of thumb they gave.
 
+**The opening to copy: Matt's, an experienced player's replay on this map (the user, 2026-09-22: "you need a
+different opening build order, take a look at the Matt game").** [K-open-early-pawn-pressure-is-standard,
+K-open-matt-order-timings] His first three minutes, from the replay's record, to be written as your first packet:
+- commander: an extractor on each of the two spots beside the start (his at 0:03 and 0:10), then three wind
+  generators (0:16, 0:22, 0:28), then the lab (0:33, finished 0:50; energy was at 490 and rising when it started),
+  then wind generators one after another with one solar among them (six more by 1:30, ten generators in all), then
+  help the lab from 1:30 on. The store never emptied: it dipped to 15 while the lab made its first constructor and
+  was full again by 1:35.
+- lab: one constructor first (0:50), then raiders without a gap (his first Pawn at 1:12, then one every ten seconds:
+  eleven by 2:45), a second constructor at about 1:45, then raiders again. Metal was spent as it came: the bank was
+  down to 8 at 2:00 and stayed under 20.
+- constructors: extractors on the free spots outward from home, a light turret beside the far ones (his first far
+  extractor at 1:45, its turret at 2:32); a converter when energy banks up (2:55).
+- army: the raiders gather at home into one group until they are a handful, then go for the enemy's extractors and
+  builders, from about 2:30; his commander never left the base.
+So the packet's first lines are: two extractors, three wind, the lab, then generators until energy banks, and the lab
+on one constructor then raiders. Not four constructors, not the lab before the generators, not solar because the
+wind looked weak: it is not.
+
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]
 - The economy from the default packet is strong: 8 extractors by 4 minutes, 14 by 6, income 30 by 7, several labs and
@@ -171,5 +190,6 @@ job, not a reason to walk away. [experiments ledger: human-1, human-2]
 - pianist-player-13 (2026-09-22, Opus at low effort, WON at 16 minutes against HARD_AGGRESSIVE, their commander
   killed): the top tier falls to the same shape, and its commander hides: never seen for 15 minutes, rebuilt in the
   far south-east corner with a hover plant. Sweep the far corners spot by spot with marks once their first base is
-  empty, and keep the home guard on the raids, not chasing. Wind is unreliable here: when energy is at zero with
-  windmills standing, build solar.
+  empty, and keep the home guard on the raids, not chasing. (An earlier lesson here read "wind is unreliable": it is
+  not; the store empties when the lab or the lab's units draw more than the generators standing make, see the energy
+  line of the map paragraph.)

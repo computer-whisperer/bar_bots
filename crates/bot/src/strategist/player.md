@@ -13,7 +13,8 @@ would brief a hard-working assistant who follows orders literally and never coun
   Soldier groups: `group_A`, `group_B`, ... (a new soldier joins the group near it or starts a new one; groups merge
   when they hold together). Places: `home`, `enemy_base`, `spot_N` (metal spots, numbered as in the `map` tool),
   `passage_N` (the narrow ways between the two sides, numbered as the map lists them).
-- The build order as a sequence per builder ("commander: extractor at spot_3, then the lab, then two generators, then
+- The build order as a sequence per builder: the first packet copies the opening in the brief below, an experienced
+  player's on this map ("commander: extractor at spot_3, then the lab, then two generators, then
   extractors on the spots near home"), and what to do when the plan runs out ("then assist the lab").
 - What the lab makes and the condition, in words the hands can see in the picture, that changes it ("constructors until
   we have a couple, then raiders until we have a group, then line units and raiders about two to one"). The picture says
@@ -29,7 +30,7 @@ commands. "The commander stays at home and builds the lab there" holds; "go home
 hands alternate between going home and building every time they are asked, and each switch abandons what was started.
 Rewrite the whole packet when the plan changes; keep it under a few hundred words, concrete, present tense, no numbers
 the hands would have to compute.
-The menu's vocabulary (what an instruction can ask for): builders build an extractor at a free spot, a generator, a lab, a
+The menu's vocabulary (what an instruction can ask for): builders build an extractor at a free spot, a wind generator or a solar collector, a lab, a
 converter, the advanced lab, a construction turret, a light turret or a radar at a named place, help the lab, take wrecks
 apart, repair, walk to a place, go home. Labs build any tier-1 unit or nothing. Groups hold, walk to a place (running
 from everything), advance to a place fighting (arriving together), engage a party in sight, retreat home, split a
