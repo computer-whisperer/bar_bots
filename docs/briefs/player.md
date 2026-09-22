@@ -181,6 +181,23 @@ K-maps-comet-barb-opens-bots, the tempo model]
   Ticks, a light turret at the spot can. The fight: thirteen Blitzes died to one Rocketeer and one Centurion at
   11:57; this opponent opened with a bot lab and had Centurions by minute twelve; switch the plant to Stouts the
   first time a line bot is seen, and keep Blitzes for what cannot shoot back.
+- comet-4 (medium, LOST at 16.9 min, the commander killed at home): **the opening to copy on this map, found.**
+  Commander list: extractor spot_45, extractor spot_50, solar, solar, vehicle_plant, extractor spot_36, extractor
+  spot_43, solar, assist; `produce {"all": ["armcv:2", "armflash"]}`; each constructor given a list of the strip's
+  spots with a turret after each pair as it appeared. That gave the plant at 0:41, two constructors by 1:30, the
+  first Blitz at 2:08, thirteen by 4:07, six extractors at 2:30, thirteen at minute 8 and nineteen at minute 10 with
+  income 41: ahead of this opponent all game on the board. It was lost on three things, all after the opening.
+  (1) Metal banked from minute 8 (800, then 2,100 for six minutes) with one plant: at income 30 the second plant is
+  due, at 40 the third; a plant is 590 metal and pays for itself in twenty seconds of production. Spend the bank on
+  plants and constructors the turn it appears. (2) 22 Blitzes were sent onto their base at 10:18 and died to four
+  light turrets and a beamer for 2,245 of theirs: Blitzes never go at turrets; Stouts take a light turret with a few
+  friends, and Shellshockers (710 range) outrange every tier-1 turret. (3) The whole army went east at 14:12 to 16:12
+  while their block of Maces, Centurions and Rocketeers walked into our base and killed the commander at 16:49; the
+  recall came at 25% health. This opponent's block arrives in our half around minute 10 and comes back every few
+  minutes: a Stout group stays at home on the turrets whenever the ball is east, and the commander goes to the far
+  end of the strip at the first sight of a line bot near home, not at 25%. Their commander stood at the north end
+  (7383, 609) this game, the base at H1-H2. Blitz raids took 17 extractors (8 to Blitzes): turrets at the outer
+  spots held only where they stood two together.
 
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]

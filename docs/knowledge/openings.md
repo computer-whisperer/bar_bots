@@ -330,3 +330,16 @@ generators beyond the second, and a solar only when energy stalls.
 assist), `analyze_match` curves (bank 0 and income 6 to 8 through minute 11).
 **Would be wrong if.** The same list with two solars and four extractors were no faster to the tenth Blitz.
 **Used by.** the player's brief (Comet Catcher section).
+
+### K-open-comet-vehicle-list
+**Claim.** On Comet Catcher from the west strip, the list "extractor spot_45, extractor spot_50, solar, solar,
+vehicle_plant, extractor spot_36, extractor spot_43, solar, assist" for the commander, `armcv:2` then Blitzes from
+the plant, and a list of the strip's spots with a turret after each pair for each constructor, gives the plant at
+0:41, two constructors by 1:30, the first Blitz at 2:08 and thirteen by 4:07, six extractors at 2:30, nineteen and
+income 41 by minute 10 (comet-4); against BARb medium that is ahead on the board all game (its army value under
+ours until minute 11; extractors 19 to 7 at minute 10). What it does not do is spend the bank: 2,100 metal banked
+from minute 9 on one plant.
+**Status.** measured (2026-09-23), one game; the same list against hard is untried.
+**Evidence.** `run/matches/1790052919-comet-4-medium`: the turn-one calls, `analyze_match` curves.
+**Would be wrong if.** The list on the east strip, or against hard, were a minute slower.
+**Used by.** the player's brief (the Comet Catcher section).
