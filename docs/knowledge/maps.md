@@ -77,6 +77,18 @@ rush-7 batches, medium; two games with no truth file).
 **Would be wrong if.** The hard profiles, which those batches did not run, opened with the plant.
 **Used by.** the player's brief (the Comet Catcher section).
 
+### K-maps-comet-tanks-stall-in-a-packed-base
+**Claim.** Tanks path badly out of a base packed with buildings: on Comet Catcher with 18 solars and 5 vehicle plants
+within 800 of home, a group of 8 Blitzes stood at spot_50 "not nearer its goal" for over 35 s and a group of 48 for
+67 s (the player's note at 15:04), both ordered to spots far east. Generators belong on named spots away from the
+plants, and the plants apart, when the army is vehicles.
+**Status.** observed (2026-09-23), one game; the cause (buildings, not the footwork's march hold) is inferred from
+the geometry, not shown.
+**Evidence.** `run/matches/1790051208-comet-1-easy`: the picture's `progress` words for group_P at 14:30 to 15:04;
+the record's building positions.
+**Would be wrong if.** The same groups stalled with the base spread out, or the stall came from the march rule.
+**Used by.** the player's brief (the Comet Catcher section).
+
 ### K-maps-metal-share-wins
 **Claim.** Holding more metal spots is the main predictor of winning; one guide puts it at "60%+ of the spots usually wins".
 On a symmetric 1v1 map this means every spot in our half plus some contested middle spots, and denying the opponent's

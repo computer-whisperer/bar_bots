@@ -142,6 +142,20 @@ K-maps-comet-barb-opens-bots, the tempo model]
   for the lab, and everything after that is open: how many solars before the plant, Blitz raids against Pawn
   raids, when the Stouts come, how far the tanks range on a map with no chokes. Say the plan you chose in a `note`
   on turn one and, at the end, what you would change; the next game's brief carries it.
+- comet-1 (easy, WON at 17.5 min): the plan was two extractors, three solars, the plant by 0:40, `armcv:1` then
+  Blitzes. The hands built the extractors at 0:03 and 0:11, solars at 0:18 and 0:28, then two more extractors and a
+  solar, and the plant only at 1:40 with 890 metal banked: the plant's menu words warned that the store would empty,
+  and the hands did not count the solars (both words are fixed: the store's fate over the build is computed, and
+  the generator options carry the count standing). Blitzes from 2:43; 233 of them, five plants, 27 solars and 38
+  extractors by the end. The fight: fourteen Blitzes went east at 6:20 with no radar and nothing scouted, found the
+  commander at 8:58 at the north-east end of its strip and fed nine Blitzes into its D-gun (1,540 metal lost to
+  660); the game was won by a gathered wave of 19 and then 32 onto its base at 11:57. The user, watching the replay:
+  "radars would have helped there". No radar was built all game: have a constructor build one at the front edge of
+  our strip by minute three (`radar_at` a spot or a mark; it sees 2,000), and another mid-map when the tanks go
+  out. The base was packed (18 solars and 5 plants within 800 of home) and tanks path badly through buildings:
+  groups of 8 and of 48 stalled at home for 35 to 67 s trying to walk out. Put the solars on named spots away from
+  the plants (a constructor's job) and the plants apart. Energy sat at 0 at 11:57 with five plants: about eight
+  solars behind each plant. This opponent opened with a plant on easy here, against its bot labs in the older games.
 
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]

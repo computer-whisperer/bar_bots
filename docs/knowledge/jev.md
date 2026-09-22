@@ -220,3 +220,16 @@ commander's first attack at 3:26.
 **Would be wrong if.** The Grunts had died at home beside the commander (none did).
 **Used by.** H-HANDS-GROUPS (newcomers walk to the largest group in our half), H-HANDS-COMMANDER-FIGHTS (a busy
 party within 500), the brief's fight paragraph.
+
+### K-hands-plant-deterred-by-the-draw-warning
+**Claim.** A warning in a factory option's words ("the store empties unless generators come first") outweighs the
+player's plan for the hands: with "three solar collectors, then the vehicle plant" as the instruction, two solars
+standing, 890 metal banked and the plant affordable, the hands chose extractors and a third solar for a minute and
+the plant came at 1:40 (comet-1). The words now state the store's fate over the build (how many seconds short, if
+any) and the generator options carry the count of generators standing, since the hands do not count them either
+(K-hands-do-not-count-constructors).
+**Status.** observed (2026-09-23), one game; the changed words are unmeasured.
+**Evidence.** `run/matches/1790051208-comet-1-easy/00/jev-0.jsonl`: the commander's asks 0:24 to 1:40 (plant at
+0.08 at 0:24, extractor 0.38 against solar 0.31 at 0:34).
+**Would be wrong if.** The plant still came a minute late with the new words.
+**Used by.** `menu.rs` `build_draw_words`, the generator words (H-HANDS-MENU).

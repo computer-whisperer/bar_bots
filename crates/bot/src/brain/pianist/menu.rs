@@ -212,8 +212,15 @@ impl Brain {
             // when the store is empty; wind is cheap and needs energy to build.
             let map = &self.world.hello.map;
             let cost = |def: UnitDefId| self.world.def(def).map_or(0.0, |d| d.metal_cost);
-            let wind_words = format!("Build a wind generator beside itself ({:.0} metal; gives {:.0} to {:.0} energy a second here, {:.0} on average; building it draws energy). Our energy now: {energy_words}.", cost(kit.wind), map.wind_min, map.wind_max, (map.wind_min + map.wind_max) / 2.0);
-            let solar_words = format!("Build a solar collector beside itself ({:.0} metal; a steady 20 energy a second; building it draws no energy, so it is the generator to build while the store is empty). Our energy now: {energy_words}.", cost(kit.solar));
+            // The count beside the option: the hands do not count what stands against a plan (comet-1: "three solar
+            // collectors, then the plant" got two, then extractors).
+            let generators = format!(
+                "We have {} solar collectors and {} wind generators standing or started.",
+                own.iter().filter(|u| u.def == kit.solar || u.def == kit.advanced_solar).count(),
+                own.iter().filter(|u| u.def == kit.wind).count()
+            );
+            let wind_words = format!("Build a wind generator beside itself ({:.0} metal; gives {:.0} to {:.0} energy a second here, {:.0} on average; building it draws energy). {generators} Our energy now: {energy_words}.", cost(kit.wind), map.wind_min, map.wind_max, (map.wind_min + map.wind_max) / 2.0);
+            let solar_words = format!("Build a solar collector beside itself ({:.0} metal; a steady 20 energy a second; building it draws no energy, so it is the generator to build while the store is empty). {generators} Our energy now: {energy_words}.", cost(kit.solar));
             let factories = own.iter().filter(|u| kit.is_factory(u.def)).count();
             let factory_words = match factories {
                 0 => "we have no factory yet: nothing makes soldiers or constructors without one".to_string(),
@@ -467,12 +474,18 @@ impl Brain {
         if d.build_time <= 0.0 || d.energy_cost <= 0.0 {
             return String::new();
         }
-        let draw = d.energy_cost / d.build_time * b.build_speed;
-        let income = tick.snapshot.energy.income;
-        if draw > income {
-            format!(" Building it draws about {draw:.0} energy a second; we make {income:.0}: the store empties unless generators come first.")
+        // The store's fate over the build, not a warning (comet-1: "the store empties unless generators come first"
+        // beside the plant kept the hands on extractors and solars until 1:40 with 890 metal banked; the store
+        // would have run out for the last few seconds of a nineteen-second build).
+        let seconds = d.build_time / b.build_speed.max(1.0);
+        let draw = d.energy_cost / seconds;
+        let energy = &tick.snapshot.energy;
+        let spare = energy.income - energy.usage;
+        let short = d.energy_cost - (energy.current + spare * seconds);
+        if short <= 0.0 {
+            format!(" Building it takes this builder about {seconds:.0} s and {:.0} energy ({draw:.0} a second); the store covers it.", d.energy_cost)
         } else {
-            format!(" Building it draws about {draw:.0} energy a second; we make {income:.0}.")
+            format!(" Building it takes this builder about {seconds:.0} s and {:.0} energy ({draw:.0} a second); the store runs out about {:.0} s before it is done and the build slows for that long.", d.energy_cost, (short / draw).min(seconds))
         }
     }
 }

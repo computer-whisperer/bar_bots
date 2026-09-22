@@ -253,7 +253,7 @@ impl Brain {
         let Some(shared) = &self.strategist else { return };
         for event in &tick.events {
             if let Event::Chat { player, text } = event {
-                if let Some(i) = self.said.iter().position(|s| s == text) {
+                if let Some(i) = self.said.iter().position(|s| s == text || text.ends_with(s.as_str())) {
                     self.said.remove(i);
                     continue;
                 }
@@ -313,7 +313,11 @@ impl Brain {
             && let Some(banner) = self.banner.take()
         {
             let side = self.world.hello.teams.iter().find(|t| t.team == self.world.hello.team).map_or("?", |t| t.side.as_str());
-            commands.push(Command::Say { text: format!("{{name}} is {banner} | seat ai{} team {} {side}", self.world.hello.ai_id, self.world.hello.team) });
+            let tail = format!(" is {banner} | seat ai{} team {} {side}", self.world.hello.ai_id, self.world.hello.team);
+            // The echo comes back with the name filled in, so the tail is what `relay_chat` drops (comet-1: the
+            // banner woke the player at 0:05 as "someone in the game said something").
+            self.said.push(tail.clone());
+            commands.push(Command::Say { text: format!("{{name}}{tail}") });
         }
         if self.pianist.is_some() {
             self.track_shelling(tick);
