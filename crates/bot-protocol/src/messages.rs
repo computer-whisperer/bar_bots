@@ -18,6 +18,13 @@ pub struct Vec3 {
     pub z: f32,
 }
 
+/// A weapon as the engine names it, with its range: what hit us when the shooter is out of sight.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Weapon {
+    pub name: String,
+    pub range: f32,
+}
+
 impl Vec3 {
     /// Horizontal distance; height is ignored.
     pub fn dist2d(self, other: Vec3) -> f32 {
@@ -266,7 +273,10 @@ pub enum Event {
     UnitFinished { unit: UnitId },
     UnitIdle { unit: UnitId },
     UnitMoveFailed { unit: UnitId },
-    UnitDamaged { unit: UnitId, attacker: Option<UnitId>, damage: f32 },
+    /// `from`: a unit vector from the hit unit toward the attacker, which the engine gives whether or not the
+    /// attacker is in sight (only `attacker` is withheld then); `weapon`: what hit it. Both `None` for damage with
+    /// no attacker (a collision, a crash).
+    UnitDamaged { unit: UnitId, attacker: Option<UnitId>, damage: f32, #[serde(default)] from: Option<Vec3>, #[serde(default)] weapon: Option<Weapon> },
     UnitDestroyed { unit: UnitId, attacker: Option<UnitId> },
     EnemyEnterLos { enemy: UnitId },
     EnemyLeaveLos { enemy: UnitId },

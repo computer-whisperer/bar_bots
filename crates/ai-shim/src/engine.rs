@@ -653,6 +653,16 @@ impl Engine {
         if code == 0 { Ok(()) } else { Err(code) }
     }
 
+    /// The weapon behind a damage event, by the engine's weapon definition id; `None` for -1.
+    pub fn weapon(&self, def: std::ffi::c_int) -> Option<bot_protocol::Weapon> {
+        if def < 0 {
+            return None;
+        }
+        let name = self.string(call!(self, WeaponDef_getName(def)));
+        let range = call!(self, WeaponDef_getRange(def));
+        Some(bot_protocol::Weapon { name, range })
+    }
+
     fn string(&self, ptr: *const std::ffi::c_char) -> String {
         if ptr.is_null() {
             return String::new();

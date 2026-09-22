@@ -61,8 +61,11 @@ and factories were seen), `curves` (levels now, 3 and 6 minutes ago), fights, en
 actor with what it is doing as the picture has it (in full the first time, then those whose entry changed), the hands'
 judgement when it is high (base in danger, attack coming), and what they did since your last turn. `situation` returns
 the whole picture your hands read this second, the actors and places by name; read it when you need to know what an
-instruction will be matched against. `map` is static: read it once, early, for the spot numbers, the passages and the
-terrain picture.
+instruction will be matched against. `map` is static: read it once, early, for the spot numbers, the passages, the
+terrain picture and the water: how much of the map is sea, and what of ours can cross it. The commander is
+amphibious and walks on the sea floor; so is the enemy's, and it can hide in the sea when its base is gone. Your
+soldiers stop at the shore. When a group is shelled by something it cannot see, the picture names a place
+`shelling` where the weapon likeliest stands, with its range and direction, and the group can advance onto it.
 
 How games on this map are won and lost. Metal is everything: extractors on metal spots are the income, income becomes
 army, and the bigger army kills the smaller one and then the base behind it. A side doing well holds about 5 extractors

@@ -52,3 +52,6 @@ Results on the corners are balanced (BARb had the same handicap) but not the pla
 of a strip's extractor clusters. `--boxes standard` (the default) reads the lobby's saved boxes from
 `crates/arena/startboxes.dat`; a map missing there fails at argument parsing, so copy its line from BYAR-Chobby's
 `savedBoxes.dat` (or `mapDetails.lua`'s `StartboxesSet`, zlib and base64) rather than falling back to `corners`.
+
+- The bot protocol changed on 2026-09-22 (`UnitDamaged` gained `from` and `weapon`): the arena builds both sides, but
+  GUI play needs `run/install_to_bar.sh` re-run so the installed shim matches the bot.

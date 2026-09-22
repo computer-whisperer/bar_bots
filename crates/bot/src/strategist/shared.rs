@@ -360,6 +360,8 @@ pub struct Score {
     /// Its factories seen and not seen destroyed, and its commander's last sighting with its age in seconds.
     pub enemy_factories: Vec<Place>,
     pub enemy_commander: Option<(Place, i32)>,
+    /// Its last seen position is off ground our bots can walk to: in the sea, where only amphibians follow.
+    pub enemy_commander_afloat: bool,
     /// Its extractors seen outside its base, nearest to us first, each with the metal of turrets known within 500.
     pub raid_targets: Vec<(Place, u32)>,
     /// Set when our soldiers stand at the guessed enemy start and no enemy building is known near it: the guess is

@@ -132,3 +132,8 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   the hands and reported. Its lessons: the ball does not leave until the home guard is standing; a lab of Pawns
   from the start against medium; when the report says a group gave up its advance, the place is unreachable: name
   the reachable spots around it instead.
+- pianist-player-8 (2026-09-22, Opus at low effort, WON at 22 minutes against MEDIUM, their commander killed in
+  our half): the third medium win in a row, and the third time the extractors fell to one while the ball was in
+  their half. The pattern that wins: expand to 13 by minute 5, commit at a 5:1 army lead, kill their factories, and
+  hold the whole army at home when their commander comes raiding. The pattern that still costs: nothing stops
+  twelve Flashes behind the ball except the ball.

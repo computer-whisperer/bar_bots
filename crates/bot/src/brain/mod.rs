@@ -19,6 +19,7 @@ mod planner;
 mod raid;
 mod scout;
 mod reclaim;
+mod shelling;
 mod squads;
 mod territory;
 mod threat;
@@ -106,6 +107,9 @@ pub struct Brain {
     directives: Directives,
     /// Enemy buildings seen and not known to be destroyed: definition, position, frame last seen.
     enemy_buildings: HashMap<UnitId, (UnitDefId, Vec3, i32)>,
+    /// Hits from out of sight in the last twenty seconds (`shelling.rs`), and when the player was last woken for them.
+    shelling: Vec<shelling::Shell>,
+    shelling_warned: i32,
     /// Buildings `forget_razed_buildings` dropped this tick, for the team board.
     razed: Vec<UnitId>,
     /// Every enemy soldier seen and not known dead, with when it was last seen: what we know of their army, a floor.
@@ -206,6 +210,8 @@ impl Brain {
             strategist,
             directives: Directives::default(),
             enemy_buildings: HashMap::new(),
+            shelling: Vec::new(),
+            shelling_warned: i32::MIN / 2,
             razed: Vec::new(),
             enemy_soldiers: HashMap::new(),
             enemy_commander_seen: None,
@@ -283,6 +289,7 @@ impl Brain {
             commands.push(Command::Say { text: format!("{{name}} is {banner} | seat ai{} team {} {side}", self.world.hello.ai_id, self.world.hello.team) });
         }
         if self.pianist.is_some() {
+            self.track_shelling(tick);
             self.run_pianist(tick, &kit, &mut commands);
         } else {
             self.protect_commander(tick, &kit, &mut commands);
@@ -351,7 +358,7 @@ impl Brain {
         for commander in tick.snapshot.own_units.iter().filter(|u| u.def == kit.commander) {
             // Who is hurting the commander: the one fact a lost game's log must hold.
             for event in &tick.events {
-                let Event::UnitDamaged { unit, attacker, damage } = *event else { continue };
+                let Event::UnitDamaged { unit, attacker, damage, .. } = *event else { continue };
                 if unit != commander.id {
                     continue;
                 }

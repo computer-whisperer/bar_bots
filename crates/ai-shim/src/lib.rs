@@ -223,7 +223,13 @@ impl Instance {
             }
             sys::EVENT_UNIT_DAMAGED => {
                 let e = event!(SUnitDamagedEvent);
-                Event::UnitDamaged { unit: UnitId(e.unit), attacker: unit(e.attacker), damage: e.damage }
+                // The direction is the zero vector when nothing attacked (a collision); the engine fills it in for an
+                // attacker out of our sight as well as one in it.
+                let from = (!e.dir_posF3.is_null())
+                    .then(|| unsafe { std::slice::from_raw_parts(e.dir_posF3, 3) })
+                    .map(|d| Vec3 { x: d[0], y: d[1], z: d[2] })
+                    .filter(|d| d.x.hypot(d.z) > 0.01 || d.y.abs() > 0.01);
+                Event::UnitDamaged { unit: UnitId(e.unit), attacker: unit(e.attacker), damage: e.damage, from, weapon: self.engine.weapon(e.weaponDefId) }
             }
             sys::EVENT_UNIT_DESTROYED => {
                 let e = event!(SUnitDestroyedEvent);

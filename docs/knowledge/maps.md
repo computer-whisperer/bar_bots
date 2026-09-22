@@ -204,3 +204,14 @@ opening where a start sits behind a choke (not measured yet: Great Divide).
 **Would be wrong if.** The same report on Great Divide or Comet Catcher gave the same ratio.
 **Used by.** (none) — the search uses the map's ground anyway (`buildorder::game::Walked`).
 
+
+### K-maps-quicksilver-is-an-island
+**Claim.** Quicksilver Remake is an island: the sea surrounds it, the commander (ours and theirs) is amphibious and
+walks on the sea floor, and the enemy commander retreats into the water and builds on the shore from it when its base
+is gone. Nothing our bot lab builds fights in the water (the Crossbow and the Tumbleweed can enter it; neither
+fights ground units), so a commander in the sea is out of reach until the referee ends the game on its economy.
+**Status.** stated by the user 2026-09-22 from watching pianist-player-7; the amphibian list is from the unit
+definitions' move classes.
+**Evidence.** pianist-player-7: the enemy commander ended at (6825, 5906) on the south-east shore beside a shipyard
+with a ball of 226 Maces stalled at the water's edge; the referee called the win with 8 enemy units left.
+**Used by.** the map tool's `water` entry, the picture's and the report's enemy-commander lines.

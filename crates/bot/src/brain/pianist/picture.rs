@@ -428,6 +428,11 @@ impl Brain {
                 places.push(Place { name: name.clone(), at: Vec3 { x: *x, y: 0.0, z: *z }, spot: None });
             }
         }
+        // H-HANDS-SHELLED: where fire from out of sight likeliest comes from, while it lasts.
+        let shelling = self.shelling();
+        if let Some(s) = &shelling {
+            places.push(Place { name: "shelling".into(), at: s.at, spot: None });
+        }
         let parties = self.enemy_parties(&snapshot.enemies);
 
         let mut place_entries: BTreeMap<String, Value> = BTreeMap::new();
@@ -474,6 +479,10 @@ impl Brain {
                     }
                     None => "where the enemy is presumed to start; not yet seen".into(),
                 },
+                None if place.name == "shelling" => {
+                    let s = shelling.as_ref().expect("a shelling place has a shelling");
+                    format!("where the {} shelling us from out of our sight likeliest stands: its range is {:.0}, {} hits on us in the last 20 s from the {}; advancing a group onto it (fight_to) kills it, a group that stays where it is keeps being hit", s.weapon, s.range, s.hits, super::super::shelling::compass(s.dir))
+                }
                 None if marks.contains_key(&place.name) => {
                     let walkable = self.snap_to_reachable(place.at);
                     let off = walkable.dist2d(place.at);
@@ -560,7 +569,7 @@ impl Brain {
             "base": match self.found_enemy_base() { Some(at) => format!("found at {}", self.place_words(&places, at)), None => format!("not found; presumed at {}", self.world.grid(enemy_base)) },
             "buildings_seen": remembered,
             "army_known": format!("{} soldiers worth {:.0} metal seen in the last three minutes and not seen to die; it may have much more", known_soldiers.len(), known_metal.max(0.0)),
-            "commander": self.enemy_commander_seen.map_or("never seen".to_string(), |(pos, seen)| format!("seen at {} {} ago", self.place_words(&places, pos), clock(frame - seen))),
+            "commander": self.enemy_commander_seen.map_or("never seen".to_string(), |(pos, seen)| format!("seen at {} {} ago{}", self.place_words(&places, pos), clock(frame - seen), if self.reachable_on_foot(pos) { "" } else { " (in the water or on ground our bots cannot walk to: it is amphibious, our soldiers are not)" })),
         });
 
         // Actors.
@@ -669,7 +678,18 @@ impl Brain {
                 for who in shooters {
                     *kinds.entry(who.as_str()).or_default() += 1;
                 }
-                let words: Vec<String> = kinds.iter().map(|(who, n)| if *who == "something unseen" { format!("something out of our sight, {n} hits: a turret or artillery that outranges us") } else { format!("{who} ({n} hits)") }).collect();
+                let words: Vec<String> = kinds
+                    .iter()
+                    .map(|(who, n)| {
+                        if *who != "something unseen" {
+                            return format!("{who} ({n} hits)");
+                        }
+                        match &shelling {
+                            Some(s) => format!("something out of our sight, {n} hits: a {} with range {:.0} from the {}; its likeliest place is `shelling` at {}", s.weapon, s.range, super::super::shelling::compass(s.dir), self.place_words(&places, s.at)),
+                            None => format!("something out of our sight, {n} hits: a turret or artillery that outranges us"),
+                        }
+                    })
+                    .collect();
                 entry["under_fire"] = json!(format!("yes, this second, by {}", words.join(", ")));
             }
             actors.insert(format!("group_{}", group.name), entry);

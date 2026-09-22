@@ -174,3 +174,16 @@ simulator's metal-income bias at minute 5 went from +2.0 / +2.4 metal/s to +1.1 
 **Would be wrong if.** A cheat-spawned test (extractors, zero energy, no builders) kept paying metal.
 **Used by.** `crates/buildorder` (the opening search's model).
 
+
+### K-engine-damage-direction-from-unseen-attackers
+**Claim.** The AI interface lists no projectiles, but its damage event carries the weapon definition and a unit vector
+from the hit unit toward the attacker's (radar-error) position whether or not the attacker is in our sight; only the
+attacker's id is withheld when it is not. With the weapon's range from the callback, one hit gives a bearing and a
+reach, and two hits on units standing apart give a point.
+**Status.** read from the engine source (2026-09-22); the bearings' accuracy is pianist-player-9's to show.
+**Evidence.** `rts/ExternalAI/EngineOutHandler.cpp` `UnitDamaged`: `attackeeDir` is set whenever `attacker` is not
+null, and only `visibleAttackerUnitId` depends on LOS or radar; `AISEvents.h` `SUnitDamagedEvent` has `dir_posF3`
+and `weaponDefId`.
+**Would be wrong if.** The engine zeroed the direction for an unseen attacker (it does not: the check is on the
+pointer, not on visibility) or the radar error put the bearing far off (it is the attacker's error position).
+**Used by.** H-HANDS-SHELLED.
