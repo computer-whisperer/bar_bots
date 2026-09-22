@@ -71,20 +71,29 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
 different opening build order, take a look at the Matt game").** [K-open-early-pawn-pressure-is-standard,
 K-open-matt-order-timings] His first three minutes, from the replay's record, to be written as your first packet:
 - commander: an extractor on each of the two spots beside the start (his at 0:03 and 0:10), then three wind
-  generators (0:16, 0:22, 0:28), then the lab (0:33, finished 0:50; energy was at 490 and rising when it started),
-  then wind generators one after another with one solar among them (six more by 1:30, ten generators in all), then
-  help the lab from 1:30 on. The store never emptied: it dipped to 15 while the lab made its first constructor and
-  was full again by 1:35.
-- lab: one constructor first (0:50), then raiders without a gap (his first Pawn at 1:12, then one every ten seconds:
-  eleven by 2:45), a second constructor at about 1:45, then raiders again. Metal was spent as it came: the bank was
-  down to 8 at 2:00 and stayed under 20.
+  generators (0:16, 0:22, 0:28), then the lab (0:33, finished 0:50; energy was at 490 and rising when it started).
+  The moment the lab stood (0:50) it helped the lab; at 0:53 it ordered seven wind generators and a solar as one
+  batch, built them back to back by 1:30 (one every six seconds, no walking between), and from 1:36 it helped the
+  lab for good, leaving it only for a wreck at 2:02. Ten generators in all. The store never emptied: it dipped to
+  15 while the lab made its first constructor and was full again by 1:35.
+- lab: one constructor first (0:50), then raiders and nothing else (his first Pawn at 1:12, one every eleven seconds
+  while the lab worked alone, then every four to fourteen seconds with the commander helping: the rate is then set
+  by metal, not build power, and the bank was spent to 8 by 2:00 and kept under 20). A second constructor only at
+  1:45, after six Pawns. The numbers: a Pawn is 1650 build time, the lab builds at 150 (eleven seconds a Pawn), the
+  commander at 300 on top of it (under four seconds a Pawn, 54 metal each: the commander helping turns the bank
+  into Pawns as fast as it can, so it helps the lab whenever it has no generator to build).
 - constructors: extractors on the free spots outward from home, a light turret beside the far ones (his first far
   extractor at 1:45, its turret at 2:32); a converter when energy banks up (2:55).
 - army: the raiders gather at home into one group until they are a handful, then go for the enemy's extractors and
   builders, from about 2:30; his commander never left the base.
-So the packet's first lines are: two extractors, three wind, the lab, then generators until energy banks, and the lab
-on one constructor then raiders. Not four constructors, not the lab before the generators, not solar because the
-wind looked weak: it is not.
+So the packet's first lines are: two extractors, three wind, the lab, then generators until energy banks up high and
+then help the lab, and help the lab whenever nothing is due; the lab on one constructor and then raiders only, a
+second constructor after the sixth raider. Not four constructors, not a second constructor before the first
+raider (human-5: a second constructor at 1:15 put the first Pawn at 1:40, thirty seconds behind Matt), not the
+lab before the generators, not solar because the wind looked weak: it is not. Where we still lag him (human-5): our
+commander built its generators one pick at a time, eight and a half seconds each against his six, and began
+helping the lab at 2:24 against his 1:36; write "help the lab" as the commander's standing state and generators as
+the exception while energy is low.
 
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]

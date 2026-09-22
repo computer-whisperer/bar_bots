@@ -310,5 +310,10 @@ user: copy it)
 **Evidence.** The record's created events and resource samples for the first three minutes, listed above.
 **Would be wrong if.** The replay's record misattributed the builder (it names none; the order is the commander's
 own until the first constructor stands at 0:50, and the lab's units are the lab's).
+**Update (human-5 review).** The commander's commands in the record: `guard` on the lab at 0:50 as it finished; seven
+wind and a solar ordered 0:53 to 1:04 as one batch, built by 1:30; `guard` again at 1:36 and, after a reclaim, at
+2:02, and nothing else until 3:04. Pawn intervals 11-12 s while the lab worked alone (1:12, 1:23, 1:35), then 4-14 s
+with the commander's 300 build power on the lab's 150: metal-bound (income 6, a Pawn 54) with the bank spent to 8
+by 2:00. The second constructor came at 1:45 after six Pawns.
 **Used by.** the player's brief (the opening to copy, written as a packet); the hands' default instructions
 (`default.md`: two extractors, three wind, the lab, then generators; the lab one constructor then raiders).
