@@ -317,3 +317,16 @@ with the commander's 300 build power on the lab's 150: metal-bound (income 6, a 
 by 2:00. The second constructor came at 1:45 after six Pawns.
 **Used by.** the player's brief (the opening to copy, written as a packet); the hands' default instructions
 (`default.md`: two extractors, three wind, the lab, then generators; the lab one constructor then raiders).
+
+### K-open-comet-solars-starve-the-opening
+**Claim.** On Comet Catcher (wind 1 to 4) a vehicle opening that buys its energy with solars starves its metal: six
+solars are 930 metal at 155 each, eight Blitzes' worth, and with two extractors giving 6 metal a second the store sat
+at zero from minute two to minute thirteen while the plant, which with the commander helping can spend 25 a second
+on Blitzes, made 28 Blitzes in seventeen minutes (comet-3). Wind on Quicksilver costs 40 a generator, which is why
+Matt's eight generators were cheap there. The bound on this map is metal: extractors on the strip's spots before
+generators beyond the second, and a solar only when energy stalls.
+**Status.** observed (2026-09-23), one game, the corrected order untried.
+**Evidence.** `run/matches/1790052453-comet-3-medium`: the list (two extractors, three solars, plant, three solars,
+assist), `analyze_match` curves (bank 0 and income 6 to 8 through minute 11).
+**Would be wrong if.** The same list with two solars and four extractors were no faster to the tenth Blitz.
+**Used by.** the player's brief (Comet Catcher section).

@@ -89,6 +89,18 @@ the record's building positions.
 **Would be wrong if.** The same groups stalled with the base spread out, or the stall came from the march rule.
 **Used by.** the player's brief (the Comet Catcher section).
 
+### K-maps-comet-middle-spots-die-first
+**Claim.** On Comet Catcher the spots nearest home by walking time are not the strip's own: from a west-strip start
+at (1176, 3497) the menu lists spot_43 (1992, 3288) and spot_52 (2424, 3736) in the open middle before spot_28 and
+spot_30 of the strip, and a constructor told to "expand along our strip" took them; against medium each died within
+27 to 70 s of standing, to Ticks and Pawns, while the strip's spot_36, spot_54, spot_28 and spot_30 stood untaken
+until 5:38 (comet-3). The strip's spots are named in the brief, so the player lists them by name.
+**Status.** observed (2026-09-23), one game.
+**Evidence.** `run/matches/1790052453-comet-3-medium`: the extractor timeline (2:28 spot_43 died 3:17, 2:59 spot_52
+died 3:27, 3:27 spot_43 again died 6:02); `jev-0.jsonl` the constructor's picks.
+**Would be wrong if.** Middle spots held as long as strip spots against the same raids.
+**Used by.** the player's brief (Comet Catcher section).
+
 ### K-maps-metal-share-wins
 **Claim.** Holding more metal spots is the main predictor of winning; one guide puts it at "60%+ of the spots usually wins".
 On a symmetric 1v1 map this means every spot in our half plus some contested middle spots, and denying the opponent's

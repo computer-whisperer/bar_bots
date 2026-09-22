@@ -165,6 +165,22 @@ K-maps-comet-barb-opens-bots, the tempo model]
   vehicle_plant, solar, solar, assist), `produce` caps the constructors (`armcv:1`), the instructions say the plant is
   the only factory and the commander never chases; and a few Blitzes stay home as the guard from the first one,
   since medium raids from 4:00 with scout cars and Blitzes. Their plant came first on medium too.
+- comet-3 (medium, LOST at 17.0 min): the `queue` list ran to the second (extractors 0:03 and 0:11, three solars,
+  the plant at 0:51, three more solars, one constructor, then helping the plant), and the game was lost on metal.
+  Six solars are 930 metal, eight Blitzes' worth, spent while income was 6; the store sat at zero from minute two
+  to minute thirteen and the plant, which with the commander helping can turn 25 metal a second into Blitzes, made
+  28 in seventeen minutes (the first at 3:03). Metal is the bound here, never energy: two solars before the plant,
+  then the commander takes the strip spots nearest home (spot_36, spot_54, then spot_28, spot_30) before it helps
+  the plant, and a solar only when the energy words say stalling. The one constructor, told "expand along our
+  strip", took the middle spots the menu lists first by walking time (spot_43, spot_52, spot_38, on open ground
+  toward the enemy) and each died within 27 to 70 s to Ticks and Pawns; the strip's own spots were untouched until
+  5:38. So the moment `constructor_N` appears in the picture, give it a `queue` list of the strip's spots by name
+  with a turret after each pair (extractor spot_36, extractor spot_54, turret spot_54, extractor spot_28, ...), and
+  allow the second constructor by minute three: the strip has fourteen spots and one Mason never reaches them. The
+  raids: 24 extractors lost, to Ticks (21 metal, faster than a Blitz), Pawns and Blitzes; Blitzes cannot catch
+  Ticks, a light turret at the spot can. The fight: thirteen Blitzes died to one Rocketeer and one Centurion at
+  11:57; this opponent opened with a bot lab and had Centurions by minute twelve; switch the plant to Stouts the
+  first time a line bot is seen, and keep Blitzes for what cannot shoot back.
 
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]
