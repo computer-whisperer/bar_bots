@@ -162,3 +162,13 @@ to Favs, 12 windmills and 3 constructors to raiders in all.
 in sight", with no size).
 **Used by.** H-HANDS-DETACH (`send_against`); the player's prompt, "Defence is yours".
 
+### K-hands-lab-ordered-three-ahead
+**Claim.** Asked every three seconds while up to two orders waited, and told "constructors 0" while one was being
+made and two waited, the hands ordered constructors until the count they were told changed; a whitelist that
+changed meanwhile applied only after the waiting orders.
+**Status.** demonstrated (2026-09-22, human-3)
+**Evidence.** human-3 (`run/matches/1790046088-human-2`): lab asked at 1:06, 1:09, 1:12, each answered corck at
+0.95 to 0.98 with the entry reading "constructors 0 (none)"; a fourth at 1:55; the `produce` of 2:13 (corak only)
+took effect at 3:01 when the queue had drained; the lab died at 3:03.
+**Would be wrong if.** The packet had asked for four constructors (it said "constructors until we have a couple").
+**Used by.** H-HANDS-MENU (one order waiting at most; the counts include what is being made).

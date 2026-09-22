@@ -198,7 +198,7 @@ impl Brain {
             };
             for (key, def, words) in [
                 ("generator", generator, format!("Build an energy generator beside itself. Our energy now: {energy_words}.")),
-                ("lab", kit.lab, format!("Build a bot lab (the factory) in the base yard; 650 metal. {lab_words}. Our metal now: {metal_words}.")),
+                ("lab", kit.lab, format!("Build a bot lab (the factory) in the base yard; 650 metal. {lab_words}. Our metal now: {metal_words}.{}", self.build_draw_words(unit, kit.lab, tick))),
                 ("converter", kit.converter, "Build an energy-to-metal converter beside itself (1150 metal; only with a large energy surplus and no free spots).".to_string()),
                 ("advanced_lab", kit.advanced_lab, "Build the advanced (tier 2) bot lab in the base yard: 2600 metal, for a strong economy only.".to_string()),
             ] {
@@ -268,12 +268,16 @@ impl Brain {
             let name = self.actor_name(unit.id, kit);
             let queued = pianist.lab_queue.get(&unit.id).map_or(0, Vec::len);
             let last = pianist.last_asked.get(&name).copied().unwrap_or(i32::MIN / 2);
-            if queued >= 2 || frame - last < LAB_REVIEW_FRAMES {
+            // One order waiting at most (H-HANDS-MENU): with two, three constructors were ordered in six seconds before
+            // the first stood, and the player's whitelist of 2:13 waited behind them until 3:00 (human-3).
+            if queued >= 1 || frame - last < LAB_REVIEW_FRAMES {
                 continue;
             }
             let Some(def) = self.world.def(unit.def) else { continue };
             let extractors = own.iter().filter(|u| !u.being_built && kit.is_extractor(u.def)).count();
             let constructors = own.iter().filter(|u| !u.being_built && (u.def == kit.constructor || u.def == kit.advanced_constructor)).count();
+            let constructors_coming = own.iter().filter(|u| u.being_built && (u.def == kit.constructor || u.def == kit.advanced_constructor)).count() + queued;
+            let coming_words = if constructors_coming > 0 { format!(" and {constructors_coming} more being made") } else { String::new() };
             let soldiers: Vec<&OwnUnit> = own.iter().filter(|u| !u.being_built && self.is_army(u, kit)).collect();
             let army_metal: f32 = soldiers.iter().filter_map(|u| self.world.def(u.def)).map(|d| d.metal_cost).sum();
             let mut options: BTreeMap<String, Pick> = BTreeMap::new();
@@ -292,7 +296,7 @@ impl Brain {
                 // The count in words beside the option: Jev does not count what it has against a plan
                 // (pianist-smoke-1: thirty constructors and no soldier by minute nine).
                 let have = if *buildable == kit.constructor || *buildable == kit.advanced_constructor {
-                    format!(" We have {constructors} constructors already: {}.", super::picture::constructor_words(constructors, extractors))
+                    format!(" We have {constructors} constructors already{coming_words}: {}.", super::picture::constructor_words(constructors + constructors_coming, extractors))
                 } else if self.world.def(*buildable).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0) {
                     format!(" Our soldiers: {}.", super::picture::soldier_words(soldiers.len(), army_metal))
                 } else {
@@ -301,8 +305,8 @@ impl Brain {
                 criteria.insert(key, json!(format!("Build a {}.{have}", self.unit_words(*buildable, kit))));
             }
             let instructions = json!(format!(
-                "Given `actors.{name}`, `ours`, `economy` and the player's `instructions`, which unit should {name} build next? We have {constructors} constructors ({}) and {} soldiers ({}).{}",
-                super::picture::constructor_words(constructors, extractors), soldiers.len(), super::picture::soldier_words(soldiers.len(), army_metal),
+                "Given `actors.{name}`, `ours`, `economy` and the player's `instructions`, which unit should {name} build next? We have {constructors} constructors{coming_words} ({}) and {} soldiers ({}).{}",
+                super::picture::constructor_words(constructors + constructors_coming, extractors), soldiers.len(), super::picture::soldier_words(soldiers.len(), army_metal),
                 if allowed.is_some() && buildables.len() < def.build_options.len() { " The player allows only the units offered here." } else { "" }
             ));
             pianist.last_asked.insert(name.clone(), frame);
@@ -401,6 +405,24 @@ impl Brain {
         }
         self.pianist = Some(pianist);
         menus
+    }
+}
+
+impl Brain {
+    /// What building `def` with this builder draws in energy a second against our income (human-3: the commander's
+    /// lab drew 80 a second against 30 coming in, and the store was empty for the next minute and a half).
+    fn build_draw_words(&self, builder: &OwnUnit, def: UnitDefId, tick: &Tick) -> String {
+        let (Some(b), Some(d)) = (self.world.def(builder.def), self.world.def(def)) else { return String::new() };
+        if d.build_time <= 0.0 || d.energy_cost <= 0.0 {
+            return String::new();
+        }
+        let draw = d.energy_cost / d.build_time * b.build_speed;
+        let income = tick.snapshot.energy.income;
+        if draw > income {
+            format!(" Building it draws about {draw:.0} energy a second; we make {income:.0}: the store empties unless generators come first.")
+        } else {
+            format!(" Building it draws about {draw:.0} energy a second; we make {income:.0}.")
+        }
     }
 }
 

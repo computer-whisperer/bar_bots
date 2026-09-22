@@ -66,19 +66,20 @@ fn stock_words(current: f32, storage: f32) -> &'static str {
     }
 }
 
-fn flow_words(income: f32, usage: f32, current: f32, storage: f32) -> &'static str {
+fn flow_words(income: f32, usage: f32, current: f32, storage: f32) -> String {
     let share = if storage > 0.0 { current / storage } else { 0.0 };
     // The engine caps spending at income once the store is empty, so a stall reads as "in balance" by the numbers.
     if share < 0.05 && usage >= income * 0.9 {
-        "STALLING: the store is empty and everything that needs it builds slowly; more income is needed"
+        "STALLING: the store is empty and everything that needs it builds slowly; more income is needed".into()
     } else if usage > income * 1.15 && share < 0.25 {
-        "spending faster than it comes in: stalling, everything builds slowly"
+        "spending faster than it comes in: stalling, everything builds slowly".into()
     } else if usage > income * 1.15 {
-        "spending faster than it comes in, running the store down"
+        // Seconds to empty beside the trend (human-3: the lab was chosen at 351 energy running down 56 a second).
+        format!("spending faster than it comes in, running the store down: empty in about {:.0} s", current / (usage - income))
     } else if income > usage * 1.3 && share > 0.6 {
-        "more coming in than is spent: banking it unused"
+        "more coming in than is spent: banking it unused".into()
     } else {
-        "in balance"
+        "in balance".into()
     }
 }
 
@@ -616,7 +617,8 @@ impl Brain {
                 } else {
                     format!("building {}", queue.iter().map(|(def, _)| self.short_words(*def, kit)).collect::<Vec<_>>().join(" then "))
                 });
-                entry["we_have"] = json!(format!("constructors {constructors} ({}); soldiers {} ({})", constructor_words(constructors, extractors), soldiers.len(), soldier_words(soldiers.len(), army_metal)));
+                let coming = own.iter().filter(|u| u.being_built && (u.def == kit.constructor || u.def == kit.advanced_constructor)).count() + queue.iter().filter(|(def, _)| *def == kit.constructor || *def == kit.advanced_constructor).count();
+                entry["we_have"] = json!(format!("constructors {constructors}{} ({}); soldiers {} ({})", if coming > 0 { format!(" and {coming} being made") } else { String::new() }, constructor_words(constructors + coming, extractors), soldiers.len(), soldier_words(soldiers.len(), army_metal)));
                 if let Some(list) = self.allowed_units(&name) {
                     let words: Vec<String> = list.iter().filter_map(|n| self.world.def_named(n)).map(|d| self.short_words(d, kit)).collect();
                     entry["allowed"] = json!(if words.is_empty() { "the player allows nothing this lab can build: it builds anything".to_string() } else { format!("the player allows only: {}", words.join(", ")) });

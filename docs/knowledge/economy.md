@@ -140,3 +140,17 @@ commander's orders at 1:27 and 3:36 while the picture read the spot as free. In 
 is 70 elmos elsewhere and the lab lands 173 from the spot (pianist-player-14: spot_10 taken at 1:51).
 **Would be wrong if.** The engine's site search stepped off spots on its own (it did not: two orders, no site).
 **Used by.** H-ECO-BASE-LAYOUT (`beside_builder` keeps 150 from a spot).
+
+### K-eco-lab-before-generators-empties-the-store
+**Claim.** A commander building the lab draws about 80 energy a second; with only the commander's 30 coming in the
+store is empty within ten seconds and stays empty while wind generators (which cost energy to build) go up one by
+one, and everything, the lab's first units included, builds at a crawl for a minute and more.
+**Status.** demonstrated (2026-09-22, human-3; the people in the game said the same: "you are about to run out of
+e", "solar is better when you are out of e, because you do not e stall making solar", "this map has 12 wind")
+**Evidence.** human-3: lab created 0:37, energy 351 at 0:34 falling 56 a second, zero from 0:46 to 1:54 through
+four windmills; the first constructor took 43 s (1:10 to 1:53). The same shape in human-1 and human-2 (energy 0 at
+1:00 both).
+**Would be wrong if.** The lab's draw were the windmills' (usage was 80 to 86 with the lab alone under construction,
+30 between builds).
+**Used by.** the brief's map paragraph (one solar, then wind); the lab option's draw words (H-HANDS-MENU); the flow
+words' seconds to empty.

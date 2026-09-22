@@ -60,6 +60,12 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
   nearest spots are on and just below our plateau; the middle rows are the contested ones and change hands all game.
   The opponent starts on the mirror plateau across the open middle, about 3,900 on foot. The map's `passages` list
   names the narrow ways; the picture names the three narrowest `passage_1` to `passage_3`.
+- Energy on this map, from the people who play it (human-3): the wind averages 12 and is good; strong players build one
+  solar first, then wind for the rest. Building a lab draws about 80 energy a second and a wind generator costs
+  energy to build, so a lab before any generator empties the store for a minute and a half and the lab then builds
+  at a crawl (human-3: the store at zero from 0:46 to 1:54, the first constructor 43 s in the making, no soldier
+  before 3:01 and the lab dead at 3:03). Solar first when the store is empty, since building solar costs no energy.
+  About twenty energy for every metal spent is the rule of thumb they gave.
 
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]
