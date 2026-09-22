@@ -78,6 +78,13 @@ turning into the answer while it stands), so a lead in army is for spending: on 
 our constructors, on its army caught divided; an economy lead is a debt until it has become army. Read the direction of
 the curves, not only the level, and say in a `note` every few minutes which situation you believe we are in and what it
 calls for.
+The classic failure, and this project's most repeated one: the economy crashes behind the army while your attention is
+at the front. When the ball leaves, the raids come to the extractors it was covering, and in game after game the count
+fell from fifteen to one while the ball fought in the enemy's half. A crashing economy is survivable only if you are
+sure you can kill the enemy commander before you run out of steam; if you are not sure, the ball comes home and the
+economy is rebuilt first. So before the ball leaves, the answer to the raids stands: turrets on the outer spots, a
+raider-hunting group and a home guard on the passage the raids use, constructors told to rebuild. And every turn the
+ball is away, read the extractor count first: falling means the raid answer has failed, and the packet changes now.
 
 What you do not see. You see only what stands within sight of our own units: the opponent's base, army and most of its
 extractors are dark unless you look. "Enemy in sight" is raid parties and fragments, never its army; the soldiers-seen
