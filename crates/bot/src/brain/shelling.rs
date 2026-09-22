@@ -44,6 +44,21 @@ pub(super) struct Shelling {
     pub units: Vec<UnitId>,
 }
 
+impl Brain {
+    /// A weapon in words: the unit its definition name is prefixed with ("armart_tawf113_weapon" is the Shellshock's),
+    /// else the raw name.
+    pub(super) fn weapon_words(&self, weapon: &str) -> String {
+        let prefix = weapon.split('_').next().unwrap_or(weapon);
+        match self.world.def_named(prefix) {
+            Some(def) if self.kit.is_some() => {
+                let d = self.world.def(def).expect("a named def exists");
+                format!("{} ({}{})", self.name(def), d.name, if d.speed == 0.0 { ", a turret" } else { "" })
+            }
+            _ => weapon.to_string(),
+        }
+    }
+}
+
 /// Eight compass words for a direction; north is toward smaller z, as the grid's rows run.
 pub(super) fn compass(dir: Vec3) -> &'static str {
     let angle = dir.x.atan2(-dir.z).to_degrees().rem_euclid(360.0);
@@ -81,7 +96,7 @@ impl Brain {
         self.shelling_warned = frame;
         shared.trigger(format!(
             "our soldiers are being shelled from out of sight by a {} (range {:.0}) from the {}, {} hits in {} s: the picture names the place `shelling` where it likeliest stands",
-            s.weapon, s.range, compass(s.dir), s.hits, (frame - s.since) / FRAMES_PER_SECOND
+            self.weapon_words(&s.weapon), s.range, compass(s.dir), s.hits, (frame - s.since) / FRAMES_PER_SECOND
         ));
     }
 

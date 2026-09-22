@@ -137,3 +137,8 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   their half. The pattern that wins: expand to 13 by minute 5, commit at a 5:1 army lead, kill their factories, and
   hold the whole army at home when their commander comes raiding. The pattern that still costs: nothing stops
   twelve Flashes behind the ball except the ball.
+- pianist-player-9 (2026-09-22, Opus at low effort, WON at 11 minutes against HARD, their commander killed): hard's
+  commander comes into our half early (5:45) and eats a small ball piecemeal; massing first and committing at a 20:1
+  seen lead at 7:59 won it in four minutes. Hard's raids are the same Flashes, plus Shellshock artillery of range
+  710 that shells from out of sight: the picture's `shelling` place is where it stands, and advancing onto it is
+  how the ball answered it.

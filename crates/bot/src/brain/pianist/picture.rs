@@ -481,7 +481,7 @@ impl Brain {
                 },
                 None if place.name == "shelling" => {
                     let s = shelling.as_ref().expect("a shelling place has a shelling");
-                    format!("where the {} shelling us from out of our sight likeliest stands: its range is {:.0}, {} hits on us in the last 20 s from the {}; advancing a group onto it (fight_to) kills it, a group that stays where it is keeps being hit", s.weapon, s.range, s.hits, super::super::shelling::compass(s.dir))
+                    format!("where the {} shelling us from out of our sight likeliest stands: its range is {:.0}, {} hits on us in the last 20 s from the {}; advancing a group onto it (fight_to) kills it, a group that stays where it is keeps being hit", self.weapon_words(&s.weapon), s.range, s.hits, super::super::shelling::compass(s.dir))
                 }
                 None if marks.contains_key(&place.name) => {
                     let walkable = self.snap_to_reachable(place.at);
@@ -685,7 +685,7 @@ impl Brain {
                             return format!("{who} ({n} hits)");
                         }
                         match &shelling {
-                            Some(s) => format!("something out of our sight, {n} hits: a {} with range {:.0} from the {}; its likeliest place is `shelling` at {}", s.weapon, s.range, super::super::shelling::compass(s.dir), self.place_words(&places, s.at)),
+                            Some(s) => format!("something out of our sight, {n} hits: a {} with range {:.0} from the {}; its likeliest place is `shelling` at {}", self.weapon_words(&s.weapon), s.range, super::super::shelling::compass(s.dir), self.place_words(&places, s.at)),
                             None => format!("something out of our sight, {n} hits: a turret or artillery that outranges us"),
                         }
                     })

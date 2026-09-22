@@ -14,8 +14,10 @@ const BASE_RADIUS: f32 = 1500.0;
 const RAZED_RADIUS: f32 = 1200.0;
 /// H-MAP-ENEMY-CLUSTER: a building of theirs seen this near an unfound base's guess, and nearer the guess than our
 /// home, refines the guess to the metal-spot cluster nearest the building, spots chained within `CLUSTER_LINK` of
-/// one another. (2,500 took a forward extractor of theirs in the contested middle for the base: pianist-player-5.)
-const REFINE_RADIUS: f32 = 1200.0;
+/// one another. (2,500 took a forward extractor of theirs in the contested middle for the base: pianist-player-5;
+/// 1,200 took a building 1,105 off on hard for it and moved the guess to a lone empty spot: pianist-player-9. The
+/// start's own extractors lie within 700 of it, K-scout-enemy-base-is-a-spot-cluster.)
+const REFINE_RADIUS: f32 = 700.0;
 const CLUSTER_LINK: f32 = 700.0;
 /// H-MAP-ENEMY-GUESS-EMPTY: a refined guess with a unit of ours this near it, and no building of theirs remembered
 /// within `EMPTY_RADIUS`, was wrong; it goes back to the start guess and that cluster is not guessed again.
