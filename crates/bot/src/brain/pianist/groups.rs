@@ -25,6 +25,10 @@ const LOST_FRAMES: i32 = 6 * FRAMES_PER_SECOND;
 /// of the enemy base with the player reading "under fire" and nothing about the hands).
 const PROGRESS_STEP: f32 = 60.0;
 const STALL_FRAMES: i32 = 45 * FRAMES_PER_SECOND;
+/// An advance that has not got nearer its goal for this long is given up: the group holds and the player is told
+/// (pianist-player-7: the ball answered `continue` for 151 s short of an islet spot, then for 103 s short of a mark
+/// on the shore, while the player rewrote the packet four times).
+const GIVE_UP_FRAMES: i32 = 90 * FRAMES_PER_SECOND;
 
 #[derive(Clone, Debug)]
 pub(crate) enum GroupTask {
@@ -143,6 +147,8 @@ impl Brain {
         }
         // Standing orders, under each group's footwork rules (H-HANDS-LANE).
         let footwork: Vec<crate::strategist::shared::Footwork> = pianist.groups.iter().map(|g| self.footwork_of(&g.name)).collect();
+        let marks: Vec<String> = self.strategist.as_ref().map(|s| s.marks.lock().unwrap().keys().cloned().collect()).unwrap_or_default();
+        let is_mark_name = |place: &str| place != "home" && place != "enemy_base" && !place.starts_with("spot_") && !place.starts_with("passage_");
         let mut marches: Vec<(usize, Vec3)> = Vec::new();
         let mut stalled: Vec<String> = Vec::new();
         for (index, group) in pianist.groups.iter_mut().enumerate() {
@@ -155,9 +161,19 @@ impl Brain {
                     if to_go < group.best_to_go - PROGRESS_STEP {
                         (group.best_to_go, group.progressed) = (to_go, frame);
                     }
+                    let forgotten = is_mark_name(place) && !marks.contains(place);
+                    let given_up = frame - group.progressed >= GIVE_UP_FRAMES;
                     if to_go < ARRIVED {
                         group.task = GroupTask::Hold { since: frame, committed: *fight };
                         group.held.clear();
+                    } else if forgotten || given_up {
+                        stalled.push(if forgotten {
+                            format!("group_{} was walking to {place}, which is no longer a marked place: it holds where it is", group.name)
+                        } else {
+                            format!("group_{} gave up its {} to {place}: it has not got nearer for {} s, {to_go:.0} short of it, and holds where it is", group.name, if *fight { "advance" } else { "walk" }, (frame - group.progressed) / FRAMES_PER_SECOND)
+                        });
+                        commands.extend(units.iter().map(|u| Command::Stop { unit: u.id }));
+                        group.set_task(GroupTask::Hold { since: frame, committed: false }, frame);
                     } else if *fight {
                         if frame - group.progressed >= STALL_FRAMES && !group.stall_warned {
                             group.stall_warned = true;

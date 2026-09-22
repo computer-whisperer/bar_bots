@@ -411,7 +411,9 @@ impl Brain {
             .unwrap_or_else(|| include_str!("default.md").to_string());
         for token in instructions.split(|c: char| !c.is_ascii_alphanumeric() && c != '_') {
             if let Some(i) = token.strip_prefix("spot_").and_then(|n| n.parse::<usize>().ok()) {
-                if i < spots.len() && !places.iter().any(|p| p.spot == Some(i)) {
+                // An islet spot nobody can walk to is no place to send anyone (pianist-player-7: the ball stood 151 s
+                // short of spot_31 on the shore while the player named it).
+                if i < spots.len() && !places.iter().any(|p| p.spot == Some(i)) && self.reachable_on_foot(spots[i]) {
                     places.push(Place { name: format!("spot_{i}"), at: spots[i], spot: Some(i) });
                 }
             } else if let Some(n) = token.strip_prefix("passage_").and_then(|n| n.parse::<usize>().ok()) {
@@ -472,7 +474,11 @@ impl Brain {
                     }
                     None => "where the enemy is presumed to start; not yet seen".into(),
                 },
-                None if marks.contains_key(&place.name) => "a place the player marked".into(),
+                None if marks.contains_key(&place.name) => {
+                    let walkable = self.snap_to_reachable(place.at);
+                    let off = walkable.dist2d(place.at);
+                    if off > 150.0 { format!("a place the player marked; our bots cannot walk onto it, the nearest ground they can reach is {off:.0} away (units sent here stop there)") } else { "a place the player marked".into() }
+                }
                 None => "a narrow passage between the two sides".into(),
             };
             entry["what"] = json!(what);

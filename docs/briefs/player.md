@@ -123,3 +123,12 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   stands at home; a ball under unseen artillery advances onto it or leaves, never stands.
 - Since pianist-player-6 the player has `produce` (what each lab may build: the sure way to get raiders built
   against raiders), `mark` (a place of its own) and `lane` (the footwork rules per group).
+- pianist-player-7 (2026-09-22, Opus at low effort, WON at 33 minutes against MEDIUM, called by the referee): the
+  first game with `produce`, used from the first turn, and the labs built what was listed (89 Pawns among 300 units).
+  The raids still took the extractors from 14 to 3 while the ball was away at 13:03; what won was clearing our half
+  with the whole army, rebuilding to 24 extractors behind two home groups and turrets, and only then hunting. Their
+  commander rebuilt in the far south-east corner on the shore beside a shipyard, where bots cannot walk: a mark on
+  water stops the group at the nearest ground, and an advance that has not got nearer for 90 s is now given up by
+  the hands and reported. Its lessons: the ball does not leave until the home guard is standing; a lab of Pawns
+  from the start against medium; when the report says a group gave up its advance, the place is unreachable: name
+  the reachable spots around it instead.
