@@ -143,8 +143,8 @@ fn tool_list(mode: Mode) -> Value {
               "description": "Name a place of your own for your hands: an object of name to [x, z] map coordinates or a grid cell (\"E7\": its centre), or null to forget it. A marked place joins the picture's places at once, so instructions can send groups and builders there (\"group_B: advance to south_gate\"), and its entry says whose ground it is and what enemy is near. Names are lower-case words with underscores; home, enemy_base, spot_N, passage_N and group_N are taken. Any spot or passage you name in the packet is on your hands' menu already, however far; mark is for places that are not spots.",
               "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }, { "type": "string" }, { "type": "null" } ] }, "description": "Place name to [x, z], a grid cell, or null." } },
             { "name": "produce",
-              "description": "What each lab may build: an object of lab name (lab_N) or \"all\" to a list of unit names (as the report writes them: armpw, armham, armck), or null to lift the restriction. A name with a count after a colon (armck:1) is allowed that many more times from now and then drops off the list by itself: the way to say 'one constructor, then raiders' to hands that cannot count. A lab with a list is offered only those units and nothing else, every time it is asked; your instructions still say which of them and when. Use it when the packet's words are not getting the mix you want. A list naming nothing the lab can build leaves that lab unrestricted; the lab's entry in the picture shows its list.",
-              "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "string" } }, { "type": "null" } ] }, "description": "Lab name or \"all\" to unit names, or null." } },
+              "description": "What each factory may build: an object of factory name (lab_N or plant_N) or \"all\" to a list of unit names (as the report writes them: armpw, armham, armck), or null to lift the restriction. A name with a count after a colon (armck:1) is allowed that many more times from now and then drops off the list by itself: the way to say 'one constructor, then raiders' to hands that cannot count. A lab with a list is offered only those units and nothing else, every time it is asked; your instructions still say which of them and when. Use it when the packet's words are not getting the mix you want. A list naming nothing the lab can build leaves that lab unrestricted; the lab's entry in the picture shows its list.",
+              "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "string" } }, { "type": "null" } ] }, "description": "Factory name (lab_N or plant_N) or \"all\" to unit names, or null." } },
             { "name": "say",
               "description": "Say something in the game's chat, to everyone playing. Short lines. The report shows what people say to you; when an experienced player offers advice or asks what you are doing, answer, and ask them what they would do: their feedback is what this project learns from.",
               "inputSchema": { "type": "object", "additionalProperties": false, "required": ["text"], "properties": { "text": { "type": "string", "maxLength": 240 } } } },
@@ -409,12 +409,12 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared, mode: Mode) -> Resu
             Ok(format!("said: {text}"))
         }
         "produce" => {
-            let lists = arguments.as_object().filter(|o| !o.is_empty()).ok_or("produce takes an object: lab name (lab_N) or \"all\" to a list of unit names (a name with :N caps it at N more), or null to lift it")?;
+            let lists = arguments.as_object().filter(|o| !o.is_empty()).ok_or("produce takes an object: factory name (lab_N or plant_N) or \"all\" to a list of unit names (a name with :N caps it at N more), or null to lift it")?;
             let known: Vec<String> = shared.field().buildable.iter().map(|(name, _)| name.clone()).collect();
             let mut parsed: Vec<(String, Option<Vec<String>>)> = Vec::new();
             for (name, value) in lists {
-                if name != "all" && !name.starts_with("lab_") {
-                    return Err(format!("{name}: lists are by lab name (lab_N) or \"all\""));
+                if name != "all" && !name.starts_with("lab_") && !name.starts_with("plant_") {
+                    return Err(format!("{name}: lists are by factory name (lab_N or plant_N) or \"all\""));
                 }
                 let list = match value {
                     Value::Null => None,

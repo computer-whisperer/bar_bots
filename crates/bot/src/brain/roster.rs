@@ -17,6 +17,9 @@ pub struct Roster {
     nano: &'static str,
     radar: &'static str,
     constructor: &'static str,
+    /// The vehicle plant and its constructor: the factory for flat open maps (K-maps-factory-by-terrain).
+    plant: &'static str,
+    vehicle_constructor: &'static str,
     /// Tier 2 (docs/knowledge/tier2.md): the advanced bot lab, its constructor, the extractor that one builds over a
     /// tier-1 extractor, and the two units the lab makes until a commander says otherwise.
     advanced_lab: &'static str,
@@ -38,12 +41,14 @@ pub const ROSTERS: [Roster; 2] = [
     Roster {
         commander: "armcom", extractor: "armmex", solar: "armsolar", wind: "armwin", advanced_solar: "armadvsol",
         converter: "armmakr", lab: "armlab", turret: "armllt", nano: "armnanotc", radar: "armrad", constructor: "armck",
+        plant: "armvp", vehicle_constructor: "armcv",
         advanced_lab: "armalab", advanced_constructor: "armack", advanced_extractor: "armmoho", advanced_line: "armzeus", advanced_second: "armfido",
         raider: "armpw", skirmisher: "armrock", artillery: "armham", line: "armham", second: "armwar", resurrector: "armrectr",
     },
     Roster {
         commander: "corcom", extractor: "cormex", solar: "corsolar", wind: "corwin", advanced_solar: "coradvsol",
         converter: "cormakr", lab: "corlab", turret: "corllt", nano: "cornanotc", radar: "corrad", constructor: "corck",
+        plant: "corvp", vehicle_constructor: "corcv",
         advanced_lab: "coralab", advanced_constructor: "corack", advanced_extractor: "cormoho", advanced_line: "corcan", advanced_second: "corcan",
         raider: "corak", skirmisher: "corstorm", artillery: "corthud", line: "corthud", second: "corstorm", resurrector: "cornecro",
     },
@@ -64,6 +69,9 @@ pub struct Kit {
     pub nano: UnitDefId,
     pub radar: UnitDefId,
     pub constructor: UnitDefId,
+    /// The vehicle plant and the constructor it makes.
+    pub plant: UnitDefId,
+    pub vehicle_constructor: UnitDefId,
     pub advanced_lab: UnitDefId,
     pub advanced_constructor: UnitDefId,
     pub advanced_extractor: UnitDefId,
@@ -81,6 +89,16 @@ impl Kit {
     /// Either tier: what holds a metal spot for us.
     pub fn is_extractor(&self, def: UnitDefId) -> bool {
         def == self.extractor || def == self.advanced_extractor
+    }
+
+    /// Any factory: the bot lab, the vehicle plant, the advanced bot lab.
+    pub fn is_factory(&self, def: UnitDefId) -> bool {
+        def == self.lab || def == self.plant || def == self.advanced_lab
+    }
+
+    /// Any constructor a factory makes: bot, vehicle, advanced bot.
+    pub fn is_constructor(&self, def: UnitDefId) -> bool {
+        def == self.constructor || def == self.vehicle_constructor || def == self.advanced_constructor
     }
 }
 
@@ -100,6 +118,8 @@ impl Roster {
             nano: id(self.nano)?,
             radar: id(self.radar)?,
             constructor: id(self.constructor)?,
+            plant: id(self.plant)?,
+            vehicle_constructor: id(self.vehicle_constructor)?,
             advanced_lab: id(self.advanced_lab)?,
             advanced_constructor: id(self.advanced_constructor)?,
             advanced_extractor: id(self.advanced_extractor)?,

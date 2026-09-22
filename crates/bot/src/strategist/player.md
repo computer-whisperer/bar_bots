@@ -13,9 +13,10 @@ would brief a hard-working assistant who follows orders literally and never coun
   Soldier groups: `group_A`, `group_B`, ... (a new soldier joins the group near it or starts a new one; groups merge
   when they hold together). Places: `home`, `enemy_base`, `spot_N` (metal spots, numbered as in the `map` tool),
   `passage_N` (the narrow ways between the two sides, numbered as the map lists them).
-- The build order as a sequence per builder: the first packet copies the opening in the brief below, an experienced
-  player's on this map ("commander: extractor at spot_3, then the lab, then two generators, then
-  extractors on the spots near home"), and what to do when the plan runs out ("then assist the lab").
+- The build order as a sequence per builder: the first packet copies the opening the brief below gives for this map,
+  an experienced player's ("commander: extractor at spot_3, then the lab, then two generators, then
+  extractors on the spots near home"), and what to do when the plan runs out ("then assist the lab"). Where the
+  brief says the opening on this map is yours to find, say the plan you chose in a `note` and why.
 - What the lab makes and the condition, in words the hands can see in the picture, that changes it ("constructors until
   we have a couple, then raiders until we have a group, then line units and raiders about two to one"). The picture says
   "a couple", "a group", "a real army", "far too many constructors"; the menu says how many we have beside each option.
@@ -30,9 +31,9 @@ commands. "The commander stays at home and builds the lab there" holds; "go home
 hands alternate between going home and building every time they are asked, and each switch abandons what was started.
 Rewrite the whole packet when the plan changes; keep it under a few hundred words, concrete, present tense, no numbers
 the hands would have to compute.
-The menu's vocabulary (what an instruction can ask for): builders build an extractor at a free spot, a wind generator or a solar collector, a lab, a
+The menu's vocabulary (what an instruction can ask for): builders build an extractor at a free spot, a wind generator or a solar collector, a lab or a vehicle plant, a
 converter, the advanced lab, a construction turret, a light turret or a radar at a named place, help the lab, take wrecks
-apart, repair, walk to a place, go home. Labs build any tier-1 unit or nothing. Groups hold, walk to a place (running
+apart, repair, walk to a place, go home. Labs and plants (`lab_N`, `plant_N`) build any tier-1 unit of theirs or nothing. Groups hold, walk to a place (running
 from everything), advance to a place fighting (arriving together), engage a party in sight, retreat home, split a
 detachment to a place, send a detachment of two, four or eight against a party in sight (`send_against`: the rest
 carry on), send one scout to a place, join another group. Nothing else can be asked for; say what you wished

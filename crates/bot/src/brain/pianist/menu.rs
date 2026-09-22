@@ -129,7 +129,7 @@ impl Brain {
 
         // Builders.
         let under_fire: Vec<UnitId> = tick.events.iter().filter_map(|e| if let bot_protocol::Event::UnitDamaged { unit, .. } = e { Some(*unit) } else { None }).collect();
-        for unit in own.iter().filter(|u| !u.being_built && (u.def == kit.commander || u.def == kit.constructor)) {
+        for unit in own.iter().filter(|u| !u.being_built && (u.def == kit.commander || kit.is_constructor(u.def))) {
             let name = self.actor_name(unit.id, kit);
             let task = pianist.tasks.get(&unit.id).cloned();
             let last = pianist.last_asked.get(&name).copied().unwrap_or(i32::MIN / 2);
@@ -214,16 +214,17 @@ impl Brain {
             let cost = |def: UnitDefId| self.world.def(def).map_or(0.0, |d| d.metal_cost);
             let wind_words = format!("Build a wind generator beside itself ({:.0} metal; gives {:.0} to {:.0} energy a second here, {:.0} on average; building it draws energy). Our energy now: {energy_words}.", cost(kit.wind), map.wind_min, map.wind_max, (map.wind_min + map.wind_max) / 2.0);
             let solar_words = format!("Build a solar collector beside itself ({:.0} metal; a steady 20 energy a second; building it draws no energy, so it is the generator to build while the store is empty). Our energy now: {energy_words}.", cost(kit.solar));
-            let labs = own.iter().filter(|u| u.def == kit.lab).count();
-            let lab_words = match labs {
-                0 => "we have no lab yet: nothing makes soldiers or constructors without one".to_string(),
-                1 => "we have one lab already; a second doubles production when metal is banking up".to_string(),
-                n => format!("we have {n} labs already"),
+            let factories = own.iter().filter(|u| kit.is_factory(u.def)).count();
+            let factory_words = match factories {
+                0 => "we have no factory yet: nothing makes soldiers or constructors without one".to_string(),
+                1 => "we have one factory already; a second doubles production when metal is banking up".to_string(),
+                n => format!("we have {n} factories already"),
             };
             for (key, def, words) in [
                 ("wind_generator", kit.wind, wind_words),
                 ("solar_collector", kit.solar, solar_words),
-                ("lab", kit.lab, format!("Build a bot lab (the factory) in the base yard; 650 metal. {lab_words}. Our metal now: {metal_words}.{}", self.build_draw_words(unit, kit.lab, tick))),
+                ("lab", kit.lab, format!("Build a bot lab (the factory for bots: cheap units that climb slopes) in the base yard; {:.0} metal. {factory_words}. Our metal now: {metal_words}.{}", cost(kit.lab), self.build_draw_words(unit, kit.lab, tick))),
+                ("vehicle_plant", kit.plant, format!("Build a vehicle plant (the factory for tanks: faster and tougher than bots on flat open ground, no slopes) in the base yard; {:.0} metal. {factory_words}. Our metal now: {metal_words}.{}", cost(kit.plant), self.build_draw_words(unit, kit.plant, tick))),
                 ("converter", kit.converter, "Build an energy-to-metal converter beside itself (1150 metal; only with a large energy surplus and no free spots).".to_string()),
                 ("advanced_lab", kit.advanced_lab, "Build the advanced (tier 2) bot lab in the base yard: 2600 metal, for a strong economy only.".to_string()),
             ] {
@@ -231,8 +232,8 @@ impl Brain {
                     offer(key, Pick::Building(def), words);
                 }
             }
-            if can(kit.nano) && own.iter().any(|u| u.def == kit.lab && !u.being_built) {
-                offer("construction_turret", Pick::Building(kit.nano), "Build a construction turret beside the nearest lab: adds build power to it (metal must be flowing in faster than the lab spends it).".into());
+            if can(kit.nano) && own.iter().any(|u| kit.is_factory(u.def) && !u.being_built) {
+                offer("construction_turret", Pick::Building(kit.nano), "Build a construction turret beside the nearest factory: adds build power to it (metal must be flowing in faster than the factory spends it).".into());
             }
             if can(kit.turret) {
                 offer("turret_at", Pick::BuildingAt(kit.turret), "Build a light laser turret (85 metal) at the place answered in `where`: repels lone raiders at an extractor.".into());
@@ -242,8 +243,8 @@ impl Brain {
             }
             // Helping the lab is offered on a queue-ahead ask too, ordered by the bot as the build finishes (human-6: a
             // commander kept building by the queue-ahead was never offered it and did not help the lab for two minutes).
-            if let Some(lab) = own.iter().filter(|u| u.def == kit.lab && !u.being_built).min_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos))) {
-                offer("assist_lab", Pick::AssistLab(lab.id), if queue_ahead { "Then help the lab build: adds this builder's build power to whatever it makes, until told otherwise.".into() } else { "Help the lab build: adds this builder's build power to whatever it makes.".into() });
+            if let Some(lab) = own.iter().filter(|u| kit.is_factory(u.def) && !u.being_built).min_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos))) {
+                offer("assist_lab", Pick::AssistLab(lab.id), if queue_ahead { "Then help the nearest factory (lab or plant) build: adds this builder's build power to whatever it makes, until told otherwise.".into() } else { "Help the nearest factory (lab or plant) build: adds this builder's build power to whatever it makes.".into() });
             }
             if let Some(field) = self.reclaim.fields.iter().filter(|f| f.metal >= 100.0 && f.at.dist2d(unit.pos) < RECLAIM_WITHIN).max_by(|a, b| a.metal.total_cmp(&b.metal)) {
                 offer("reclaim", Pick::Reclaim(field.at), format!("Take apart the wrecks at {} ({:.0} metal lying there{}).", self.place_words(&picture.places, field.at), field.metal, if field.safe { "" } else { "; not safe ground" }));
@@ -301,8 +302,8 @@ impl Brain {
             });
         }
 
-        // Labs.
-        for unit in own.iter().filter(|u| !u.being_built && (u.def == kit.lab || u.def == kit.advanced_lab)) {
+        // Factories: labs and plants.
+        for unit in own.iter().filter(|u| !u.being_built && kit.is_factory(u.def)) {
             let name = self.actor_name(unit.id, kit);
             let queued = pianist.lab_queue.get(&unit.id).map_or(0, Vec::len);
             let last = pianist.last_asked.get(&name).copied().unwrap_or(i32::MIN / 2);
@@ -313,8 +314,8 @@ impl Brain {
             }
             let Some(def) = self.world.def(unit.def) else { continue };
             let extractors = own.iter().filter(|u| !u.being_built && kit.is_extractor(u.def)).count();
-            let constructors = own.iter().filter(|u| !u.being_built && (u.def == kit.constructor || u.def == kit.advanced_constructor)).count();
-            let constructors_coming = own.iter().filter(|u| u.being_built && (u.def == kit.constructor || u.def == kit.advanced_constructor)).count() + queued;
+            let constructors = own.iter().filter(|u| !u.being_built && kit.is_constructor(u.def)).count();
+            let constructors_coming = own.iter().filter(|u| u.being_built && kit.is_constructor(u.def)).count() + queued;
             let coming_words = if constructors_coming > 0 { format!(" and {constructors_coming} more being made") } else { String::new() };
             let soldiers: Vec<&OwnUnit> = own.iter().filter(|u| !u.being_built && self.is_army(u, kit)).collect();
             let army_metal: f32 = soldiers.iter().filter_map(|u| self.world.def(u.def)).map(|d| d.metal_cost).sum();
@@ -345,7 +346,7 @@ impl Brain {
                 options.insert(key.clone(), Pick::Unit(*buildable));
                 // The count in words beside the option: Jev does not count what it has against a plan
                 // (pianist-smoke-1: thirty constructors and no soldier by minute nine).
-                let have = if *buildable == kit.constructor || *buildable == kit.advanced_constructor {
+                let have = if kit.is_constructor(*buildable) {
                     format!(" We have {constructors} constructors already{coming_words}: {}.", super::picture::constructor_words(constructors + constructors_coming, extractors))
                 } else if self.world.def(*buildable).is_some_and(|d| d.weapon_count > 0 && d.speed > 0.0) {
                     format!(" Our soldiers: {}.", super::picture::soldier_words(soldiers.len(), army_metal))

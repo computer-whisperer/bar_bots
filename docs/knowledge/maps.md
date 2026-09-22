@@ -67,6 +67,16 @@ That land units path between the starts is our own arena observation (waves meet
 **Would be wrong if.** A vehicle-plant opening did not beat the bot-lab opening on Quicksilver at equal economy rules.
 **Used by.** (candidate: factory type chosen by mean slope between the two start positions)
 
+### K-maps-comet-barb-opens-bots
+**Claim.** On Comet Catcher Remake, a flat open vehicles map, BARb opens with a bot lab most of the time, at every
+profile the arena has run there: 91 bot labs (Armada 75, Cortex 16) against 13 vehicle plants in 104 recorded games.
+Its terrain rule, if it has one, does not pick the plant here; expect Pawns and Ticks early on this map.
+**Status.** measured (2026-09-23) from the arena's results.
+**Evidence.** `opponent_first_factory` in `run/matches/*comet*/results.jsonl` (v33-comet, now-comet, rush-5 to
+rush-7 batches, medium; two games with no truth file).
+**Would be wrong if.** The hard profiles, which those batches did not run, opened with the plant.
+**Used by.** the player's brief (the Comet Catcher section).
+
 ### K-maps-metal-share-wins
 **Claim.** Holding more metal spots is the main predictor of winning; one guide puts it at "60%+ of the spots usually wins".
 On a symmetric 1v1 map this means every spot in our half plus some contested middle spots, and denying the opponent's

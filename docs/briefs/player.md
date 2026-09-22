@@ -54,6 +54,9 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
 - Constructors die in the field walking alone to far spots. Expand in steps the army has already covered.
   [K-army-verdicts-v18]
 
+**Which map.** Two maps have sections here, Quicksilver Remake and Comet Catcher Remake. The `map` tool names the
+one you are on; read that map's section and its opening, and skip the other's.
+
 **This map, Quicksilver Remake, from the north-west corner start (the games so far: `--corner nw`, mirrored).**
 [K-maps-terrain-not-straight-lines, the terrain picture in the `map` tool]
 - 38 of the 44 spots can be walked to; six on islets cannot (the map's `walk_from_home` is null for them). The
@@ -75,7 +78,7 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
   `attack` row offers exactly that), and no group of one or two goes anywhere alone. Their raid comes at 2:00; the
   first Grunts are the guard, not the raid.
 
-**The opening to copy: Matt's, an experienced player's replay on this map (the user, 2026-09-22: "you need a
+**The opening to copy on Quicksilver: Matt's, an experienced player's replay on that map (the user, 2026-09-22: "you need a
 different opening build order, take a look at the Matt game").** [K-open-early-pawn-pressure-is-standard,
 K-open-matt-order-timings] His first three minutes, from the replay's record, to be written as your first packet:
 - commander: an extractor on each of the two spots beside the start (his at 0:03 and 0:10), then three wind
@@ -104,6 +107,41 @@ lab before the generators, not solar because the wind looked weak: it is not. Wh
 commander built its generators one pick at a time, eight and a half seconds each against his six, and began
 helping the lab at 2:24 against his 1:36; write "help the lab" as the commander's standing state and generators as
 the exception while energy is low.
+
+**This map, Comet Catcher Remake (the series from 2026-09-23: `--corner nw` is the west strip, Armada, mirrored,
+against this opponent from easy up to hard_aggressive).** [K-maps-factory-by-terrain, K-units-vehicles-vs-bots,
+K-maps-comet-barb-opens-bots, the tempo model]
+- 8192 by 6144, flat and open, no water, no passages: a vehicles map. Played west against east in full-height strips a
+  fifth of the map wide. 80 spots: 14 in our strip (spot_2, 7, 14, 19, 28, 30, 36, 45, 50, 54, 62, 67, 68, 74, north
+  to south, at x 540 to 1370), 14 in theirs (spot_5, 10, 12, 17, 25, 29, 34, 42, 48, 51, 60, 65, 72, 77), 52 in the
+  open middle. Our start is placed within reach of two spots. The opponent's strip is 5,500 to 6,500 elmos east; the
+  game puts the AI at an end of its strip (the north-east (6899, 681) or the south-west (1286, 5421), diagonal from
+  ours, not straight across), so scout the strip, not the mirror point. Each extractor gives about 2.6 metal a
+  second here.
+- Wind is dead: 1 to 4. Solar collectors only (155 metal, a steady 20 energy a second each, no energy to build). A
+  factory draws about 80 energy a second while it is being built, and vehicles cost eight to fourteen energy per
+  metal (Blitz 900 for 110, Stout 2100 for 225, Mason 1950 for 135), so a plant running steadily wants about eight
+  solars behind it; build them beside the commander before and while the plant goes up.
+- This opponent opened with a bot lab in 91 of 104 recorded games on this map (a vehicle plant in 13), whatever the
+  terrain says: expect Pawns and Ticks early and Maces or Rocketeers later, from the far end of its strip.
+- Tier-1 vehicles (metal / health / speed / range), Armada with the Cortex twin in brackets: Rascal `armfav`
+  31/105/168/180 scout car (Tumbleweed `corfav` 26/90/153/180); Blitz `armflash` 110/730/101/180 raider tank
+  (Instigator `corgator` 120/820/85/230); Stout `armstump` 225/1800/75/350 tank, the line unit (Bulldog `corraid`
+  235/2000/72/350); Janus `armjanus` 240/1030/54/380 rocket burst (Leveler `corlevlr` 220/1400/40/315 assault);
+  Whistler `armsam` 150/820/55/700 rockets (Slasher `cormist` 155/860/52/700); Shellshocker `armart` 135/620/54/710
+  artillery (Wolverine `corwolv` 170/750/48/710); Pincer `armpincer` 200/1340/63/305 amphibious tank (Coyote
+  `corgarp`); Mason `armcv` 135/1380/54 constructor vehicle (Rover `corcv` 145/1430/51); Beaver `armbeaver` 150
+  amphibious constructor. The plant `armvp` is 590 metal (`corvp` 570) against the lab's 500; `plant_N` is its name
+  in the picture and in `produce`. Against bots: a Blitz is two Pawns' metal with twice a Pawn's health and speed
+  and kills constructors and extractors the same way; a Stout beats any tier-1 bot head on and takes a light turret
+  with a few friends but does not outrange it (350 against 430); Whistlers and Shellshockers do.
+- The opening here is yours to find: it is the question this series asks (the user: "figure out an alternate meta;
+  a classic vehicles map will require different patterns and tempo"). Matt's opening below is a bots opening on
+  Quicksilver; its shape (two extractors, generators, the factory standing by 0:35 with the commander helping it, one
+  constructor and then raiders under a `produce` cap) is the starting point, with solars for the wind and the plant
+  for the lab, and everything after that is open: how many solars before the plant, Blitz raids against Pawn
+  raids, when the Stouts come, how far the tanks range on a map with no chokes. Say the plan you chose in a `note`
+  on turn one and, at the end, what you would change; the next game's brief carries it.
 
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]

@@ -143,6 +143,8 @@ impl Brain {
             "our commander: the strongest builder, a good fighter; the game is lost if it dies"
         } else if def == kit.constructor {
             "constructor: builds anything tier 1, repairs, reclaims; expands the economy"
+        } else if def == kit.vehicle_constructor {
+            "constructor vehicle: builds anything tier 1, repairs, reclaims; faster than the bot on flat ground"
         } else if def == kit.raider {
             "raider: fast and light, kills builders, extractors and lone turrets, loses to line units"
         } else if def == kit.line {
@@ -164,7 +166,9 @@ impl Brain {
         } else if def == kit.wind {
             "wind generator: energy with the wind"
         } else if def == kit.lab {
-            "bot lab: the factory"
+            "bot lab: the factory for bots"
+        } else if def == kit.plant {
+            "vehicle plant: the factory for tanks"
         } else if def == kit.turret {
             "light laser turret"
         } else if def == kit.radar {
@@ -175,6 +179,8 @@ impl Brain {
             "energy-to-metal converter"
         } else if def == kit.advanced_lab {
             "advanced bot lab: tier 2"
+        } else if let Some((_, role)) = vehicle_words(name) {
+            role
         } else {
             "unit"
         };
@@ -205,6 +211,10 @@ impl Brain {
             "wind generator"
         } else if def == kit.lab {
             "lab"
+        } else if def == kit.plant {
+            "vehicle plant"
+        } else if def == kit.vehicle_constructor {
+            "constructor vehicle"
         } else if def == kit.advanced_lab {
             "advanced lab"
         } else if def == kit.turret {
@@ -225,6 +235,8 @@ impl Brain {
             "brawler"
         } else if def == kit.resurrector {
             "resurrection bot"
+        } else if let Some((word, _)) = vehicle_words(self.name(def)) {
+            word
         } else {
             return self.name(def).to_string();
         };
@@ -527,10 +539,10 @@ impl Brain {
             .map(|f| format!("{:.0} metal of wrecks at {}{}", f.metal, self.place_words(&places, f.at), if f.safe { "" } else { " (not safe)" }))
             .collect();
         let extractors = count(&|u| kit.is_extractor(u.def));
-        let constructors = count(&|u| u.def == kit.constructor || u.def == kit.advanced_constructor);
+        let constructors = count(&|u| kit.is_constructor(u.def));
         let ours = json!({
             "extractors": extractors,
-            "labs": count(&|u| u.def == kit.lab || u.def == kit.advanced_lab),
+            "labs": count(&|u| kit.is_factory(u.def)),
             "constructors": format!("{constructors}: {}", constructor_words(constructors, extractors)),
             "turrets": count(&|u| u.def == kit.turret),
             "radars": count(&|u| u.def == kit.radar),
@@ -555,7 +567,7 @@ impl Brain {
                 };
                 let near_ours = own
                     .iter()
-                    .filter(|u| self.world.def(u.def).is_some_and(|d| d.speed == 0.0) || u.def == kit.commander || u.def == kit.constructor)
+                    .filter(|u| self.world.def(u.def).is_some_and(|d| d.speed == 0.0) || u.def == kit.commander || kit.is_constructor(u.def))
                     .map(|u| (u.pos.dist2d(p.at), u))
                     .filter(|(d, _)| *d < NEAR)
                     .min_by(|a, b| a.0.total_cmp(&b.0))
@@ -588,8 +600,8 @@ impl Brain {
         });
         let mut actors: BTreeMap<String, Value> = BTreeMap::new();
         for unit in own.iter().filter(|u| !u.being_built) {
-            let builder = unit.def == kit.commander || unit.def == kit.constructor;
-            let lab = unit.def == kit.lab || unit.def == kit.advanced_lab;
+            let builder = unit.def == kit.commander || kit.is_constructor(unit.def);
+            let lab = kit.is_factory(unit.def);
             if !builder && !lab {
                 continue;
             }
@@ -625,7 +637,7 @@ impl Brain {
                     (Some(now), true) => format!("building a {now}"),
                     (Some(now), false) => format!("building a {now}, then {}", queue.iter().map(|(def, _)| self.short_words(*def, kit)).collect::<Vec<_>>().join(" then ")),
                 });
-                let coming = own.iter().filter(|u| u.being_built && (u.def == kit.constructor || u.def == kit.advanced_constructor)).count() + queue.iter().filter(|(def, _)| *def == kit.constructor || *def == kit.advanced_constructor).count();
+                let coming = own.iter().filter(|u| u.being_built && kit.is_constructor(u.def)).count() + queue.iter().filter(|(def, _)| kit.is_constructor(*def)).count();
                 entry["we_have"] = json!(format!("constructors {constructors}{} ({}); soldiers {} ({})", if coming > 0 { format!(" and {coming} being made") } else { String::new() }, constructor_words(constructors + coming, extractors), soldiers.len(), soldier_words(soldiers.len(), army_metal)));
                 if let Some(list) = self.allowed_units(&name) {
                     let words: Vec<String> = list
@@ -746,8 +758,26 @@ impl Brain {
     pub(super) fn actor_name(&self, unit: bot_protocol::UnitId, kit: &Kit) -> String {
         match self.known_units.get(&unit).map(|(def, _)| *def) {
             Some(def) if def == kit.commander => "commander".into(),
+            Some(def) if def == kit.plant => format!("plant_{}", unit.0),
             Some(def) if def == kit.lab || def == kit.advanced_lab => format!("lab_{}", unit.0),
             _ => format!("constructor_{}", unit.0),
         }
     }
+}
+
+/// The tier-1 vehicles by name: a short word for the picture and a role for the menu (the kit names no vehicle but
+/// the plant and its constructor; the plant offers whatever the game lets it build). Numbers from the unit files.
+fn vehicle_words(name: &str) -> Option<(&'static str, &'static str)> {
+    Some(match name {
+        "armfav" | "corfav" => ("scout car", "scout car: very fast, almost unarmed; sees for the army"),
+        "armflash" | "corgator" => ("raider tank", "raider tank: fast, kills builders and extractors, loses to tanks and turrets"),
+        "armstump" | "corraid" => ("tank", "tank: the plant's line unit, wins tier-1 fights at equal metal; 350 range, short of a light turret's 430"),
+        "armjanus" => ("rocket tank", "rocket tank: a heavy burst at 380 range, slow to reload"),
+        "corlevlr" => ("assault tank", "assault tank: a heavy short-range shot, slow"),
+        "armsam" | "cormist" => ("rocket vehicle", "rocket vehicle: 700 range, outranges turrets, weak up close"),
+        "armart" | "corwolv" => ("artillery vehicle", "artillery vehicle: 710 range, needs something in front of it"),
+        "armpincer" | "corgarp" => ("amphibious tank", "amphibious tank: crosses water; a weaker tank on land"),
+        "armbeaver" | "cormuskrat" => ("amphibious constructor", "amphibious constructor: builds on water and land, slow"),
+        _ => return None,
+    })
 }

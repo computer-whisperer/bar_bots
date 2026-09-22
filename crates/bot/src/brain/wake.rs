@@ -125,7 +125,7 @@ impl Brain {
         if reasons.is_empty() && since >= wake.max_seconds as i32 * FRAMES_PER_SECOND {
             reasons.push(format!("{} s have passed", since / FRAMES_PER_SECOND));
         }
-        let first_turn = last_turn_frame == 0 && tick.snapshot.own_units.iter().any(|u| u.def == kit.lab);
+        let first_turn = last_turn_frame == 0 && tick.snapshot.own_units.iter().any(|u| kit.is_factory(u.def));
         if first_turn {
             reasons.push("our first factory is up".into());
         }

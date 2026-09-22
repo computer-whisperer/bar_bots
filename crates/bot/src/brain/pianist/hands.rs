@@ -99,7 +99,7 @@ impl Brain {
                             commands.push(Command::Guard { unit: id, target: lab });
                         }
                         task = Some(Task::Assist { lab, since: frame });
-                        did = Some("help the lab".into());
+                        did = Some("help the factory".into());
                     }
                     Pick::Reclaim(at) => {
                         let wrecks = self.wrecks_to_take(at, unit);

@@ -369,11 +369,11 @@ impl Brain {
     /// Where a building the opening plan asks for goes: the places the rules would put it (H-ECO-BASE-LAYOUT), and
     /// generators beside the builder until the first lab is started (H-ECO-OPENING: no walking between the first buildings).
     pub(super) fn place_planned(&self, def: UnitDefId, builder: &OwnUnit, own: &[OwnUnit], kit: &Kit) -> Plan {
-        let lab = own.iter().filter(|u| u.def == kit.lab).min_by(|a, b| a.pos.dist2d(builder.pos).total_cmp(&b.pos.dist2d(builder.pos)));
+        let lab = own.iter().filter(|u| kit.is_factory(u.def)).min_by(|a, b| a.pos.dist2d(builder.pos).total_cmp(&b.pos.dist2d(builder.pos)));
         match def {
             // The yard, but no farther from the builder than its reach: the commander built the lab at its feet in
             // both experienced players' replays and never took a step for it (rush-2-ab: ours walked 280 for it).
-            d if d == kit.lab => Plan::Near(d, self.beside_builder(builder, self.forward_of_home(LAB_YARD), own, LAB_CLEARANCE, LAB_SPOT_CLEARANCE)),
+            d if d == kit.lab || d == kit.plant => Plan::Near(d, self.beside_builder(builder, self.forward_of_home(LAB_YARD), own, LAB_CLEARANCE, LAB_SPOT_CLEARANCE)),
             d if d == kit.turret => Plan::Near(d, self.forward_of_home(TURRET_LINE)),
             d if d == kit.nano && lab.is_some() => Plan::Beside(d, lab.unwrap().pos),
             // As the simulator places them: beside the builder wherever it stands, no walking (queue-smoke: a planned
@@ -532,7 +532,7 @@ impl Brain {
 
     /// The gap, in build squares, a new building keeps from its neighbours: wide enough for units to walk through.
     fn gap_around(&self, def: UnitDefId, kit: &Kit) -> i32 {
-        if def == kit.lab { LAB_GAP } else { BUILDING_GAP }
+        if def == kit.lab || def == kit.plant { LAB_GAP } else { BUILDING_GAP }
     }
 
     pub(super) fn is_unreachable(&self, point: Vec3) -> bool {

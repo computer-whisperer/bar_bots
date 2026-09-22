@@ -408,7 +408,7 @@ impl Brain {
                     .snapshot
                     .own_units
                     .iter()
-                    .filter(|u| u.def == kit.constructor && !u.being_built && u.pos.dist2d(commander.pos) < 1200.0)
+                    .filter(|u| kit.is_constructor(u.def) && !u.being_built && u.pos.dist2d(commander.pos) < 1200.0)
                     .min_by(|a, b| a.pos.dist2d(commander.pos).total_cmp(&b.pos.dist2d(commander.pos)));
                 if let Some(medic) = medic {
                     self.fire("H-ECO-REPAIR");
@@ -457,7 +457,7 @@ impl Brain {
                 "[ai {}] f={} ({:.0} min) metal {:.0} (+{:.1}/-{:.1}) energy {:.0}/{:.0} (+{:.0}/-{:.0}) | mex {} labs {} cons {} army {} | enemies visible {}",
                 self.ai(), tick.frame, tick.frame as f32 / 1800.0, s.metal.current, s.metal.income, s.metal.usage,
                 s.energy.current, s.energy.storage, s.energy.income, s.energy.usage,
-                count(kit.extractor) + count(kit.advanced_extractor), count(kit.lab) + count(kit.advanced_lab), count(kit.constructor) + count(kit.advanced_constructor),
+                count(kit.extractor) + count(kit.advanced_extractor), count(kit.lab) + count(kit.plant) + count(kit.advanced_lab), count(kit.constructor) + count(kit.vehicle_constructor) + count(kit.advanced_constructor),
                 s.own_units.iter().filter(|u| self.is_army(u, kit)).count(), s.enemies.len()
             );
             if !self.stuck_cells.is_empty() {
