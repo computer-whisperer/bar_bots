@@ -145,3 +145,6 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
 - pianist-player-11 (2026-09-22, Opus at low effort, WON at 10 minutes against HARD, their commander killed): the
   same shape as game 9 and faster: mass to a real ball while their commander wanders into our half, commit south at
   a clear lead, mark their commander when it is seen, send the whole ball onto the mark.
+- pianist-player-12 (2026-09-22, Opus at low effort, WON at 11 minutes against HARD): the same shape again. The
+  `shelling` place moves with each hit and vanishes when the hits stop; send the ball onto it once, not as a
+  standing destination, and name the next spot beyond it.
