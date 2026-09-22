@@ -3,6 +3,7 @@
 mod brain;
 mod recorder;
 mod strategist;
+mod texts;
 mod team;
 mod world;
 

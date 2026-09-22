@@ -55,12 +55,14 @@ impl Mode {
         })
     }
 
-    fn system_prompt(self) -> &'static str {
+    /// Read from the checkout at every session start (`crate::texts`): an edit needs no rebuild.
+    fn system_prompt(self) -> String {
+        use crate::texts::{read, COMMANDER_BRIEF, COMMANDER_PROMPT, PLAYER_BRIEF, PLAYER_PROMPT, STRATEGIST_PROMPT};
         match self {
-            Mode::Strategist => include_str!("prompt.md"),
+            Mode::Strategist => read(&STRATEGIST_PROMPT),
             // The role, then what the project knows (`docs/README.md`: the brief is rewritten from the knowledge base).
-            Mode::Commander => concat!(include_str!("commander.md"), include_str!("../../../../docs/briefs/commander.md")),
-            Mode::Player => concat!(include_str!("player.md"), include_str!("../../../../docs/briefs/player.md")),
+            Mode::Commander => read(&COMMANDER_PROMPT) + &read(&COMMANDER_BRIEF),
+            Mode::Player => read(&PLAYER_PROMPT) + &read(&PLAYER_BRIEF),
         }
     }
 
@@ -102,6 +104,8 @@ struct Session {
     child: Child,
     stdin: ChildStdin,
     turn_done: Receiver<()>,
+    /// The system prompt this session was started with (`texts::digest`), to notice an edit on disk.
+    prompt: u64,
 }
 
 impl Strategist {
@@ -144,6 +148,7 @@ impl Drop for Strategist {
 
 impl Launch {
     fn spawn(&self) -> std::io::Result<Session> {
+        let prompt = self.mode.system_prompt();
         let mut child = Command::new("claude")
             .current_dir(&self.cwd)
             .env("CLAUDE_CONFIG_DIR", &self.config_dir)
@@ -151,7 +156,7 @@ impl Launch {
             .arg(&self.mcp_config)
             .args(["--allowedTools", "mcp__wreason__*", "--permission-mode", "dontAsk", "--setting-sources", ""])
             .args(["--effort", &self.effort])
-            .args(["--system-prompt", self.mode.system_prompt()])
+            .args(["--system-prompt", &prompt])
             .args(["--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -184,7 +189,7 @@ impl Launch {
                 }
             }
         });
-        Ok(Session { child, stdin, turn_done })
+        Ok(Session { child, stdin, turn_done, prompt: crate::texts::digest(&prompt) })
     }
 }
 
@@ -236,7 +241,13 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
                 break;
             }
         }
-        if turns_this_session >= mode.turns_per_session() {
+        // A fresh session at the cap, and as soon as the prompt on disk has been edited (the user, 2026-09-22: text
+        // updates without a rebuild); either way the new session is handed the notes.
+        let edited = crate::texts::digest(&mode.system_prompt()) != session.prompt;
+        if edited {
+            eprintln!("[ai {ai_id}] the prompt on disk has changed: a fresh session reads it");
+        }
+        if turns_this_session >= mode.turns_per_session() || edited {
             session.end();
             session = match launch.spawn() {
                 Ok(next) => next,

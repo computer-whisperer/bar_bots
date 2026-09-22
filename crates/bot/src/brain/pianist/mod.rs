@@ -111,6 +111,8 @@ pub struct Pianist {
     log: Option<File>,
     /// The instructions as last written to the log: a call carries them only when they changed.
     logged_instructions: String,
+    /// The rules as last logged (the header, then every change: they are read from disk each call).
+    logged_rules: String,
     /// What the hands did with this call's answers (`hands.rs`), for the log line.
     pub(super) played: Vec<serde_json::Value>,
     stats: Stats,
@@ -187,6 +189,7 @@ impl Pianist {
             last_player_wake: i32::MIN / 2,
             log,
             logged_instructions: String::new(),
+            logged_rules: String::new(),
             played: Vec::new(),
             stats: Stats::default(),
             announced: false,
@@ -195,6 +198,7 @@ impl Pianist {
 
     /// The log's first line: what every call shares.
     pub fn log_header(&mut self, ai_id: i32, rules: &str) {
+        self.logged_rules = rules.to_string();
         if let Some(log) = &mut self.log {
             let line = json!({
                 "t": "header", "format": "within-reason-jev", "version": LOG_VERSION, "ai_id": ai_id, "model": self.client.model(),
@@ -389,9 +393,9 @@ impl Brain {
         }
     }
 
-    /// One line of the log per call: the request (the instructions only when they changed, the rules never: they are
-    /// in the header), the answers, what the hands played, and the groups, places and parties by name so a reader can
-    /// draw them.
+    /// One line of the log per call: the request (the instructions and the rules only when they changed; the rules
+    /// are in the header and re-read from disk each call), the answers, what the hands played, and the groups, places
+    /// and parties by name so a reader can draw them.
     fn log_call(&mut self, tick: &Tick, request: &jev::Request, response: &jev::Response) {
         let own = &tick.snapshot.own_units;
         let Some(pianist) = self.pianist.as_mut() else { return };
@@ -400,6 +404,11 @@ impl Brain {
         }
         let mut state = request.state.clone();
         let instructions = state["instructions"].as_str().unwrap_or_default().to_string();
+        let rules = state["rules"].as_str().unwrap_or_default().to_string();
+        let rules_changed = rules != pianist.logged_rules;
+        if rules_changed {
+            pianist.logged_rules = rules.clone();
+        }
         if let Some(fields) = state.as_object_mut() {
             fields.remove("instructions");
             fields.remove("rules");
@@ -429,6 +438,9 @@ impl Brain {
             "retries": response.retries, "state": state, "questions": request.questions, "answers": response.answers,
             "played": std::mem::take(&mut pianist.played), "groups": groups, "places": places, "parties": parties,
         });
+        if rules_changed {
+            line["rules"] = json!(rules);
+        }
         if changed {
             line["instructions"] = json!(instructions);
         }

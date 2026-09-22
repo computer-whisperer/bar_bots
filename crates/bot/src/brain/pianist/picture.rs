@@ -408,7 +408,7 @@ impl Brain {
             .as_ref()
             .map(|s| s.instructions.lock().unwrap().clone())
             .filter(|i| !i.trim().is_empty())
-            .unwrap_or_else(|| include_str!("default.md").to_string());
+            .unwrap_or_else(|| crate::texts::read(&crate::texts::HANDS_DEFAULT));
         for token in instructions.split(|c: char| !c.is_ascii_alphanumeric() && c != '_') {
             if let Some(i) = token.strip_prefix("spot_").and_then(|n| n.parse::<usize>().ok()) {
                 // An islet spot nobody can walk to is no place to send anyone (pianist-player-7: the ball stood 151 s
@@ -703,7 +703,7 @@ impl Brain {
         let wind = (self.world.hello.map.wind_min + self.world.hello.map.wind_max) / 2.0;
         let rules = format!(
             "{}This map's wind averages about {wind:.0}: {}.",
-            include_str!("rules.md"),
+            crate::texts::read(&crate::texts::HANDS_RULES),
             if wind >= 8.0 { "wind generators (40 metal) beat solar collectors here" } else { "solar collectors are the reliable energy here" }
         );
         let state = json!({

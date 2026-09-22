@@ -16,6 +16,11 @@ AI runs on his machine (his compute, his inference subscriptions). Own autohost 
   `run/install_to_bar.sh` after any shim or protocol change (pitfalls.md).
 - Start `target/release/bot` with `WITHIN_REASON_SOCKET` unset; shim and bot both default to `$XDG_RUNTIME_DIR/within-reason.sock`.
   The shim retries about once a second, so the bot may start late or be restarted mid-game.
+- **Text edits need no rebuild** (`crates/bot/src/texts.rs`): the prompts (`crates/bot/src/strategist/*.md`), the
+  briefs (`docs/briefs/*.md`) and the hands' `rules.md` and `default.md` are read from the checkout at every use. The
+  hands see a rules edit on their next call; the player gets a fresh session (handed the notes, as at the 40-turn cap)
+  at its next turn after the prompt or brief changed on disk. `bot.log` says which files are read from where; a bot
+  run away from its checkout uses the compiled copies (`WITHIN_REASON_TEXTS=<checkout>` names it).
 
 ## Public lobbies — source reading only, untested against the live server
 - Chobby lists AIs from the LOCAL install (`VFS.GetAvailableAIs`, ai_list_window.lua:14); blacklist is only `CircuitAI`.
