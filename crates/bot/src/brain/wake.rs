@@ -125,9 +125,13 @@ impl Brain {
         if reasons.is_empty() && since >= wake.max_seconds as i32 * FRAMES_PER_SECOND {
             reasons.push(format!("{} s have passed", since / FRAMES_PER_SECOND));
         }
-        let first_turn = last_turn_frame == 0 && tick.snapshot.own_units.iter().any(|u| kit.is_factory(u.def));
+        // Under the pianist the player opens the game, since the factory is its choice (comet-0: the hands built a
+        // bot lab under the default text before the player's first turn, on a vehicles map). The field commander
+        // still comes in when the first factory stands.
+        let opens = self.pianist.is_some();
+        let first_turn = last_turn_frame == 0 && (opens || tick.snapshot.own_units.iter().any(|u| kit.is_factory(u.def)));
         if first_turn {
-            reasons.push("our first factory is up".into());
+            reasons.push(if opens { "the game begins: the opening is yours" } else { "our first factory is up" }.into());
         }
         let too_soon = if last_turn_frame == 0 { !first_turn } else { since < MIN_GAP_FRAMES };
         if reasons.is_empty() || too_soon || busy {
