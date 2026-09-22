@@ -113,3 +113,11 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   the hunt; labs and the commander never forward of the army; a ball never stands under unseen artillery: advance
   onto it or leave; and when the report says the base guess is at a place our units have stood on and seen nothing,
   the guess is wrong.
+- pianist-player-6 (2026-09-21, Opus at low effort, WON at 29 minutes, the first win against MEDIUM): a win with the
+  economy destroyed. Ten extractors at 6:00, then twelve Flashes held us at 0 to 3 for fifteen minutes; turrets on
+  every spot and a ball of Maces parked at the passage both failed, because Maces cannot catch Flashes and the raids
+  went round the ball. The ball gutted the enemy base from 11:01, but the enemy commander had left it to raid our half,
+  and the game was won at 29:42 when it died at C3 in our half with its army still alive. Named far spots and marks
+  (`mark`) were followed by the hands. Its lessons: against medium's raids, raiders of our own (Pawns) on the raids'
+  passages, not turrets alone and not Maces; the enemy commander leaves its base once pressed and dies to whatever
+  stands at home; a ball under unseen artillery advances onto it or leaves, never stands.
