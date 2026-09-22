@@ -142,3 +142,6 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   seen lead at 7:59 won it in four minutes. Hard's raids are the same Flashes, plus Shellshock artillery of range
   710 that shells from out of sight: the picture's `shelling` place is where it stands, and advancing onto it is
   how the ball answered it.
+- pianist-player-11 (2026-09-22, Opus at low effort, WON at 10 minutes against HARD, their commander killed): the
+  same shape as game 9 and faster: mass to a real ball while their commander wanders into our half, commit south at
+  a clear lead, mark their commander when it is seen, send the whole ball onto the mark.
