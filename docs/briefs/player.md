@@ -198,6 +198,17 @@ K-maps-comet-barb-opens-bots, the tempo model]
   end of the strip at the first sight of a line bot near home, not at 25%. Their commander stood at the north end
   (7383, 609) this game, the base at H1-H2. Blitz raids took 17 extractors (8 to Blitzes): turrets at the outer
   spots held only where they stood two together.
+- comet-5 (medium, LOST at 27.7 min): the same opening (plant 0:40, first Blitz 2:05, twelve extractors and income
+  27 at 5:16), and this time the opponent opened with a vehicle plant: its Blitzes took 41 of our extractors over the
+  game (25 to Blitzes) while ours sat in five small guard groups, then a block of nine Janus (380 range) killed
+  eleven Stouts (350) at 17:07, and 24 Shellshockers without a screen were eaten at 23:06. Against its plant: one
+  block, never five guards; Stouts trade even with Blitzes, so the turrets do the guarding (31 were built, from 5:07,
+  too late for the first raids: the first two go up with the first outer extractors); the Janus is the counter to
+  Stouts, and Shellshockers behind a Stout screen are the counter to Janus, never alone. Energy: the plant's units
+  cost eight to fourteen energy per metal and Stouts at two plants stalled the store at 17:07; then 46 solars were
+  built with the metal at zero and energy full ("solars were pure waste", 24:06): count the plants and hold solars at
+  about eight per running plant. `queue` takes an empty list or null to cancel a list (the strings sent at 24:11 are
+  accepted now too).
 
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]

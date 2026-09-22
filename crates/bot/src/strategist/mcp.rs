@@ -137,7 +137,7 @@ fn tool_list(mode: Mode) -> Value {
               "description": format!("Your standing instructions to your hands: the whole packet, replacing the last one. Jev reads it every second beside the picture and picks each actor's next action from a menu, so write it as standing orders in plain words: the build order per builder as a sequence, what the lab makes and when that changes, where each group stands, when it engages, scouts and attacks, what to do about raids. Name places as the picture does (home, enemy_base, spot_N, passage_N, and any place you marked with `mark`; a spot or passage you name here is always on your hands' menu, however far) and groups as group_A, group_B. No arithmetic for the hands to do: say \"when we have about ten soldiers\", not a formula. At most {INSTRUCTIONS_LIMIT} characters."),
               "inputSchema": { "type": "object", "additionalProperties": false, "required": ["text"], "properties": { "text": { "type": "string" } } } },
             { "name": "queue",
-              "description": "A builder's build list, done exactly and in order by the bot itself without asking your hands: an object of builder name (commander, constructor_N) to a list of steps, or null to cancel its list. Steps: \"extractor spot_N\" (or \"extractor\" for the nearest free spot), \"solar\", \"wind\", \"lab\", \"vehicle_plant\", \"converter\", \"advanced_lab\", \"construction_turret\", \"turret <place>\", \"radar <place>\", \"assist\" (help the nearest factory, standing or being built: the last step of an opening). Each step is ordered when the one before is 60% built, so nothing idles; a step that cannot be done (the spot taken, a place unknown, a building this builder cannot make) is skipped and said in the hands' report. While a list runs the builder is off your hands' menu unless an enemy is on it; your instructions take over when the list is done. This is how an opening is made to happen as written: the hands do not follow a sequence (comet-1, comet-2: 'three solars, then the plant' got extractors and the plant at 1:45).",
+              "description": "A builder's build list, done exactly and in order by the bot itself without asking your hands: an object of builder name (commander, constructor_N) to a list of steps, or null (or an empty list) to cancel its list. Steps: \"extractor spot_N\" (or \"extractor\" for the nearest free spot), \"solar\", \"wind\", \"lab\", \"vehicle_plant\", \"converter\", \"advanced_lab\", \"construction_turret\", \"turret <place>\", \"radar <place>\", \"assist\" (help the nearest factory, standing or being built: the last step of an opening). Each step is ordered when the one before is 60% built, so nothing idles; a step that cannot be done (the spot taken, a place unknown, a building this builder cannot make) is skipped and said in the hands' report. While a list runs the builder is off your hands' menu unless an enemy is on it; your instructions take over when the list is done. This is how an opening is made to happen as written: the hands do not follow a sequence (comet-1, comet-2: 'three solars, then the plant' got extractors and the plant at 1:45).",
               "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "string" } }, { "type": "null" } ] }, "description": "Builder name to steps, or null." } },
             { "name": "lane",
               "description": "Which footwork rules your hands' code applies to a group's soldiers between your hands' orders, per group name or for \"all\": \"raw\" (none: the group's orders reach the engine exactly as given), \"on\" (all of them, the default), or a list of the rules to keep. The rules: flee (a soldier steps out of the reach of a turret or a fight it was not sent against, or one it would die in), fan (spreads out under a commander's D-gun), focus (soldiers standing together shoot one target at a time), kite (a soldier that outranges its enemy steps back while reloading), march (an advancing group waits for its stragglers so it arrives together), follow (an engaging group is re-sent after its party as it moves). A setting stands until you change it; the group's picture entry shows it when it is not the default.",
@@ -334,8 +334,18 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared, mode: Mode) -> Resu
                 if name != "commander" && !name.starts_with("constructor_") {
                     return Err(format!("{name}: lists are by builder name (commander or constructor_N)"));
                 }
-                let list = match value {
+                // As the model writes them (comet-5, 24:11: "cannot cancel the commander's old solar list, the queue
+                // tool rejects every form I try"): the list as a JSON string, "null" as a string, one step as a bare
+                // string, an empty list to cancel.
+                let value = match value {
+                    Value::String(s) if s.trim() == "null" => Value::Null,
+                    Value::String(s) if s.trim_start().starts_with('[') => serde_json::from_str(s).map_err(|e| format!("{name}: {e}"))?,
+                    Value::String(s) => Value::Array(vec![Value::String(s.clone())]),
+                    other => other.clone(),
+                };
+                let list = match &value {
                     Value::Null => None,
+                    Value::Array(items) if items.is_empty() => None,
                     Value::Array(items) => {
                         let steps: Vec<String> = items.iter().map(|v| v.as_str().map(|s| s.trim().to_string()).ok_or_else(|| format!("{name}: steps are strings"))).collect::<Result<_, _>>()?;
                         for step in &steps {
@@ -661,6 +671,13 @@ mod tests {
         assert!(orders(&json!({ "calls": [{ "tool": "queue", "arguments": { "commander": ["solar"] } }] }), &shared, Mode::Player).unwrap().contains("1 steps"));
         assert!(call_tool("queue", &json!({ "group_A": ["solar"] }), &shared, Mode::Player).is_err());
         assert!(call_tool("queue", &json!({ "commander": ["windmill"] }), &shared, Mode::Player).is_err());
+        // The shapes the model actually sent to cancel or replace a list (comet-5).
+        for form in [json!({ "commander": "null" }), json!({ "commander": [] }), json!({ "commander": null })] {
+            assert!(call_tool("queue", &form, &shared, Mode::Player).unwrap().contains("cancelled"), "{form}");
+            assert!(shared.queues.lock().unwrap().get("commander").cloned().flatten().is_none());
+        }
+        assert!(call_tool("queue", &json!({ "commander": "[\"assist\"]" }), &shared, Mode::Player).unwrap().contains("1 steps"));
+        assert!(call_tool("queue", &json!({ "commander": "assist" }), &shared, Mode::Player).unwrap().contains("1 steps"));
     }
 
     #[test]
