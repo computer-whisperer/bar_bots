@@ -155,7 +155,9 @@ impl Launch {
             .args(["--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            // Kept since realtime-1: a session that answers nothing for 120 s (games 10, 11, realtime-1) leaves no
+            // trace without it.
+            .stderr(std::fs::File::create(self.cwd.with_file_name(self.cwd.file_name().map(|n| n.to_string_lossy().replace("-cwd", "-stderr.log")).unwrap_or_default())).map_or(Stdio::null(), Stdio::from))
             .spawn()?;
         let stdin = child.stdin.take().expect("piped stdin");
         let stdout = child.stdout.take().expect("piped stdout");

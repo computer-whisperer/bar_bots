@@ -11,8 +11,13 @@ use bot_protocol::{Event, Tick, UnitId, Vec3};
 use super::pianist::GroupTask;
 use super::{Brain, FRAMES_PER_SECOND};
 
-/// Hits older than this are forgotten.
-const SHELL_MEMORY: i32 = 20 * FRAMES_PER_SECOND;
+/// Hits older than this are forgotten (20 s until realtime-1: the place flickered with each hit and the hands re-sent
+/// the ball to it, pianist-player-12 and -13).
+const SHELL_MEMORY: i32 = 45 * FRAMES_PER_SECOND;
+/// A shelling with no hit for this long, and a unit of ours standing within `STOOD_ON` of its place, is over: the
+/// shooter is dead or gone, and the place goes.
+const QUIET_FRAMES: i32 = 10 * FRAMES_PER_SECOND;
+const STOOD_ON: f32 = 300.0;
 /// The player is woken when this many hits have come from out of sight over this long, once a minute.
 const WAKE_HITS: usize = 5;
 const WAKE_SECONDS: i32 = 15;
@@ -71,6 +76,12 @@ impl Brain {
     pub(super) fn track_shelling(&mut self, tick: &Tick) {
         let frame = tick.frame;
         self.shelling.retain(|s| frame - s.frame <= SHELL_MEMORY);
+        if let Some(s) = self.shelling()
+            && self.shelling.iter().all(|h| frame - h.frame > QUIET_FRAMES)
+            && tick.snapshot.own_units.iter().any(|u| !u.being_built && u.pos.dist2d(s.at) < STOOD_ON)
+        {
+            self.shelling.clear();
+        }
         for event in &tick.events {
             let Event::UnitDamaged { unit, attacker: None, from: Some(dir), weapon: Some(weapon), .. } = event else { continue };
             if weapon.range <= 0.0 {
