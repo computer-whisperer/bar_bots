@@ -206,3 +206,17 @@ building windmills emptied the store (energy 15 at 2:00, 0 at 3:00).
 **Would be wrong if.** The packet had allowed a second constructor (it did not until the sixth raider).
 **Used by.** H-HANDS-PRODUCE (a cap after a colon), the prompt ("the hands cannot count"), the brief's opening
 packet lines.
+
+### K-hands-grunts-die-away-from-the-commander
+**Claim.** Early raiders of ours fight the human's Pawn raid in ones, twos and fives out at the extractors, 400 to
+1,200 from the commander, and trade one for one at best; the commander, kept building at home by the packet and
+offered no attack beyond 320, never adds its guns.
+**Status.** demonstrated (2026-09-23, human-8; the user: "it let pawns drift too far out and didn't use its
+commander to improve exchange rates early on")
+**Evidence.** human-8 (`run/matches/1790049731-human-8`): groups A to F formed 1:33 to 3:22 as Grunts left the lab
+while the ball held at spot_14; `send_against` two at 2:03, `engage` by a pair at 2:22; eight Grunts destroyed by
+3:14 at 380, 447, 525, 539, 602, 715, 771 and 1,231 from the commander, in groups of 1, 1, 2, 2, 5, 5, 5; the
+commander's first attack at 3:26.
+**Would be wrong if.** The Grunts had died at home beside the commander (none did).
+**Used by.** H-HANDS-GROUPS (newcomers walk to the largest group in our half), H-HANDS-COMMANDER-FIGHTS (a busy
+party within 500), the brief's fight paragraph.

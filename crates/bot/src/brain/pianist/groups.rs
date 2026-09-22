@@ -12,6 +12,10 @@ use super::super::{Brain, FRAMES_PER_SECOND};
 /// H-HANDS-GROUPS: a new soldier joins the largest group whose centre is this close, else forms a new one; two holding
 /// groups whose centres are this close merge, the smaller into the larger (smoke-5: forty one-unit groups round home).
 const ADOPT_RADIUS: f32 = 400.0;
+/// Farther than that, a newcomer joins the largest group within this that stands in our half, walking to it: fresh
+/// Grunts at the lab formed groups of one and two while the ball held 400 to 2,700 away, and died in ones and twos
+/// (human-8: eight Grunts lost by 3:14, every one in a group of five or fewer, 380 to 1,231 from the commander).
+const ADOPT_FAR: f32 = 1500.0;
 const MERGE_RADIUS: f32 = 300.0;
 /// A moving group has arrived when its centre is this close to its destination.
 const ARRIVED: f32 = 300.0;
@@ -111,16 +115,21 @@ impl Brain {
         // H-HANDS-GROUPS: newcomers.
         let mut loose: Vec<&OwnUnit> = soldiers.iter().copied().filter(|u| !pianist.groups.iter().any(|g| g.members.contains(&u.id))).collect();
         loose.sort_by_key(|u| u.id.0);
+        let enemy_base = self.enemy_base(home);
         for unit in loose {
-            let nearest = pianist
-                .groups
-                .iter_mut()
-                .filter_map(|g| centre_of(&g.units(own)).map(|c| (c.dist2d(unit.pos), g)))
-                .filter(|(d, _)| *d < ADOPT_RADIUS)
-                .max_by(|a, b| a.1.members.len().cmp(&b.1.members.len()).then(b.0.total_cmp(&a.0)));
-            match nearest {
-                Some((_, group)) => group.members.push(unit.id),
-                None => {
+            let candidates: Vec<(f32, Vec3, usize)> = pianist.groups.iter().enumerate().filter_map(|(i, g)| centre_of(&g.units(own)).map(|c| (c.dist2d(unit.pos), c, i))).collect();
+            let near = candidates.iter().filter(|(d, _, _)| *d < ADOPT_RADIUS).max_by(|a, b| pianist.groups[a.2].members.len().cmp(&pianist.groups[b.2].members.len()).then(b.0.total_cmp(&a.0)));
+            let far = candidates
+                .iter()
+                .filter(|(d, c, _)| *d < ADOPT_FAR && c.dist2d(home) < c.dist2d(enemy_base))
+                .max_by(|a, b| pianist.groups[a.2].members.len().cmp(&pianist.groups[b.2].members.len()).then(b.0.total_cmp(&a.0)));
+            match (near, far) {
+                (Some((_, _, i)), _) => pianist.groups[*i].members.push(unit.id),
+                (None, Some((_, c, i))) => {
+                    pianist.groups[*i].members.push(unit.id);
+                    commands.push(Command::Move { unit: unit.id, to: *c, queue: false });
+                }
+                (None, None) => {
                     let name = pianist.new_group_name();
                     pianist.groups.push(Group::new(name, vec![unit.id], GroupTask::Hold { since: frame, committed: false }, frame));
                 }

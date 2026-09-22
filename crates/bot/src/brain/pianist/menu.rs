@@ -34,6 +34,10 @@ const QUEUE_AT: f32 = 0.6;
 /// A builder is offered the attack on a party only this close: raiders outrun a commander, and one sent after a party
 /// 500 away walked after it for a minute instead of helping the lab (human-6).
 const ATTACK_REACH: f32 = 320.0;
+/// A party this close is offered too when it is busy: standing at a building of ours, or fought by a group of ours,
+/// which the commander's guns then join (human-8, the user: it did not use its commander to improve the exchange
+/// rate; the Grunts died 380 to 525 from it).
+const ATTACK_JOIN: f32 = 500.0;
 /// A group this small is not offered a detachment (pianist-player-14: groups of one sent one soldier at a time).
 const DETACH_FROM: usize = 4;
 /// A party bigger than this is an attack, not a raider to be met by a detachment (human-1: two soldiers sent against
@@ -259,10 +263,15 @@ impl Brain {
             // H-HANDS-COMMANDER-FIGHTS: a builder is offered the attack on a party beside it that it outweighs alone; the
             // commander's D-gun is the early answer to raiders (human-1, second game: the player ordered it in five
             // packets and nothing on the menu could do it while two Pawns razed the base).
-            if let Some(party) = picture.parties.iter().filter(|p| p.at.dist2d(unit.pos) < ATTACK_REACH).min_by(|a, b| a.at.dist2d(unit.pos).total_cmp(&b.at.dist2d(unit.pos))) {
+            let busy_party = |p: &super::picture::Party| {
+                own.iter().any(|u| u.pos.dist2d(p.at) < 150.0 && self.world.def(u.def).is_some_and(|d| d.speed == 0.0))
+                    || pianist.groups.iter().any(|g| matches!(&g.task, super::GroupTask::Engage { party, .. } if party.iter().any(|id| p.ids.contains(id))))
+            };
+            if let Some(party) = picture.parties.iter().filter(|p| p.at.dist2d(unit.pos) < ATTACK_REACH || (p.at.dist2d(unit.pos) < ATTACK_JOIN && busy_party(p))).min_by(|a, b| a.at.dist2d(unit.pos).total_cmp(&b.at.dist2d(unit.pos))) {
                 let odds = self.odds_words(&[unit], party, tick.snapshot.enemies.as_slice());
                 if odds.starts_with("we outweigh") {
-                    offer("attack", Pick::Attack(party.at, party.name.clone()), format!("Attack {} ({}, {:.0} away, within reach) now and come back to what it was doing: against this unit alone, {odds}. Raiders outrun it: a party farther off is not offered.", party.name, party.composition, party.at.dist2d(unit.pos)));
+                    let why = if party.at.dist2d(unit.pos) < ATTACK_REACH { "within reach" } else { "busy at our buildings or fighting our soldiers, so it can be caught" };
+                    offer("attack", Pick::Attack(party.at, party.name.clone()), format!("Attack {} ({}, {:.0} away, {why}) now and come back to what it was doing: against this unit alone, {odds}; its guns beside our soldiers turn an even trade. Raiders outrun it: a party farther off is not offered.", party.name, party.composition, party.at.dist2d(unit.pos)));
                 }
             }
             let instructions = json!(if let Some((what, share)) = started.as_ref().filter(|_| queue_ahead) {
@@ -312,7 +321,7 @@ impl Brain {
             let mut options: BTreeMap<String, Pick> = BTreeMap::new();
             let mut criteria: BTreeMap<String, Value> = BTreeMap::new();
             options.insert("nothing".into(), Pick::Nothing);
-            criteria.insert("nothing".into(), json!("Build nothing now and save the metal."));
+            criteria.insert("nothing".into(), json!("Build nothing now and save the metal (only when metal is short: a unit chosen here waits behind the one being made, so choosing it never interrupts that unit; human-8: the lab chose nothing seven times while its constructor was being made)."));
             // H-HANDS-PRODUCE: the player's whitelist, when it names something this lab can build, is the whole menu.
             let allowed = self.allowed_units(&name);
             // A changed allowance restarts the lab's counts against its caps ("corck:1": one more, then off the list).

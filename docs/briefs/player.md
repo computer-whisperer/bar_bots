@@ -67,6 +67,13 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
   before 3:01 and the lab dead at 3:03). Solar first when the store is empty, since building solar costs no energy.
   About twenty energy for every metal spent is the rule of thumb they gave; "two constructors is very greedy on this
   map" (human-6), so one constructor and the commander helping the lab is the early shape.
+- The fight, once the opening is right (human-8: Matt's opening minute for minute, ten Grunts by 2:43, and lost
+  anyway): Grunts trade one for one with Pawns and lose in ones and twos away from the commander (eight lost by
+  3:14, all 380 to 1,231 from it). The user's reading: the Pawns drifted too far out, and the commander was not used
+  to improve the exchange rate. So the raiders hold at home beside the commander until they are a handful, the
+  commander attacks a raider party at a building of ours or one our soldiers are fighting within its short walk (the
+  `attack` row offers exactly that), and no group of one or two goes anywhere alone. Their raid comes at 2:00; the
+  first Grunts are the guard, not the raid.
 
 **The opening to copy: Matt's, an experienced player's replay on this map (the user, 2026-09-22: "you need a
 different opening build order, take a look at the Matt game").** [K-open-early-pawn-pressure-is-standard,
