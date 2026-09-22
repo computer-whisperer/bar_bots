@@ -615,10 +615,15 @@ impl Brain {
                 }
             } else {
                 let queue = pianist.lab_queue.get(&unit.id).map(Vec::as_slice).unwrap_or_default();
-                entry["doing"] = json!(if unit.idle && queue.is_empty() {
-                    "idle: building nothing".to_string()
-                } else {
-                    format!("building {}", queue.iter().map(|(def, _)| self.short_words(*def, kit)).collect::<Vec<_>>().join(" then "))
+                // What stands on its pad now (the queue holds only what is not yet started, human-6: "building "
+                // with the queue empty and a Grunt on the pad).
+                let on_pad = own.iter().filter(|u| u.being_built && u.pos.dist2d(unit.pos) < 120.0 && self.world.def(u.def).is_some_and(|d| d.speed > 0.0)).map(|u| format!("{} ({:.0}% built)", self.short_words(u.def, kit), u.health / u.max_health.max(1.0) * 100.0)).next();
+                entry["doing"] = json!(match (on_pad, queue.is_empty()) {
+                    (None, true) if unit.idle => "idle: building nothing".to_string(),
+                    (None, true) => "starting a unit".to_string(),
+                    (None, false) => format!("building {}", queue.iter().map(|(def, _)| self.short_words(*def, kit)).collect::<Vec<_>>().join(" then ")),
+                    (Some(now), true) => format!("building a {now}"),
+                    (Some(now), false) => format!("building a {now}, then {}", queue.iter().map(|(def, _)| self.short_words(*def, kit)).collect::<Vec<_>>().join(" then ")),
                 });
                 let coming = own.iter().filter(|u| u.being_built && (u.def == kit.constructor || u.def == kit.advanced_constructor)).count() + queue.iter().filter(|(def, _)| *def == kit.constructor || *def == kit.advanced_constructor).count();
                 entry["we_have"] = json!(format!("constructors {constructors}{} ({}); soldiers {} ({})", if coming > 0 { format!(" and {coming} being made") } else { String::new() }, constructor_words(constructors + coming, extractors), soldiers.len(), soldier_words(soldiers.len(), army_metal)));

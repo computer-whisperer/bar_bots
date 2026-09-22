@@ -564,7 +564,7 @@ impl Brain {
                 Some(Task::Reclaim { since, .. }) | Some(Task::Repair { since, .. }) if frame - since > super::economy::ORDER_GRACE_FRAMES => {
                     pianist.tasks.remove(&unit.id);
                 }
-                Some(Task::Walk { to, since, .. }) if unit.pos.dist2d(*to) < 150.0 || frame - since > 40 * FRAMES_PER_SECOND => {
+                Some(Task::Walk { to, since, place }) if unit.pos.dist2d(*to) < 150.0 || frame - since > 40 * FRAMES_PER_SECOND || (place.starts_with("party_") && frame - since > 10 * FRAMES_PER_SECOND) => {
                     pianist.tasks.remove(&unit.id);
                 }
                 _ => {}

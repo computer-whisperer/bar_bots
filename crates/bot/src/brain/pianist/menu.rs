@@ -31,6 +31,9 @@ const STARTED_ALARM: f32 = 800.0;
 /// A builder whose started build is this far along is asked what comes next, and the answer is queued behind it
 /// (H-HANDS-QUEUE: human-5, a generator every 8.5 s against Matt's 6, the difference an idle pick and a walk each).
 const QUEUE_AT: f32 = 0.6;
+/// A builder is offered the attack on a party only this close: raiders outrun a commander, and one sent after a party
+/// 500 away walked after it for a minute instead of helping the lab (human-6).
+const ATTACK_REACH: f32 = 320.0;
 /// A group this small is not offered a detachment (pianist-player-14: groups of one sent one soldier at a time).
 const DETACH_FROM: usize = 4;
 /// A party bigger than this is an attack, not a raider to be met by a detachment (human-1: two soldiers sent against
@@ -257,10 +260,10 @@ impl Brain {
             // H-HANDS-COMMANDER-FIGHTS: a builder is offered the attack on a party beside it that it outweighs alone; the
             // commander's D-gun is the early answer to raiders (human-1, second game: the player ordered it in five
             // packets and nothing on the menu could do it while two Pawns razed the base).
-            if let Some(party) = picture.parties.iter().filter(|p| p.at.dist2d(unit.pos) < ALARM).min_by(|a, b| a.at.dist2d(unit.pos).total_cmp(&b.at.dist2d(unit.pos))) {
+            if let Some(party) = picture.parties.iter().filter(|p| p.at.dist2d(unit.pos) < ATTACK_REACH).min_by(|a, b| a.at.dist2d(unit.pos).total_cmp(&b.at.dist2d(unit.pos))) {
                 let odds = self.odds_words(&[unit], party, tick.snapshot.enemies.as_slice());
                 if odds.starts_with("we outweigh") {
-                    offer("attack", Pick::Attack(party.at, party.name.clone()), format!("Attack {} ({}, {:.0} away) now and come back to what it was doing: against this unit alone, {odds}.", party.name, party.composition, party.at.dist2d(unit.pos)));
+                    offer("attack", Pick::Attack(party.at, party.name.clone()), format!("Attack {} ({}, {:.0} away, within reach) now and come back to what it was doing: against this unit alone, {odds}. Raiders outrun it: a party farther off is not offered.", party.name, party.composition, party.at.dist2d(unit.pos)));
                 }
             }
             let instructions = json!(if let Some((what, share)) = started.as_ref().filter(|_| queue_ahead) {
