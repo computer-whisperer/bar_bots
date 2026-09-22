@@ -93,8 +93,11 @@ const LAB_YARD: f32 = 350.0;
 const LAB_CLEARANCE: f32 = 230.0;
 const BUILDING_CLEARANCE: f32 = 90.0;
 /// No building goes up this close to a metal spot's centre: a lab anchored 102 from a spot left the engine no site for
-/// the extractor (human-1, the user's "it builds the lab right on top of it"; a lab is 96 wide, an extractor 48).
+/// the extractor (human-1, the user's "it builds the lab right on top of it"; a lab is 96 wide, an extractor 48). The
+/// lab keeps farther: the engine's site search moved one 80 from an anchor that was 156 from the spot (human-1, second
+/// game: the lab landed 98 from spot_10 again).
 const SPOT_CLEARANCE: f32 = 150.0;
+const LAB_SPOT_CLEARANCE: f32 = 260.0;
 const TURRET_LINE: f32 = 650.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
@@ -370,13 +373,13 @@ impl Brain {
         match def {
             // The yard, but no farther from the builder than its reach: the commander built the lab at its feet in
             // both experienced players' replays and never took a step for it (rush-2-ab: ours walked 280 for it).
-            d if d == kit.lab => Plan::Near(d, self.beside_builder(builder, self.forward_of_home(LAB_YARD), own, LAB_CLEARANCE)),
+            d if d == kit.lab => Plan::Near(d, self.beside_builder(builder, self.forward_of_home(LAB_YARD), own, LAB_CLEARANCE, LAB_SPOT_CLEARANCE)),
             d if d == kit.turret => Plan::Near(d, self.forward_of_home(TURRET_LINE)),
             d if d == kit.nano && lab.is_some() => Plan::Beside(d, lab.unwrap().pos),
             // As the simulator places them: beside the builder wherever it stands, no walking (queue-smoke: a planned
             // solar went to the back field 497 elmos from a commander out at a far extractor, and the plan's timing
             // with it).
-            d if d != kit.nano => Plan::Beside(d, self.beside_builder(builder, self.enemy_base(builder.pos), own, BUILDING_CLEARANCE)),
+            d if d != kit.nano => Plan::Beside(d, self.beside_builder(builder, self.enemy_base(builder.pos), own, BUILDING_CLEARANCE, SPOT_CLEARANCE)),
             d => Plan::Near(d, self.forward_of_home(-BACK_FIELD)),
         }
     }
@@ -388,7 +391,7 @@ impl Brain {
     /// of ours stands or is started within `clearance` of it: the engine's closest free site to an anchor on the first
     /// extractor's nanoframe lay beyond the extractor, out of reach, and the commander walked for the lab
     /// (rush-7-comet-std-noplace 09).
-    fn beside_builder(&self, builder: &OwnUnit, toward: Vec3, own: &[OwnUnit], clearance: f32) -> Vec3 {
+    fn beside_builder(&self, builder: &OwnUnit, toward: Vec3, own: &[OwnUnit], clearance: f32, spot_clearance: f32) -> Vec3 {
         let reach = self.world.def(builder.def).map_or(100.0, |d| d.build_distance.max(60.0));
         let heading = (toward.z - builder.pos.z).atan2(toward.x - builder.pos.x);
         let at = |turn: f32| {
@@ -396,7 +399,7 @@ impl Brain {
             Vec3 { x: builder.pos.x + angle.cos() * reach, y: 0.0, z: builder.pos.z + angle.sin() * reach }
         };
         let standing = |p: Vec3| own.iter().any(|u| u.id != builder.id && self.world.def(u.def).is_some_and(|d| d.speed == 0.0) && u.pos.dist2d(p) < clearance);
-        let on_spot = |p: Vec3| self.world.hello.metal_spots.iter().any(|s| s.dist2d(p) < SPOT_CLEARANCE);
+        let on_spot = |p: Vec3| self.world.hello.metal_spots.iter().any(|s| s.dist2d(p) < spot_clearance);
         let started = |p: Vec3| {
             self.last_orders.iter().any(|(id, (_, _, near))| *id != builder.id && self.jobs.contains_key(id) && near.dist2d(p) < clearance)
                 || self.queued.iter().any(|(id, (_, near, _))| *id != builder.id && near.dist2d(p) < clearance)
@@ -591,7 +594,7 @@ impl Brain {
         let opening_energy = planned(kit.wind) + 2 * planned(kit.solar);
         if opening_energy < OPENING_GENERATORS {
             // Beside the commander, wherever it is: no walking between the first buildings.
-            return (Plan::Beside(small_generator, self.beside_builder(builder, self.enemy_base(builder.pos), snapshot.own_units.as_slice(), BUILDING_CLEARANCE)), "H-ECO-OPENING");
+            return (Plan::Beside(small_generator, self.beside_builder(builder, self.enemy_base(builder.pos), snapshot.own_units.as_slice(), BUILDING_CLEARANCE, SPOT_CLEARANCE)), "H-ECO-OPENING");
         }
         if planned(kit.lab) < 1 {
             return (Plan::Near(kit.lab, yard), "H-ECO-OPENING");

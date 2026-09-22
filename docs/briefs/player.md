@@ -79,8 +79,11 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
 straight at the field constructors, and never stopped; against zero army the game was over by 3:00 (all builders
 dead by 2:55, the lab by 4:46). Soldiers before the fourth constructor, and no constructor beyond spot_12 without a
 soldier near it before 3:00. The people in chat gave real advice ("30 pawns before mace"; "moving the commander
-around costs build power") and answered a question in a minute: ask early, take what fits, say what you are doing.
-[experiments ledger: human-1]
+around costs build power"; "about 20 energy for every metal, and more than one or two constructors makes defending
+hard") and answered a question in a minute: ask early, take what fits, say what you are doing. Both games the lab
+made three constructors while three windmills ran and energy sat at zero from 1:00; the wind here gives energy, less
+than that spends. The commander can `attack` a raider party beside it that it outweighs: two Pawns at home are its
+job, not a reason to walk away. [experiments ledger: human-1, human-2]
 
 **What earlier players did, right and wrong.** [experiments ledger: pianist-player-1]
 - pianist-player-1 (2026-09-21, Opus at low effort, lost at 14 minutes): the opening packet was sound and the hands

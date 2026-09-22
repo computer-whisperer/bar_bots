@@ -49,6 +49,8 @@ pub(crate) enum Pick {
     Repair(UnitId),
     WalkTo,
     RetreatHome,
+    /// Attack the nearest enemy party (a builder that outweighs it; the commander against raiders).
+    Attack(Vec3, String),
     /// Labs.
     Unit(UnitDefId),
     Nothing,
@@ -230,6 +232,15 @@ impl Brain {
             offer("walk_to", Pick::WalkTo, "Walk to the place answered in `where` and wait there.".into());
             if unit.pos.dist2d(self.home) > AWAY {
                 offer("retreat_home", Pick::RetreatHome, format!("Go home now ({} away, {:.0}); the way home avoids known threats.", distance_words(unit.pos.dist2d(self.home)), unit.pos.dist2d(self.home)));
+            }
+            // H-HANDS-COMMANDER-FIGHTS: a builder is offered the attack on a party beside it that it outweighs alone; the
+            // commander's D-gun is the early answer to raiders (human-1, second game: the player ordered it in five
+            // packets and nothing on the menu could do it while two Pawns razed the base).
+            if let Some(party) = picture.parties.iter().filter(|p| p.at.dist2d(unit.pos) < ALARM).min_by(|a, b| a.at.dist2d(unit.pos).total_cmp(&b.at.dist2d(unit.pos))) {
+                let odds = self.odds_words(&[unit], party, tick.snapshot.enemies.as_slice());
+                if odds.starts_with("we outweigh") {
+                    offer("attack", Pick::Attack(party.at, party.name.clone()), format!("Attack {} ({}, {:.0} away) now and come back to what it was doing: against this unit alone, {odds}.", party.name, party.composition, party.at.dist2d(unit.pos)));
+                }
             }
             let instructions = json!(format!(
                 "Given `actors.{name}` and the player's `instructions`, what should {name} do next? Prefer what the instructions say; keep to the plan unless the situation has changed. Energy now: {energy_words}. Metal now: {metal_words}."

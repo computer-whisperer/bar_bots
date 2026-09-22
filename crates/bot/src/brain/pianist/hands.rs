@@ -115,6 +115,11 @@ impl Brain {
                             did = Some(format!("walk to {}", p.name));
                         }
                     }
+                    Pick::Attack(at, ref party_name) => {
+                        commands.push(Command::Fight { unit: id, to: at, queue: false });
+                        task = Some(Task::Walk { to: at, place: party_name.clone(), since: frame });
+                        did = Some(format!("attack {party_name}"));
+                    }
                     Pick::RetreatHome => {
                         match (unit.def == kit.commander).then(|| self.commander_waypoint_home(unit.pos)).flatten() {
                             Some(waypoint) => {

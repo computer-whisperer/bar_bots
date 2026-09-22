@@ -142,7 +142,12 @@ fn spawn_worker(client: jev::Client) -> Worker {
     let (to, requests) = std::sync::mpsc::channel::<(u64, jev::Request)>();
     let (answers, from) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        for (id, request) in requests {
+        while let Ok((mut id, mut request)) = requests.recv() {
+            // Behind by a slow call, the worker answers the newest request only: answered in order, a burst of
+            // one-second calls made every later answer stale (human-1, second game: three of 35 dropped).
+            while let Ok((newer_id, newer)) = requests.try_recv() {
+                (id, request) = (newer_id, newer);
+            }
             if answers.send((id, client.ask(&request))).is_err() {
                 break;
             }

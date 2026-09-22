@@ -344,6 +344,9 @@ impl Brain {
                 }
             }
             self.home = unit.pos;
+            for b in &self.world.hello.start_boxes {
+                eprintln!("[ai {}] start box of ally team {}: ({:.0}, {:.0}) to ({:.0}, {:.0}){}", self.world.hello.ai_id, b.ally_team, b.left, b.top, b.right, b.bottom, if b.ally_team == self.world.hello.ally_team { " (ours)" } else { "" });
+            }
             self.guess_enemy_bases();
             eprintln!("[ai {}] playing {} from ({:.0}, {:.0})", self.ai(), roster.commander, unit.pos.x, unit.pos.z);
             if let Some(kit) = self.kit {

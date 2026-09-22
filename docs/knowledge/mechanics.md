@@ -197,3 +197,16 @@ the AI's host, and woke the player ("That was my own chat echoed back"); the ban
 **Would be wrong if.** The host player's number were someone else's (the banner, which the bot itself says at
 frame 75, came back under the same number).
 **Used by.** `relay_chat`: lines we said and have not yet seen back are dropped when they come back.
+
+### K-mech-lobby-box-beside-us
+**Claim.** A lobby's start script can give an enemy ally team a start box whose centre is next to our own start,
+so the box guess of the enemy base is worthless there; the mirror is the better guess.
+**Status.** demonstrated (2026-09-22, human-2)
+**Evidence.** human-2 (`run/matches/1790045403-human-1`): three ally teams in the script; the terrain line says
+"enemy start 605 away on foot, 579 in a straight line" from our start at (4066, 2237); the picture's `enemy_base`
+was at D3, "presumed at E3"; the lab yard, forward of home toward it, faced spot_10. The same in human-1 ("presumed
+at E3"; the player marked its own guess at 2:25 "to stop the commander wandering toward the bad guess").
+**Would be wrong if.** The boxes were right and a person really started there (nobody did: the Pawns came from the
+south).
+**Used by.** H-MAP-ENEMY-START (a guess nearer than a third of the map's short side is discarded for the mirror;
+the boxes are logged at the start).

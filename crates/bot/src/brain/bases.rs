@@ -62,6 +62,16 @@ impl super::Brain {
                 None if index == 0 => self.world.mirrored(self.home),
                 None => continue,
             };
+            // A lobby's boxes can put an enemy beside us (human-1 second game: three ally teams, the first enemy's
+            // box centre 579 from our start, so "enemy_base" was the ground next to home and the lab yard faced
+            // spot_10). A guess nearer than a third of the map's shorter side is no guess: the mirror is.
+            let too_near = hello.map.width.min(hello.map.height) / 3.0;
+            let at = if at.dist2d(self.home) < too_near {
+                eprintln!("[ai {}] enemy team {team}'s box guess {:.0} from our start is discarded for the mirror", hello.ai_id, at.dist2d(self.home));
+                self.world.mirrored(self.home)
+            } else {
+                at
+            };
             bases.push(EnemyBase { team: Some(*team), at, found: false, dead: false, refined: false, guessed: at, rejected: Vec::new(), factories: HashMap::new() });
         }
         if bases.is_empty() {
