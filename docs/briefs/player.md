@@ -65,7 +65,8 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
   energy to build, so a lab before any generator empties the store for a minute and a half and the lab then builds
   at a crawl (human-3: the store at zero from 0:46 to 1:54, the first constructor 43 s in the making, no soldier
   before 3:01 and the lab dead at 3:03). Solar first when the store is empty, since building solar costs no energy.
-  About twenty energy for every metal spent is the rule of thumb they gave.
+  About twenty energy for every metal spent is the rule of thumb they gave; "two constructors is very greedy on this
+  map" (human-6), so one constructor and the commander helping the lab is the early shape.
 
 **The opening to copy: Matt's, an experienced player's replay on this map (the user, 2026-09-22: "you need a
 different opening build order, take a look at the Matt game").** [K-open-early-pawn-pressure-is-standard,

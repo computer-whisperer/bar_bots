@@ -162,18 +162,24 @@ fn spawn_worker(client: jev::Client) -> Worker {
 }
 
 impl Pianist {
-    /// The builder's queued task becomes its task, its clock starting now.
-    pub(super) fn promote(&mut self, builder: UnitId, frame: i32) {
-        if let Some(mut next) = self.queued.remove(&builder) {
-            match &mut next {
-                Task::Build { ordered, started, .. } => {
-                    *ordered = frame;
-                    *started = false;
-                }
-                Task::Assist { since, .. } | Task::Reclaim { since, .. } | Task::Repair { since, .. } | Task::Walk { since, .. } => *since = frame,
+    /// The builder's queued task becomes its task, its clock starting now. Helping the lab is the one task the engine
+    /// could not hold queued (the guard order has no queue flag), so it is ordered here, as the build finishes.
+    pub(super) fn promote(&mut self, builder: UnitId, frame: i32) -> Option<Command> {
+        let mut next = self.queued.remove(&builder)?;
+        let mut order = None;
+        match &mut next {
+            Task::Build { ordered, started, .. } => {
+                *ordered = frame;
+                *started = false;
             }
-            self.tasks.insert(builder, next);
+            Task::Assist { lab, since } => {
+                *since = frame;
+                order = Some(Command::Guard { unit: builder, target: *lab });
+            }
+            Task::Reclaim { since, .. } | Task::Repair { since, .. } | Task::Walk { since, .. } => *since = frame,
         }
+        self.tasks.insert(builder, next);
+        order
     }
 
     /// The client from the environment (the key file or `TYPESAFE_API_KEY`); `Err` says why there is none.
@@ -253,7 +259,7 @@ impl Pianist {
 impl Brain {
     /// The pianist's whole turn of the brain: bookkeeping every think, a call to Jev when one is due.
     pub(super) fn run_pianist(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
-        self.pianist_housekeeping(tick, kit);
+        self.pianist_housekeeping(tick, kit, commands);
         self.keep_groups(tick, kit, commands);
         // The growth history (the curves and the stagnation wake) and the field the player's report and wake
         // conditions read; the heuristic brain keeps them inside its army rules.
@@ -468,7 +474,7 @@ impl Brain {
     }
 
     /// Tasks and queues against what the engine says: builds started or refused, labs' units begun, units gone.
-    fn pianist_housekeeping(&mut self, tick: &Tick, kit: &Kit) {
+    fn pianist_housekeeping(&mut self, tick: &Tick, kit: &Kit, commands: &mut Vec<Command>) {
         let own = &tick.snapshot.own_units;
         let frame = tick.frame;
         let names: Vec<(UnitId, String, Vec3)> = own.iter().map(|u| (u.id, self.name(u.def).to_string(), u.pos)).collect();
@@ -486,7 +492,7 @@ impl Brain {
                     // A frame appearing while the task is a started build is the queued build beginning (the
                     // finished event promoted it already, unless the frame in progress died): promote now.
                     if matches!(pianist.tasks.get(&builder), Some(Task::Build { started: true, .. })) {
-                        pianist.promote(builder, frame);
+                        commands.extend(pianist.promote(builder, frame));
                     }
                     // The frame stands where the engine put it, up to a building's width from the point ordered
                     // (pianist-player-6: two windmills 200 from their ordered point were not seen as started, and
@@ -518,7 +524,7 @@ impl Brain {
                             .collect();
                         for builder in builders {
                             if pianist.queued.contains_key(&builder) {
-                                pianist.promote(builder, frame);
+                                commands.extend(pianist.promote(builder, frame));
                             } else {
                                 pianist.tasks.remove(&builder);
                             }

@@ -236,11 +236,10 @@ impl Brain {
             if can(kit.radar) {
                 offer("radar_at", Pick::BuildingAt(kit.radar), "Build a radar tower (60 metal, sees 2000) at the place answered in `where`.".into());
             }
-            // Helping the lab cannot be queued behind a build (the engine's guard order takes no queue flag).
-            if let Some(lab) = own.iter().filter(|u| u.def == kit.lab && !u.being_built).min_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos)))
-                && !queue_ahead
-            {
-                offer("assist_lab", Pick::AssistLab(lab.id), "Help the lab build: adds this builder's build power to whatever it makes.".into());
+            // Helping the lab is offered on a queue-ahead ask too, ordered by the bot as the build finishes (human-6: a
+            // commander kept building by the queue-ahead was never offered it and did not help the lab for two minutes).
+            if let Some(lab) = own.iter().filter(|u| u.def == kit.lab && !u.being_built).min_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos))) {
+                offer("assist_lab", Pick::AssistLab(lab.id), if queue_ahead { "Then help the lab build: adds this builder's build power to whatever it makes, until told otherwise.".into() } else { "Help the lab build: adds this builder's build power to whatever it makes.".into() });
             }
             if let Some(field) = self.reclaim.fields.iter().filter(|f| f.metal >= 100.0 && f.at.dist2d(unit.pos) < RECLAIM_WITHIN).max_by(|a, b| a.metal.total_cmp(&b.metal)) {
                 offer("reclaim", Pick::Reclaim(field.at), format!("Take apart the wrecks at {} ({:.0} metal lying there{}).", self.place_words(&picture.places, field.at), field.metal, if field.safe { "" } else { "; not safe ground" }));

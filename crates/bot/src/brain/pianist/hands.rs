@@ -94,7 +94,10 @@ impl Brain {
                         did = build(Plan::Near(def, self.snap_to_reachable(at)), None);
                     }
                     Pick::AssistLab(lab) => {
-                        commands.push(Command::Guard { unit: id, target: lab });
+                        // Queued, the guard order is given when the build finishes (`Pianist::promote`).
+                        if !queue {
+                            commands.push(Command::Guard { unit: id, target: lab });
+                        }
                         task = Some(Task::Assist { lab, since: frame });
                         did = Some("help the lab".into());
                     }
