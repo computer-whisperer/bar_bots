@@ -308,6 +308,14 @@ fn run_match(repo: &Path, batch_dir: &Path, options: &Options, index: usize) -> 
         .envs(options.think_penalty.as_ref().map(|penalty| ("WITHIN_REASON_THINK_PENALTY", penalty)))
         .stderr(File::create(dir.join("bot.log"))?)
         .spawn()?;
+    // The engine's watchdog kills a game whose main thread stalls for HangTimeout seconds (60 by default). In lockstep
+    // the game stalls for every turn of a session; a hung session held pianist-player-10 past it and the engine died.
+    // The engine reads springsettings.cfg from its write-dir at start and appends its own defaults after ours.
+    {
+        use std::io::Write;
+        let mut settings = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("springsettings.cfg"))?;
+        writeln!(settings, "HangTimeout = 600")?;
+    }
     let log = File::create(dir.join("engine.log"))?;
     let mut engine = Command::new(repo.join("run/engine/spring-headless"))
         .args(["--isolation", "--write-dir"])

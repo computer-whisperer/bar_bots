@@ -55,3 +55,8 @@ of a strip's extractor clusters. `--boxes standard` (the default) reads the lobb
 
 - The bot protocol changed on 2026-09-22 (`UnitDamaged` gained `from` and `weapon`): the arena builds both sides, but
   GUI play needs `run/install_to_bar.sh` re-run so the installed shim matches the bot.
+
+- The engine's watchdog (`HangTimeout`, 60 s by default, 600 at most) kills a game whose main thread stalls that long,
+  and a lockstep turn is such a stall: a hung `claude -p` session took pianist-player-10 with it. The arena writes
+  `HangTimeout = 600` into the match's springsettings.cfg, and the driver abandons a turn after 45 s and replaces the
+  session (`strategist/mod.rs` `TURN_CAP`).

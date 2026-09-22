@@ -258,6 +258,7 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
         shared.turn_over.store(false, Ordering::Relaxed);
         let line = json!({ "type": "user", "message": { "role": "user", "content": prompt } });
         let sent = writeln!(session.stdin, "{line}").and_then(|()| session.stdin.flush()).is_ok();
+        let mut abandoned = false;
         let finished = sent
             && loop {
                 match session.turn_done.recv_timeout(Duration::from_millis(50)) {
@@ -267,10 +268,34 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
                         owed_result = true;
                         break true;
                     }
+                    // A turn that has held the game this long is a hung session (pianist-player-10: the first turn
+                    // never returned, and the engine's watchdog killed the game at three minutes): the game goes on
+                    // and the session is replaced.
+                    Err(RecvTimeoutError::Timeout) if mode.lockstep() && started.elapsed() > TURN_CAP => {
+                        abandoned = true;
+                        break true;
+                    }
                     Err(RecvTimeoutError::Timeout) if !stop.load(Ordering::Relaxed) => {}
                     Err(_) => break false,
                 }
             };
+        if abandoned {
+            eprintln!("[ai {ai_id}] {mode:?} turn abandoned after {} s with no answer: the session is replaced", started.elapsed().as_secs());
+            launch.transcript.record(json!({ "kind": "turn_end", "wall_seconds": started.elapsed().as_secs_f32(), "ended_by": "abandoned" }));
+            shared.end_turn();
+            session.end();
+            session = match launch.spawn() {
+                Ok(next) => next,
+                Err(e) => {
+                    eprintln!("[ai {ai_id}] could not restart the session: {e}; heuristics carry on alone");
+                    shared.close_gate();
+                    return;
+                }
+            };
+            turns_this_session = 0;
+            owed_result = false;
+            continue;
+        }
         launch.transcript.record(json!({ "kind": "turn_end", "wall_seconds": started.elapsed().as_secs_f32(), "ended_by": if owed_result { "wait" } else { "response" } }));
         shared.end_turn();
         if !finished {
@@ -283,6 +308,10 @@ fn drive(launch: Launch, mut session: Session, shared: &Shared, stop: &AtomicBoo
     shared.close_gate();
     session.end();
 }
+
+/// A lockstep turn is abandoned after this long with no answer (the engine's watchdog, HangTimeout, is 60 s by default
+/// and the arena raises it to 600; turns run 1 to 11 s).
+const TURN_CAP: Duration = Duration::from_secs(45);
 
 /// The commander is shown the picture outright (a tool call to look would double its turn), in full at the start of
 /// a session and as changes afterwards.

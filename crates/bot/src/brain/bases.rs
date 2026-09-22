@@ -173,6 +173,11 @@ impl super::Brain {
     /// The user, from a Quicksilver game: first contact at 1:52 is enough for a high guess that the enemy's
     /// extractors are all round D7. True when a guess moved.
     fn refine_guesses_from_sightings(&mut self, frame: i32) -> bool {
+        // Suspended under the pianist (the user, 2026-09-22): the player marks where to go; three of four moves of
+        // the guess in player games were wrong (pianist-player-5, -8, -9), and the mirror guess was right each time.
+        if self.pianist.is_some() {
+            return false;
+        }
         let spots = &self.world.hello.metal_spots;
         let mut moved = false;
         let home = self.home;
