@@ -645,13 +645,13 @@ mod tests {
     fn produce_whitelists_a_lab_or_all() {
         let shared = Shared::default();
         assert!(call_tool("produce", &json!({ "all": ["armpw", "armham"], "lab_7": [] }), &shared, Mode::Player).is_ok());
+        let allowed = shared.allowed.lock().unwrap().clone();
+        assert_eq!(allowed["all"], vec!["armpw".to_string(), "armham".to_string()]);
+        assert!(allowed["lab_7"].is_empty());
         assert!(call_tool("produce", &json!({ "all": ["armck:1", "armpw"] }), &shared, Mode::Player).is_ok());
         assert!(call_tool("produce", &json!({ "all": ["armck:x"] }), &shared, Mode::Player).is_err());
         assert_eq!(crate::brain::pianist::allowance("armck:2"), ("armck", Some(2)));
         assert_eq!(crate::brain::pianist::allowance("armpw"), ("armpw", None));
-        let allowed = shared.allowed.lock().unwrap().clone();
-        assert_eq!(allowed["all"], vec!["armpw".to_string(), "armham".to_string()]);
-        assert!(allowed["lab_7"].is_empty());
         assert!(call_tool("produce", &json!({ "group_A": ["armpw"] }), &shared, Mode::Player).is_err());
         assert!(call_tool("produce", &json!({ "all": "armpw" }), &shared, Mode::Player).is_err());
         assert!(call_tool("produce", &json!({ "lab_7": null }), &shared, Mode::Player).is_ok());
