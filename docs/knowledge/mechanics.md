@@ -187,3 +187,13 @@ and `weaponDefId`.
 **Would be wrong if.** The engine zeroed the direction for an unseen attacker (it does not: the check is on the
 pointer, not on visibility) or the radar error put the bearing far off (it is the attacker's error position).
 **Used by.** H-HANDS-SHELLED.
+
+### K-mech-chat-echoes-our-own-lines
+**Claim.** The engine reports a line the AI says (`Game_sendTextMessage`) back to it as a chat event from its own
+host player, like any other player's line.
+**Status.** demonstrated (2026-09-22, human-1)
+**Evidence.** human-1: "gl hf! Opening: ..." said at 0:18 by the player came back at 0:18 as chat from player 3,
+the AI's host, and woke the player ("That was my own chat echoed back"); the banner lines came back the same way.
+**Would be wrong if.** The host player's number were someone else's (the banner, which the bot itself says at
+frame 75, came back under the same number).
+**Used by.** `relay_chat`: lines we said and have not yet seen back are dropped when they come back.

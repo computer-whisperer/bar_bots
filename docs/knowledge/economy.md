@@ -129,3 +129,14 @@ The spots we do not hold, they hold.
 both sides expanded freely showed no complementarity.
 **Used by.** (none yet) — it is why the tempo model's economy estimate works at all, and an argument that our own
 expansion count is worth reporting to the commander as information about the opponent.
+
+### K-eco-lab-anchored-on-a-spot
+**Claim.** A building anchored beside its builder can land over a metal spot: the engine's site search does not keep
+buildings off spots (K-rules-site-search-ignores-metal-spots), and a lab 102 from a spot's centre leaves no site for
+the extractor, so the spot is never taken.
+**Status.** demonstrated (2026-09-22, human-1; the user's report "it builds the lab right on top of it")
+**Evidence.** human-1: the lab created at (3936, 2160), 102 from spot_10 (3864, 2088); "no site for armmex" for the
+commander's orders at 1:27 and 3:36 while the picture read the spot as free. In the arena's placed games the start
+is 70 elmos elsewhere and the lab lands 173 from the spot (pianist-player-14: spot_10 taken at 1:51).
+**Would be wrong if.** The engine's site search stepped off spots on its own (it did not: two orders, no site).
+**Used by.** H-ECO-BASE-LAYOUT (`beside_builder` keeps 150 from a spot).

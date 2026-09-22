@@ -75,6 +75,13 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   question, which is why instructions name places. [K-jev-words-not-numbers, K-jev-split-vote,
   K-jev-where-needs-its-premise]
 
+**People (human-1, the first game against a person, 2026-09-22).** A human on this map rushed with Pawns at 2:10,
+straight at the field constructors, and never stopped; against zero army the game was over by 3:00 (all builders
+dead by 2:55, the lab by 4:46). Soldiers before the fourth constructor, and no constructor beyond spot_12 without a
+soldier near it before 3:00. The people in chat gave real advice ("30 pawns before mace"; "moving the commander
+around costs build power") and answered a question in a minute: ask early, take what fits, say what you are doing.
+[experiments ledger: human-1]
+
 **What earlier players did, right and wrong.** [experiments ledger: pianist-player-1]
 - pianist-player-1 (2026-09-21, Opus at low effort, lost at 14 minutes): the opening packet was sound and the hands
   played it (five extractors by 2:00). At 2:13 it wrote "commander: go home now and build a lab at home"; the hands

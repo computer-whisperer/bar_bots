@@ -232,6 +232,7 @@ impl Brain {
                     pianist.groups[index].members.retain(|id| !detached.contains(id));
                     commands.extend(detached.iter().map(|id| Command::Fight { unit: *id, to, queue: false }));
                     let name = pianist.new_group_name();
+                    pianist.last_asked.insert(format!("group_{name}"), frame);
                     did = Some(format!("send {} soldiers as group_{name} to {}", detached.len(), p.name));
                     pianist.groups.push(Group::new(name, detached, GroupTask::Move { to, place: p.name.clone(), fight: true, since: frame }, frame));
                 }
@@ -239,7 +240,7 @@ impl Brain {
             Pick::Detach => {
                 // The party in `whom` unless a group already engages it; then the nearest party nobody engages.
                 let engaged: Vec<UnitId> = pianist.groups.iter().filter_map(|g| if let GroupTask::Engage { party, .. } = &g.task { Some(party.clone()) } else { None }).flatten().collect();
-                let free = |p: &&super::picture::Party| !p.ids.iter().any(|id| engaged.contains(id));
+                let free = |p: &&super::picture::Party| p.ids.len() <= super::menu::DETACH_PARTY_MAX && !p.ids.iter().any(|id| engaged.contains(id));
                 let party = whom.as_ref().and_then(|n| picture.parties.iter().find(|p| p.name == *n)).filter(free).or_else(|| {
                     picture.parties.iter().filter(free).min_by(|a, b| centre.map_or(0.0, |c| a.at.dist2d(c)).total_cmp(&centre.map_or(0.0, |c| b.at.dist2d(c))))
                 });
@@ -255,6 +256,7 @@ impl Brain {
                     pianist.groups[index].members.retain(|id| !detached.contains(id));
                     commands.extend(detached.iter().map(|id| Command::Fight { unit: *id, to: party.at, queue: false }));
                     let name = pianist.new_group_name();
+                    pianist.last_asked.insert(format!("group_{name}"), frame);
                     did = Some(format!("send {} soldiers as group_{name} against {} ({})", detached.len(), party.name, party.composition));
                     pianist.groups.push(Group::new(name, detached, GroupTask::Engage { party: party.ids.clone(), at: party.at, since: frame, last_seen: frame }, frame));
                 }
@@ -268,6 +270,7 @@ impl Brain {
                         pianist.groups[index].members.retain(|id| *id != scout.id);
                         commands.push(Command::Move { unit: scout.id, to, queue: false });
                         let name = pianist.new_group_name();
+                        pianist.last_asked.insert(format!("group_{name}"), frame);
                         did = Some(format!("send a {} as group_{name} to look at {}", self.name(scout.def), p.name));
                         pianist.groups.push(Group::new(name, vec![scout.id], GroupTask::Move { to, place: p.name.clone(), fight: false, since: frame }, frame));
                     }

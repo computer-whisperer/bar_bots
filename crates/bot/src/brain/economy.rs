@@ -92,6 +92,9 @@ const LAB_YARD: f32 = 350.0;
 /// small building's gap plus a little.
 const LAB_CLEARANCE: f32 = 230.0;
 const BUILDING_CLEARANCE: f32 = 90.0;
+/// No building goes up this close to a metal spot's centre: a lab anchored 102 from a spot left the engine no site for
+/// the extractor (human-1, the user's "it builds the lab right on top of it"; a lab is 96 wide, an extractor 48).
+const SPOT_CLEARANCE: f32 = 150.0;
 const TURRET_LINE: f32 = 650.0;
 /// A site a builder failed to reach is avoided, with everything this close to it, for this long.
 const UNREACHABLE_RADIUS: f32 = 120.0;
@@ -393,6 +396,7 @@ impl Brain {
             Vec3 { x: builder.pos.x + angle.cos() * reach, y: 0.0, z: builder.pos.z + angle.sin() * reach }
         };
         let standing = |p: Vec3| own.iter().any(|u| u.id != builder.id && self.world.def(u.def).is_some_and(|d| d.speed == 0.0) && u.pos.dist2d(p) < clearance);
+        let on_spot = |p: Vec3| self.world.hello.metal_spots.iter().any(|s| s.dist2d(p) < SPOT_CLEARANCE);
         let started = |p: Vec3| {
             self.last_orders.iter().any(|(id, (_, _, near))| *id != builder.id && self.jobs.contains_key(id) && near.dist2d(p) < clearance)
                 || self.queued.iter().any(|(id, (_, near, _))| *id != builder.id && near.dist2d(p) < clearance)
@@ -400,7 +404,7 @@ impl Brain {
         [0.0, 45.0, -45.0, 90.0, -90.0, 135.0, -135.0, 180.0]
             .into_iter()
             .map(at)
-            .find(|p| !standing(*p) && !started(*p))
+            .find(|p| !standing(*p) && !started(*p) && !on_spot(*p))
             .unwrap_or_else(|| at(0.0))
     }
 

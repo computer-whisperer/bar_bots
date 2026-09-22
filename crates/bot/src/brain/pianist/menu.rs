@@ -30,6 +30,9 @@ const ALARM: f32 = 600.0;
 const STARTED_ALARM: f32 = 800.0;
 /// A group this small is not offered a detachment (pianist-player-14: groups of one sent one soldier at a time).
 const DETACH_FROM: usize = 4;
+/// A party bigger than this is an attack, not a raider to be met by a detachment (human-1: two soldiers sent against
+/// eight Pawns four times, each pair back in the group a second later).
+pub(super) const DETACH_PARTY_MAX: usize = 3;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Pick {
@@ -345,7 +348,7 @@ impl Brain {
             offer("retreat", Pick::Retreat, "Fall back to our base.".into());
             if units.len() >= 2 {
                 offer("split", Pick::Split, "Send a detachment, the number in `how_many` of the nearest soldiers, to advance to the place in `where`; the rest carry on as they were.".into());
-                let unengaged = picture.parties.iter().any(|p| !p.ids.iter().any(|id| engaged.contains(id)));
+                let unengaged = picture.parties.iter().any(|p| p.ids.len() <= DETACH_PARTY_MAX && !p.ids.iter().any(|id| engaged.contains(id)));
                 if unengaged && units.len() >= DETACH_FROM {
                     // H-HANDS-DETACH: a raider at a structure is met by a few soldiers, not the ball (realtime-2: 11 of
                     // 18 engagements were the whole ball after one Fav, Stump or Beaver, while a Fav killed a lab at home).
