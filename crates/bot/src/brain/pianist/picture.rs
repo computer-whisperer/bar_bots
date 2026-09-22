@@ -448,22 +448,27 @@ impl Brain {
             let what = match place.spot {
                 Some(i) => {
                     let spot = spots[i];
-                    let ours: Vec<String> = own
+                    // The extractor on the spot itself (within its radius) is what takes it; the buildings beside it
+                    // are said separately (the user, 2026-09-22: a starting spot never taken, every game: the
+                    // neighbouring spot's extractor 300 away read as "our extractor" here, and the spot was never free).
+                    let on_spot = own.iter().find(|u| kit.is_extractor(u.def) && u.pos.dist2d(spot) < self.world.hello.map.extractor_radius + 10.0);
+                    let beside: Vec<String> = own
                         .iter()
-                        .filter(|u| u.pos.dist2d(spot) < 350.0 && self.world.def(u.def).is_some_and(|d| d.speed == 0.0))
+                        .filter(|u| !kit.is_extractor(u.def) && u.pos.dist2d(spot) < 200.0 && self.world.def(u.def).is_some_and(|d| d.speed == 0.0))
                         .map(|u| format!("our {}{}", self.short_words(u.def, kit), if u.being_built { " (being built)" } else { "" }))
                         .collect();
+                    let beside_words = if beside.is_empty() { String::new() } else { format!(" (beside it: {})", beside.join(", ")) };
                     if let Some(seen) = their_spot(spot) {
                         let turrets = self.enemy_buildings.values().filter(|(def, pos, _)| pos.dist2d(spot) < 500.0 && self.world.def(*def).is_some_and(|d| d.weapon_count > 0)).count();
                         format!("their extractor, seen {} ago{}", clock(frame - seen), if turrets > 0 { format!(", {turrets} turret(s) beside it") } else { String::new() })
-                    } else if ours.is_empty() {
+                    } else if let Some(u) = on_spot {
+                        format!("our extractor{}{beside_words}", if u.being_built { " (being built)" } else { "" })
+                    } else {
                         let taker = pianist.tasks.iter().find_map(|(id, t)| matches!(t, Task::Build { spot: Some(s), .. } if *s == i).then_some(*id));
                         match taker {
-                            Some(id) => format!("free metal spot, {} is on its way to take it", self.actor_name(id, kit)),
-                            None => "free metal spot".into(),
+                            Some(id) => format!("free metal spot, {} is on its way to take it{beside_words}", self.actor_name(id, kit)),
+                            None => format!("free metal spot{beside_words}"),
                         }
-                    } else {
-                        ours.join(", ")
                     }
                 }
                 None if place.name == "home" => "our start: the lab and the base stand here".into(),

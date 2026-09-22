@@ -136,3 +136,14 @@ user, watching: "we are still leaving wind turbines 80% built and dying in the v
 **Would be wrong if.** The decayed frames had been abandoned for a threat (no party was within 800) or the engine
 had refused the first site (it created a frame each time).
 **Used by.** H-HANDS-STARTED.
+
+### K-hands-spot-read-as-taken-by-its-neighbour
+**Claim.** The picture described a metal spot by every building of ours within 350 of it, so a spot 300 from a taken
+spot read "our extractor, our lab, our wind generators", the extractor menu (which offers only spots whose words
+begin "free") never offered it, and it was never taken: spot_10, 150 from our start, in every player game.
+**Status.** demonstrated (2026-09-22; the user, from the replay: "one of its starting mexes is never taken")
+**Evidence.** Games 9, 11, 12, 13: spot_10 at (3864, 2088) never had an extractor; spot_12's extractor stands 300
+from it; the picture at 1:00 of game 13 reads spot_10 as "our armmex (extractor), our armlab (lab), our armwin ...".
+**Would be wrong if.** The engine had refused the site (no refusal was logged, and no order was ever given).
+**Used by.** the picture's spot words: the extractor within the spot's radius takes it, the buildings beside it are
+said beside it.

@@ -115,8 +115,14 @@ impl Brain {
             // H-HANDS-STARTED: a build the engine has started (a nanoframe stands) is not put to the question until it
             // is done, unless the builder is under fire or an enemy party is within reach; a builder re-asked every ten
             // seconds walked away from two labs and fourteen generators in pianist-player-1, and each frame decayed.
+            // The task's own flag says the build is started (set on the engine's created event; the task is dropped
+            // when the frame dies); the frame is looked up only for its progress words. Re-finding it by position was
+            // what let pianist-player-13's commander be asked again over a started extractor and switch to a windmill.
             let started = match &task {
-                Some(Task::Build { def, near, started: true, .. }) => own.iter().find(|u| u.being_built && u.def == *def && u.pos.dist2d(*near) < 200.0).map(|u| (self.short_words(*def, kit), u.health / u.max_health.max(1.0))),
+                Some(Task::Build { def, near, started: true, .. }) => {
+                    let share = own.iter().filter(|u| u.being_built && u.def == *def).map(|u| (u.pos.dist2d(*near), u.health / u.max_health.max(1.0))).min_by(|a, b| a.0.total_cmp(&b.0)).map_or(0.0, |(_, share)| share);
+                    Some((self.short_words(*def, kit), share))
+                }
                 _ => None,
             };
             let threatened = under_fire.contains(&unit.id) || picture.parties.iter().any(|p| p.at.dist2d(unit.pos) < STARTED_ALARM);
