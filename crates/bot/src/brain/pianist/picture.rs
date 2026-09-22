@@ -628,7 +628,19 @@ impl Brain {
                 let coming = own.iter().filter(|u| u.being_built && (u.def == kit.constructor || u.def == kit.advanced_constructor)).count() + queue.iter().filter(|(def, _)| *def == kit.constructor || *def == kit.advanced_constructor).count();
                 entry["we_have"] = json!(format!("constructors {constructors}{} ({}); soldiers {} ({})", if coming > 0 { format!(" and {coming} being made") } else { String::new() }, constructor_words(constructors + coming, extractors), soldiers.len(), soldier_words(soldiers.len(), army_metal)));
                 if let Some(list) = self.allowed_units(&name) {
-                    let words: Vec<String> = list.iter().filter_map(|n| self.world.def_named(n)).map(|d| self.short_words(d, kit)).collect();
+                    let words: Vec<String> = list
+                        .iter()
+                        .filter_map(|e| {
+                            let (n, cap) = super::allowance(e);
+                            let def = self.world.def_named(n)?;
+                            let made = pianist.produced.get(&(unit.id, n.to_string())).copied().unwrap_or(0);
+                            Some(match cap {
+                                Some(cap) if made >= cap => format!("{} (all {cap} allowed made: no more)", self.short_words(def, kit)),
+                                Some(cap) => format!("{} ({} more allowed)", self.short_words(def, kit), cap - made),
+                                None => self.short_words(def, kit),
+                            })
+                        })
+                        .collect();
                     entry["allowed"] = json!(if words.is_empty() { "the player allows nothing this lab can build: it builds anything".to_string() } else { format!("the player allows only: {}", words.join(", ")) });
                 }
                 entry["health"] = json!(health_words(unit.health / unit.max_health));

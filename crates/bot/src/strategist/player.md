@@ -46,8 +46,10 @@ all, which rules apply: `raw` is none, and the group's orders reach the engine e
 it when a group must go somewhere or fight something and the footwork is in the way; the group's entry shows the
 setting while it is not the default.
 `produce` restricts what a lab, or every lab, may build to a list of unit names: the lab is then offered those and
-nothing else, so the mix is exactly what you allow and the packet's words only order among them. It is the sure way
-to get a unit built (raiders against raiders, constructors after losses) when the words alone are not doing it.
+nothing else, so the mix is exactly what you allow and the packet's words only order among them. A name with a count
+after a colon (`armck:1`) is allowed that many more times and then drops off the list by itself. It is the sure way
+to get a unit built (raiders against raiders, constructors after losses) and the only way to get a count: the hands
+cannot count, and "one constructor first, then raiders" got three constructors (human-7).
 People: in a game with people, what they say in the chat comes in your report, and `say` answers them (short lines,
 to everyone). An experienced player watching you is the best feedback this project gets: answer their questions,
 say what you are trying to do, and ask what they would do in your place.

@@ -193,3 +193,16 @@ next site: a wind generator every 8.5 s where a player queueing a batch gets one
 **Would be wrong if.** Our generators had been placed farther apart than his (his batch stood within 200 of each
 other; ours beside the builder, one reach away).
 **Used by.** H-HANDS-QUEUE.
+
+### K-hands-do-not-count-constructors
+**Claim.** A packet's count ("one constructor first, then raiders") is not kept by the hands: asked every few
+seconds with the count in words, they chose the constructor again while the first was still being made, and again
+after it stood.
+**Status.** demonstrated (2026-09-22, human-7; the same in human-3, human-5 and pianist-player-15)
+**Evidence.** human-7 (`run/matches/1790049225-human-7`): the lab, allowed [corck, corak] and told "one constructor
+first, then raiders (corak) and nothing else", chose corck at 0:54 (0.99), 0:59 (0.69, with "0 and 1 more being
+made" in its words) and 1:24 (0.51); the first Grunt came at 2:08 against Matt's 1:12, and three constructors
+building windmills emptied the store (energy 15 at 2:00, 0 at 3:00).
+**Would be wrong if.** The packet had allowed a second constructor (it did not until the sixth raider).
+**Used by.** H-HANDS-PRODUCE (a cap after a colon), the prompt ("the hands cannot count"), the brief's opening
+packet lines.

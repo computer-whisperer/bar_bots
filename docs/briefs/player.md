@@ -89,7 +89,9 @@ K-open-matt-order-timings] His first three minutes, from the replay's record, to
   builders, from about 2:30; his commander never left the base.
 So the packet's first lines are: two extractors, three wind, the lab, then generators until energy banks up high and
 then help the lab, and help the lab whenever nothing is due; the lab on one constructor and then raiders only, a
-second constructor after the sixth raider. Not four constructors, not a second constructor before the first
+second constructor after the sixth raider, said with `produce` (`{"all": ["corck:1", "corak"]}` on Cortex,
+`["armck:1", "armpw"]` on Armada), since the hands cannot count and made three constructors from the words alone
+(human-7). Not four constructors, not a second constructor before the first
 raider (human-5: a second constructor at 1:15 put the first Pawn at 1:40, thirty seconds behind Matt), not the
 lab before the generators, not solar because the wind looked weak: it is not. Where we still lag him (human-5): our
 commander built its generators one pick at a time, eight and a half seconds each against his six, and began

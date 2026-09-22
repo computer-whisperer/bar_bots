@@ -315,8 +315,20 @@ impl Brain {
             criteria.insert("nothing".into(), json!("Build nothing now and save the metal."));
             // H-HANDS-PRODUCE: the player's whitelist, when it names something this lab can build, is the whole menu.
             let allowed = self.allowed_units(&name);
+            // A changed allowance restarts the lab's counts against its caps ("corck:1": one more, then off the list).
+            if pianist.allowed_seen.get(&name) != allowed.as_ref() {
+                pianist.produced.retain(|(lab, _), _| *lab != unit.id);
+                match &allowed {
+                    Some(list) => pianist.allowed_seen.insert(name.clone(), list.clone()),
+                    None => pianist.allowed_seen.remove(&name),
+                };
+            }
+            let permits = |list: &[String], b: UnitDefId| {
+                let unit_name = self.name(b).to_string();
+                list.iter().map(|e| super::allowance(e)).any(|(n, cap)| n == unit_name && cap.is_none_or(|cap| pianist.produced.get(&(unit.id, unit_name.clone())).copied().unwrap_or(0) < cap))
+            };
             let buildables: Vec<UnitDefId> = match &allowed {
-                Some(list) if def.build_options.iter().any(|b| list.contains(&self.name(*b).to_string())) => def.build_options.iter().copied().filter(|b| list.contains(&self.name(*b).to_string())).collect(),
+                Some(list) if def.build_options.iter().any(|b| permits(list, *b)) => def.build_options.iter().copied().filter(|b| permits(list, *b)).collect(),
                 _ => def.build_options.clone(),
             };
             for buildable in &buildables {

@@ -100,6 +100,10 @@ pub struct Pianist {
     next_group: usize,
     /// Spots where the engine refused an extractor, and until when they are left off the menus (H-HANDS-REFUSED).
     pub(super) refused_spots: HashMap<usize, i32>,
+    /// Units each lab has started since its allowance was set, by unit name (`produce` caps, "corck:1").
+    pub(super) produced: HashMap<(UnitId, String), usize>,
+    /// The allowance each lab (by name) was last seen with; a change restarts its counts.
+    pub(super) allowed_seen: HashMap<String, Vec<String>>,
     /// What the last picture named, so an answer's place or party can be looked up.
     pub(super) places: Vec<Place>,
     pub(super) parties: Vec<Party>,
@@ -161,6 +165,14 @@ fn spawn_worker(client: jev::Client) -> Worker {
     Worker { to, from }
 }
 
+/// A `produce` list entry: the unit name and, after a colon, how many more of it are allowed ("corck:1").
+pub fn allowance(entry: &str) -> (&str, Option<usize>) {
+    match entry.split_once(':') {
+        Some((name, count)) => (name, count.trim().parse::<usize>().ok().filter(|n| *n >= 1)),
+        None => (entry, None),
+    }
+}
+
 impl Pianist {
     /// The builder's queued task becomes its task, its clock starting now. Helping the lab is the one task the engine
     /// could not hold queued (the guard order has no queue flag), so it is ordered here, as the build finishes.
@@ -205,6 +217,8 @@ impl Pianist {
             groups: Vec::new(),
             next_group: 0,
             refused_spots: HashMap::new(),
+            produced: HashMap::new(),
+            allowed_seen: HashMap::new(),
             places: Vec::new(),
             parties: Vec::new(),
             recent: VecDeque::new(),
@@ -505,6 +519,9 @@ impl Brain {
                     }
                     if let Some(queue) = pianist.lab_queue.get_mut(&builder) {
                         let made = own.iter().find(|u| u.id == unit).map(|u| u.def);
+                        if let Some(def) = made {
+                            *pianist.produced.entry((builder, self.world.def(def).map_or(String::new(), |d| d.name.clone()))).or_insert(0) += 1;
+                        }
                         if let Some(i) = queue.iter().position(|(def, _)| Some(*def) == made) {
                             queue.remove(i);
                         } else if !queue.is_empty() {
