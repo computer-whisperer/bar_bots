@@ -28,6 +28,8 @@ const AWAY: f32 = 400.0;
 const ALARM: f32 = 600.0;
 /// A builder on a started build is asked again only with an enemy party this close (H-HANDS-STARTED).
 const STARTED_ALARM: f32 = 800.0;
+/// A group this small is not offered a detachment (pianist-player-14: groups of one sent one soldier at a time).
+const DETACH_FROM: usize = 4;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Pick {
@@ -296,6 +298,10 @@ impl Brain {
         // Groups.
         let group_names: Vec<(String, Option<Vec3>)> = pianist.groups.iter().map(|g| (g.name.clone(), super::groups::centre_of(&g.units(own)))).collect();
         let scout_out = pianist.groups.iter().any(|g| g.members.len() == 1 && matches!(g.task, super::GroupTask::Move { fight: false, .. }));
+        // H-HANDS-DETACH: a party some group of ours already engages is not offered for a detachment; asked every
+        // five seconds, a group sent four soldiers after the same Flash squad eleven times in forty seconds and the
+        // detachments sent detachments (pianist-player-14: "we are feeding it four soldiers at a time").
+        let engaged: Vec<UnitId> = pianist.groups.iter().filter_map(|g| if let super::GroupTask::Engage { party, .. } = &g.task { Some(party.clone()) } else { None }).flatten().collect();
         for group in &mut pianist.groups {
             let name = format!("group_{}", group.name);
             let units = group.units(own);
@@ -339,7 +345,8 @@ impl Brain {
             offer("retreat", Pick::Retreat, "Fall back to our base.".into());
             if units.len() >= 2 {
                 offer("split", Pick::Split, "Send a detachment, the number in `how_many` of the nearest soldiers, to advance to the place in `where`; the rest carry on as they were.".into());
-                if !picture.parties.is_empty() {
+                let unengaged = picture.parties.iter().any(|p| !p.ids.iter().any(|id| engaged.contains(id)));
+                if unengaged && units.len() >= DETACH_FROM {
                     // H-HANDS-DETACH: a raider at a structure is met by a few soldiers, not the ball (realtime-2: 11 of
                     // 18 engagements were the whole ball after one Fav, Stump or Beaver, while a Fav killed a lab at home).
                     offer("send_against", Pick::Detach, "Send a detachment, the number in `how_many` of the soldiers nearest to the enemy party named in `whom`, to attack it and follow it; the rest carry on as they were. The answer to a raider at one of our extractors while this group stays: a few soldiers catch a raider, the whole group chasing one does not.".into());

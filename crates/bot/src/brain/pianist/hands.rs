@@ -237,7 +237,13 @@ impl Brain {
                 }
             }
             Pick::Detach => {
-                if let Some(party) = whom.as_ref().and_then(|n| picture.parties.iter().find(|p| p.name == *n)) {
+                // The party in `whom` unless a group already engages it; then the nearest party nobody engages.
+                let engaged: Vec<UnitId> = pianist.groups.iter().filter_map(|g| if let GroupTask::Engage { party, .. } = &g.task { Some(party.clone()) } else { None }).flatten().collect();
+                let free = |p: &&super::picture::Party| !p.ids.iter().any(|id| engaged.contains(id));
+                let party = whom.as_ref().and_then(|n| picture.parties.iter().find(|p| p.name == *n)).filter(free).or_else(|| {
+                    picture.parties.iter().filter(free).min_by(|a, b| centre.map_or(0.0, |c| a.at.dist2d(c)).total_cmp(&centre.map_or(0.0, |c| b.at.dist2d(c))))
+                });
+                if let Some(party) = party {
                     let n = match how_many.as_deref() {
                         Some("2") => 2,
                         Some("4") => 4,
