@@ -231,7 +231,7 @@ fn tool_list(mode: Mode) -> Value {
 /// What `orders` may batch in a mode.
 fn batchable(mode: Mode) -> &'static [&'static str] {
     match mode {
-        Mode::Player => &["instruct", "lane", "mark", "produce", "say", "note", "wait"],
+        Mode::Player => &["instruct", "queue", "lane", "mark", "produce", "say", "note", "wait"],
         Mode::Strategist | Mode::Commander => &["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"],
     }
 }
@@ -653,6 +653,12 @@ mod tests {
         assert_eq!(shared.queues.lock().unwrap().get("commander").cloned().flatten().map(|s| s.len()), Some(4));
         assert!(shared.queues.lock().unwrap().contains_key("constructor_7"));
         assert!(call_tool("queue", &json!({ "commander": ["turret"] }), &shared, Mode::Player).is_err());
+        // Every player tool but the readers and `orders` itself can be batched (comet-3: `queue` was refused by the
+        // batch as "not a tool that can be batched" and the game ran without the list).
+        for tool in ["instruct", "queue", "lane", "mark", "produce", "say", "note", "wait"] {
+            assert!(batchable(Mode::Player).contains(&tool), "{tool}");
+        }
+        assert!(orders(&json!({ "calls": [{ "tool": "queue", "arguments": { "commander": ["solar"] } }] }), &shared, Mode::Player).unwrap().contains("1 steps"));
         assert!(call_tool("queue", &json!({ "group_A": ["solar"] }), &shared, Mode::Player).is_err());
         assert!(call_tool("queue", &json!({ "commander": ["windmill"] }), &shared, Mode::Player).is_err());
     }
