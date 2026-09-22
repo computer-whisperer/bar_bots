@@ -43,6 +43,12 @@ shoots one target at a time with its neighbours (`focus`), steps back while relo
 all, which rules apply: `raw` is none, and the group's orders reach the engine exactly as your hands gave them. Use
 it when a group must go somewhere or fight something and the footwork is in the way; the group's entry shows the
 setting while it is not the default.
+Places: the picture lists home, enemy_base, the spots we hold or are taking, the nearest free spots, the nearest of
+theirs, and the narrowest passages; a spot or passage you name in the packet is listed too, however far, so a deep
+attack is ordered by naming the spots along its way. For a place that is not a spot, `mark` names map coordinates or a
+grid cell, and the name is then a place like any other. The enemy base's place is a guess until a factory of theirs
+has been seen: the report says where the guess is and why; when our units stand at a guess and find nothing there, the
+guess goes back to the start position and the report says so.
 
 What you see. Each turn opens with a report: `score` (extractors and how long since they last grew, free spots and
 the nearest by number, the army and how much of it stands at home, what is known of the opponent, which is little),

@@ -520,6 +520,8 @@ pub struct Shared {
     pub hands: Mutex<Hands>,
     /// The player's footwork settings by group name (`group_A`) or `all` (`lane` tool, H-HANDS-LANE).
     pub lane: Mutex<BTreeMap<String, Footwork>>,
+    /// Places the player named (`mark` tool): name to (x, z). They join the picture's places (H-HANDS-NAMED-PLACES).
+    pub marks: Mutex<BTreeMap<String, (f32, f32)>>,
     pub wake: Mutex<Wake>,
     /// True when turns are taken in lockstep with the game (the field commander).
     pub lockstep: std::sync::atomic::AtomicBool,

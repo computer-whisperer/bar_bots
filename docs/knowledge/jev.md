@@ -109,3 +109,15 @@ batch the test.
 **Would be wrong if.** A raw ball traded worse than a laned one in a batch, or the milling counters showed path
 close to net displacement under the flee.
 **Used by.** H-HANDS-LANE.
+
+### K-hands-far-places-never-on-the-menu
+**Claim.** The picture's places were home, enemy_base, our spots, the ten nearest free spots, the six nearest of
+theirs and three passages, so a place in the far half of the map was not on any `where` question and an instruction
+naming it did nothing; a deep attack could not be ordered except through `enemy_base`. Named spots and marks fix
+the reach; whether Jev picks a far place when told to is the next thing to see.
+**Status.** demonstrated (2026-09-21)
+**Evidence.** pianist-player-5: the player named spot_36 in four packets from 9:37 and wrote at 10:42 "Only nearby
+places appear in the picture, so spot_36 was never on the menu and the ball kept re-picking the empty enemy_base",
+and at 13:21 "I wish I could name an unexplored map cell as a destination"; the jev log's places carry no spot_36.
+**Would be wrong if.** spot_36 had been unreachable on foot (it is listed as walkable in the map tool).
+**Used by.** H-HANDS-NAMED-PLACES.

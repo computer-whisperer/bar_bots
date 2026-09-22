@@ -6,16 +6,21 @@
 
 use std::collections::HashMap;
 
-use bot_protocol::{Event, Tick, UnitId, Vec3};
+use bot_protocol::{Event, OwnUnit, Tick, UnitId, Vec3};
 
 /// A factory with no team on it belongs to the base this near, else to the nearest.
 const BASE_RADIUS: f32 = 1500.0;
 /// A found base with no factory left and nothing remembered standing this near is dead.
 const RAZED_RADIUS: f32 = 1200.0;
-/// H-MAP-ENEMY-CLUSTER: a building of theirs seen this near an unfound base's guess refines the guess to the
-/// metal-spot cluster nearest the building, spots chained within `CLUSTER_LINK` of one another.
-const REFINE_RADIUS: f32 = 2500.0;
+/// H-MAP-ENEMY-CLUSTER: a building of theirs seen this near an unfound base's guess, and nearer the guess than our
+/// home, refines the guess to the metal-spot cluster nearest the building, spots chained within `CLUSTER_LINK` of
+/// one another. (2,500 took a forward extractor of theirs in the contested middle for the base: pianist-player-5.)
+const REFINE_RADIUS: f32 = 1200.0;
 const CLUSTER_LINK: f32 = 700.0;
+/// H-MAP-ENEMY-GUESS-EMPTY: a refined guess with a unit of ours this near it, and no building of theirs remembered
+/// within `EMPTY_RADIUS`, was wrong; it goes back to the start guess and that cluster is not guessed again.
+const LOOKED_RADIUS: f32 = 500.0;
+const EMPTY_RADIUS: f32 = 800.0;
 
 pub struct EnemyBase {
     /// The seat, when the script named the teams; `None` for a lone mirror guess.
@@ -27,6 +32,10 @@ pub struct EnemyBase {
     pub dead: bool,
     /// The guess was moved to the spot cluster nearest the first building of theirs seen (H-MAP-ENEMY-CLUSTER).
     refined: bool,
+    /// The start guess (box or mirror, snapped to metal), to go back to when a refined guess is found empty.
+    guessed: Vec3,
+    /// Refined guesses our units stood at and found empty (H-MAP-ENEMY-GUESS-EMPTY).
+    rejected: Vec<Vec3>,
     factories: HashMap<UnitId, Vec3>,
 }
 
@@ -51,10 +60,11 @@ impl super::Brain {
                 None if index == 0 => self.world.mirrored(self.home),
                 None => continue,
             };
-            bases.push(EnemyBase { team: Some(*team), at, found: false, dead: false, refined: false, factories: HashMap::new() });
+            bases.push(EnemyBase { team: Some(*team), at, found: false, dead: false, refined: false, guessed: at, rejected: Vec::new(), factories: HashMap::new() });
         }
         if bases.is_empty() {
-            bases.push(EnemyBase { team: None, at: self.world.mirrored(self.home), found: false, dead: false, refined: false, factories: HashMap::new() });
+            let at = self.world.mirrored(self.home);
+            bases.push(EnemyBase { team: None, at, found: false, dead: false, refined: false, guessed: at, rejected: Vec::new(), factories: HashMap::new() });
         }
         self.enemy_bases = bases;
     }
@@ -66,6 +76,7 @@ impl super::Brain {
         for base in self.enemy_bases.iter_mut().filter(|b| !b.found) {
             if let Some(spot) = spots.iter().filter(|s| reachable(**s)).min_by(|a, b| a.dist2d(base.at).total_cmp(&b.dist2d(base.at))) {
                 base.at = Vec3 { y: 0.0, ..*spot };
+                base.guessed = base.at;
             }
         }
     }
@@ -95,7 +106,7 @@ impl super::Brain {
             let Some(index) = by_team.or_else(nearest) else { continue };
             // A teamless factory far from every base is a base of its own (a seat the script did not tell us of).
             if by_team.is_none() && self.enemy_bases[index].found && self.enemy_bases[index].at.dist2d(enemy.pos) > BASE_RADIUS {
-                self.enemy_bases.push(EnemyBase { team: enemy.team, at: enemy.pos, found: true, dead: false, refined: true, factories: HashMap::from([(enemy.id, enemy.pos)]) });
+                self.enemy_bases.push(EnemyBase { team: enemy.team, at: enemy.pos, found: true, dead: false, refined: true, guessed: enemy.pos, rejected: Vec::new(), factories: HashMap::from([(enemy.id, enemy.pos)]) });
                 continue;
             }
             self.enemy_bases[index].factories.insert(enemy.id, enemy.pos);
@@ -119,10 +130,40 @@ impl super::Brain {
                 base.dead = !standing;
             }
         }
+        moved |= self.reject_empty_guesses(&tick.snapshot.own_units, tick.frame);
         moved |= self.refine_guesses_from_sightings(tick.frame);
         if moved {
             self.resurvey_enemy();
         }
+    }
+
+    /// H-MAP-ENEMY-GUESS-EMPTY: a refined guess that a unit of ours stands beside with nothing of theirs remembered
+    /// near it goes back to the start guess, and its cluster is not guessed again. (pianist-player-5: a forward
+    /// extractor of theirs moved the guess to the middle of the map at 6:31; the ball stood on the guess at 8:52 and
+    /// saw nothing, and the guess stayed there to the end while the player hunted south.) True when a guess moved.
+    fn reject_empty_guesses(&mut self, own: &[OwnUnit], frame: i32) -> bool {
+        let mut moved = false;
+        let mut lines: Vec<String> = Vec::new();
+        for base in self.enemy_bases.iter_mut().filter(|b| !b.found && !b.dead && b.refined) {
+            let looked = own.iter().any(|u| !u.being_built && u.pos.dist2d(base.at) < LOOKED_RADIUS);
+            let standing = self.enemy_buildings.values().any(|(_, pos, _)| pos.dist2d(base.at) < EMPTY_RADIUS);
+            if !looked || standing {
+                continue;
+            }
+            eprintln!(
+                "[ai {}] f={frame} enemy base guess at ({:.0}, {:.0}) found empty: back to ({:.0}, {:.0})",
+                self.world.hello.ai_id, base.at.x, base.at.z, base.guessed.x, base.guessed.z
+            );
+            lines.push(format!("{} the enemy base guess at {} was found empty by our units standing there; the guess is back at {}", super::pianist::clock(frame), self.world.grid(base.at), self.world.grid(base.guessed)));
+            base.rejected.push(base.at);
+            base.at = base.guessed;
+            base.refined = false;
+            moved = true;
+        }
+        if let Some(pianist) = &mut self.pianist {
+            pianist.done.extend(lines);
+        }
+        moved
     }
 
     /// H-MAP-ENEMY-CLUSTER: the first building of theirs seen near an unfound base's guess moves the guess to the
@@ -132,8 +173,9 @@ impl super::Brain {
     fn refine_guesses_from_sightings(&mut self, frame: i32) -> bool {
         let spots = &self.world.hello.metal_spots;
         let mut moved = false;
+        let home = self.home;
         for base in self.enemy_bases.iter_mut().filter(|b| !b.found && !b.dead && !b.refined) {
-            let Some((_, building, _)) = self.enemy_buildings.values().filter(|(_, pos, _)| pos.dist2d(base.at) < REFINE_RADIUS).min_by(|a, b| a.1.dist2d(base.at).total_cmp(&b.1.dist2d(base.at))) else { continue };
+            let Some((_, building, _)) = self.enemy_buildings.values().filter(|(_, pos, _)| pos.dist2d(base.at) < REFINE_RADIUS && pos.dist2d(base.at) < pos.dist2d(home)).min_by(|a, b| a.1.dist2d(base.at).total_cmp(&b.1.dist2d(base.at))) else { continue };
             let Some(seed) = (0..spots.len()).min_by(|a, b| spots[*a].dist2d(*building).total_cmp(&spots[*b].dist2d(*building))) else { continue };
             let mut cluster = vec![seed];
             let mut grew = true;
@@ -149,6 +191,9 @@ impl super::Brain {
             let n = cluster.len() as f32;
             let middle = cluster.iter().fold(Vec3::default(), |sum, i| Vec3 { x: sum.x + spots[*i].x / n, y: 0.0, z: sum.z + spots[*i].z / n });
             let at = cluster.iter().map(|i| Vec3 { y: 0.0, ..spots[*i] }).min_by(|a, b| a.dist2d(middle).total_cmp(&b.dist2d(middle))).unwrap();
+            if base.rejected.iter().any(|r| r.dist2d(at) < 1.0) {
+                continue;
+            }
             eprintln!(
                 "[ai {}] f={} enemy base guessed at ({:.0}, {:.0}) from a building at ({:.0}, {:.0}): a cluster of {} spots (was ({:.0}, {:.0}))",
                 self.world.hello.ai_id, frame, at.x, at.z, building.x, building.z, cluster.len(), base.at.x, base.at.z

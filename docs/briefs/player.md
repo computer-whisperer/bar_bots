@@ -103,3 +103,13 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   Its other lessons: a scouting instruction on the ball peels one soldier per ask until it names a small group for the
   job; energy needs a named builder of its own or it stalls twice; the enemy commander leaves its base to raid our spots
   once its factories are dead, and the ball must come home to hunt it, gathering first so stragglers are not eaten.
+- pianist-player-5 (2026-09-21, Opus at low effort, the first game against MEDIUM, lost at 20 minutes): the same
+  economy as the wins (15 extractors by 6:38, a 4:1 army lead at 8:03) and the attack went nowhere: the enemy base
+  guess had been pulled to the middle of the map by a forward extractor of theirs, the ball stood on the empty guess,
+  and the southern spots the player then named were never on the menu (both fixed: a guess found empty goes back to
+  the start, and every spot named in the packet is a place). Medium's raids are twelve Flashes by minute 10, and they
+  took the extractors from 15 to 5 while the ball hunted; its block came at 16 with Janus rocket trucks and Stumpy
+  tanks behind two artillery pieces. Its lessons: on medium, turrets and a home guard on the raids' passage come before
+  the hunt; labs and the commander never forward of the army; a ball never stands under unseen artillery: advance
+  onto it or leave; and when the report says the base guess is at a place our units have stood on and seen nothing,
+  the guess is wrong.

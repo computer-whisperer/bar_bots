@@ -133,12 +133,15 @@ fn tool_list(mode: Mode) -> Value {
               "description": "The picture your hands read this second, exactly as Jev sees it (without your instructions and the standing rules): economy, ours, enemy, places by name, every actor with what it is doing, recent events. You are sent a summary of it at the start of every turn; call this to read the whole picture, or a place's entry by name.",
               "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false } },
             { "name": "instruct",
-              "description": format!("Your standing instructions to your hands: the whole packet, replacing the last one. Jev reads it every second beside the picture and picks each actor's next action from a menu, so write it as standing orders in plain words: the build order per builder as a sequence, what the lab makes and when that changes, where each group stands, when it engages, scouts and attacks, what to do about raids. Name places as the picture does (home, enemy_base, spot_N, passage_N) and groups as group_A, group_B. No arithmetic for the hands to do: say \"when we have about ten soldiers\", not a formula. At most {INSTRUCTIONS_LIMIT} characters."),
+              "description": format!("Your standing instructions to your hands: the whole packet, replacing the last one. Jev reads it every second beside the picture and picks each actor's next action from a menu, so write it as standing orders in plain words: the build order per builder as a sequence, what the lab makes and when that changes, where each group stands, when it engages, scouts and attacks, what to do about raids. Name places as the picture does (home, enemy_base, spot_N, passage_N, and any place you marked with `mark`; a spot or passage you name here is always on your hands' menu, however far) and groups as group_A, group_B. No arithmetic for the hands to do: say \"when we have about ten soldiers\", not a formula. At most {INSTRUCTIONS_LIMIT} characters."),
               "inputSchema": { "type": "object", "additionalProperties": false, "required": ["text"], "properties": { "text": { "type": "string" } } } },
             { "name": "lane",
               "description": "Which footwork rules your hands' code applies to a group's soldiers between your hands' orders, per group name or for \"all\": \"raw\" (none: the group's orders reach the engine exactly as given), \"on\" (all of them, the default), or a list of the rules to keep. The rules: flee (a soldier steps out of the reach of a turret or a fight it was not sent against, or one it would die in), fan (spreads out under a commander's D-gun), focus (soldiers standing together shoot one target at a time), kite (a soldier that outranges its enemy steps back while reloading), march (an advancing group waits for its stragglers so it arrives together), follow (an engaging group is re-sent after its party as it moves). A setting stands until you change it; the group's picture entry shows it when it is not the default.",
               "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "string", "enum": ["raw", "on"] }, { "type": "array", "items": { "type": "string", "enum": ["flee", "fan", "focus", "kite", "march", "follow"] } } ] }, "description": "Group name (group_A) or \"all\" to its setting." } },
-            orders(&["instruct", "lane", "note", "wait"], "your instructions, footwork settings, a note and when to be woken"),
+            { "name": "mark",
+              "description": "Name a place of your own for your hands: an object of name to [x, z] map coordinates or a grid cell (\"E7\": its centre), or null to forget it. A marked place joins the picture's places at once, so instructions can send groups and builders there (\"group_B: advance to south_gate\"), and its entry says whose ground it is and what enemy is near. Names are lower-case words with underscores; home, enemy_base, spot_N, passage_N and group_N are taken. Any spot or passage you name in the packet is on your hands' menu already, however far; mark is for places that are not spots.",
+              "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }, { "type": "string" }, { "type": "null" } ] }, "description": "Place name to [x, z], a grid cell, or null." } },
+            orders(&["instruct", "lane", "mark", "note", "wait"], "your instructions, footwork settings, marked places, a note and when to be woken"),
             wait("A group of ours starts fighting an enemy party.", "Woken when this many soldiers of each named unit type are alive, e.g. {\"armham\": 6}. {} clears it."),
             note,
         ]),
@@ -218,7 +221,7 @@ fn tool_list(mode: Mode) -> Value {
 /// What `orders` may batch in a mode.
 fn batchable(mode: Mode) -> &'static [&'static str] {
     match mode {
-        Mode::Player => &["instruct", "lane", "note", "wait"],
+        Mode::Player => &["instruct", "lane", "mark", "note", "wait"],
         Mode::Strategist | Mode::Commander => &["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"],
     }
 }
@@ -341,6 +344,55 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared, mode: Mode) -> Resu
                 }
             }
             Ok(format!("footwork set; {}", said.join("; ")))
+        }
+        "mark" => {
+            let marks = arguments.as_object().filter(|o| !o.is_empty()).ok_or("mark takes an object: place name to [x, z], a grid cell such as \"E7\", or null to forget it")?;
+            let map = shared.map.lock().unwrap().clone();
+            let (width, height) = (map["width"].as_f64().unwrap_or(0.0) as f32, map["height"].as_f64().unwrap_or(0.0) as f32);
+            let mut parsed: Vec<(String, Option<(f32, f32)>)> = Vec::new();
+            for (name, value) in marks {
+                let word = !name.is_empty() && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') && name.chars().next().is_some_and(|c| c.is_ascii_lowercase());
+                let taken = name == "home" || name == "enemy_base" || name == "all" || ["spot_", "passage_", "group_"].iter().any(|p| name.starts_with(p));
+                if !word || taken {
+                    return Err(format!("{name}: a mark's name is lower-case words with underscores, and home, enemy_base, spot_N, passage_N and group_N are taken"));
+                }
+                let at = match value {
+                    Value::Null => None,
+                    Value::Array(xz) if xz.len() == 2 => {
+                        let (x, z) = (xz[0].as_f64().ok_or(format!("{name}: [x, z] are numbers"))? as f32, xz[1].as_f64().ok_or(format!("{name}: [x, z] are numbers"))? as f32);
+                        if width > 0.0 && (x < 0.0 || z < 0.0 || x > width || z > height) {
+                            return Err(format!("{name}: ({x:.0}, {z:.0}) is off the map, which is {width:.0} by {height:.0}"));
+                        }
+                        Some((x, z))
+                    }
+                    Value::String(cell) => {
+                        let mut chars = cell.chars();
+                        let column = chars.next().map(|c| c.to_ascii_uppercase()).filter(|c| ('A'..='H').contains(c)).ok_or(format!("{name}: a grid cell is A1 to H8"))?;
+                        let row: u32 = chars.as_str().parse().ok().filter(|r| (1..=8).contains(r)).ok_or(format!("{name}: a grid cell is A1 to H8"))?;
+                        if width <= 0.0 {
+                            return Err("the map is not known yet; give [x, z]".to_string());
+                        }
+                        Some(((column as u32 - 'A' as u32) as f32 * width / 8.0 + width / 16.0, (row - 1) as f32 * height / 8.0 + height / 16.0))
+                    }
+                    _ => return Err(format!("{name}: [x, z], a grid cell such as \"E7\", or null")),
+                };
+                parsed.push((name.clone(), at));
+            }
+            let mut marks = shared.marks.lock().unwrap();
+            let mut said: Vec<String> = Vec::new();
+            for (name, at) in parsed {
+                match at {
+                    Some((x, z)) => {
+                        marks.insert(name.clone(), (x, z));
+                        said.push(format!("{name} at ({x:.0}, {z:.0})"));
+                    }
+                    None => {
+                        marks.remove(&name);
+                        said.push(format!("{name} forgotten"));
+                    }
+                }
+            }
+            Ok(format!("marked: {}; your hands see the place from their next look", said.join("; ")))
         }
         "squad" => squad(arguments, shared),
         "set_production" => {
@@ -485,7 +537,7 @@ mod tests {
     fn the_player_has_its_lever_and_none_of_the_commanders() {
         let names = |mode: Mode| tool_list(mode).as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
         let player = names(Mode::Player);
-        assert_eq!(player, ["overview", "map", "situation", "instruct", "lane", "orders", "wait", "note"]);
+        assert_eq!(player, ["overview", "map", "situation", "instruct", "lane", "mark", "orders", "wait", "note"]);
         let commander = names(Mode::Commander);
         assert!(commander.contains(&"squad".to_string()) && !commander.contains(&"instruct".to_string()));
         for tool in batchable(Mode::Player) {
@@ -512,5 +564,21 @@ mod tests {
         assert!(call_tool("lane", &json!({ "group_A": "on" }), &shared, Mode::Player).is_ok());
         assert!(!shared.lane.lock().unwrap().contains_key("group_A"));
         assert!(call_tool("lane", &json!({ "group_A": "raw" }), &shared, Mode::Commander).is_err());
+    }
+
+    #[test]
+    fn marks_are_named_places_by_coordinates_or_cell() {
+        let shared = Shared::default();
+        *shared.map.lock().unwrap() = json!({ "width": 8000.0, "height": 8000.0 });
+        assert!(call_tool("mark", &json!({ "south_gate": [3600, 5400], "far_east": "H4" }), &shared, Mode::Player).is_ok());
+        let marks = shared.marks.lock().unwrap().clone();
+        assert_eq!(marks["south_gate"], (3600.0, 5400.0));
+        assert_eq!(marks["far_east"], (7500.0, 3500.0));
+        assert!(call_tool("mark", &json!({ "spot_3": [1.0, 1.0] }), &shared, Mode::Player).is_err());
+        assert!(call_tool("mark", &json!({ "Gate": [1.0, 1.0] }), &shared, Mode::Player).is_err());
+        assert!(call_tool("mark", &json!({ "x": [9000.0, 1.0] }), &shared, Mode::Player).is_err());
+        assert!(call_tool("mark", &json!({ "x": "Z9" }), &shared, Mode::Player).is_err());
+        assert!(call_tool("mark", &json!({ "south_gate": null }), &shared, Mode::Player).is_ok());
+        assert!(!shared.marks.lock().unwrap().contains_key("south_gate"));
     }
 }

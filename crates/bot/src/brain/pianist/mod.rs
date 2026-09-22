@@ -23,7 +23,7 @@ use super::economy::FIRST_ORDER_FRAME;
 use super::roster::Kit;
 use super::{Brain, FRAMES_PER_SECOND};
 pub(super) use groups::{Group, GroupTask};
-pub(super) use picture::{Party, Place};
+pub(super) use picture::{clock, Party, Place};
 
 /// Game seconds between calls (`WITHIN_REASON_JEV_INTERVAL` overrides).
 const INTERVAL_SECONDS: f32 = 1.0;

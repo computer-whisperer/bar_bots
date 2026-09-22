@@ -95,3 +95,15 @@ at eventually. Scouting is one Pawn or Tick at a time, occasionally, tracking wh
 **Evidence.** In that game the first contact was at 1:52; BARb's start (3371, 5556) is D7 and its extractors by minute
 3 lie within 700 of it (its records in `run/matches/*-rush-1[0-4]-*`).
 **Used by.** H-SCOUT-SPOTS, H-SCOUT-ROUTE, H-MAP-ENEMY-CLUSTER; H-ARMY-PRESSURE's unknown targets.
+
+### K-map-forward-extractor-pulls-the-guess
+**Claim.** Refining the base guess from the first building of theirs seen within 2,500 takes a forward extractor in
+the contested middle for the base on medium, where BARb expands to the middle spots by minute 6; the guess then
+sits on an empty mid-map cluster, and nothing moved it back when our army stood there and saw nothing.
+**Status.** demonstrated (2026-09-21)
+**Evidence.** pianist-player-5 bot.log at f=11745 (6:31): "enemy base guessed at (4168, 4264) from a building at
+(4112, 4240): a cluster of 2 spots (was (3656, 5816))"; the truth file has the enemy commander within 350 of
+(3656, 5816) all game; the ball held at the E5 guess from 8:52 with `enemy.base` reading "not found; presumed at
+E5" to the end.
+**Would be wrong if.** The building at (4112, 4240) had been a factory (it was an extractor at spot_21).
+**Used by.** H-MAP-ENEMY-CLUSTER, H-MAP-ENEMY-GUESS-EMPTY.

@@ -389,8 +389,35 @@ impl Brain {
         for i in &listed {
             places.push(Place { name: format!("spot_{i}"), at: spots[*i], spot: Some(*i) });
         }
-        for (n, passage) in self.passages().iter().take(PASSAGES).enumerate() {
+        let passages = self.passages();
+        for (n, passage) in passages.iter().take(PASSAGES).enumerate() {
             places.push(Place { name: format!("passage_{}", n + 1), at: passage.at, spot: None });
+        }
+        // H-HANDS-NAMED-PLACES: every spot and passage the instructions name is a place, however far (pianist-player-5:
+        // the player named spot_36 in the south for four turns and it was never on the menu, the list being the
+        // nearest free spots and the nearest of theirs), and so is every place the player marked.
+        let instructions = self
+            .strategist
+            .as_ref()
+            .map(|s| s.instructions.lock().unwrap().clone())
+            .filter(|i| !i.trim().is_empty())
+            .unwrap_or_else(|| include_str!("default.md").to_string());
+        for token in instructions.split(|c: char| !c.is_ascii_alphanumeric() && c != '_') {
+            if let Some(i) = token.strip_prefix("spot_").and_then(|n| n.parse::<usize>().ok()) {
+                if i < spots.len() && !places.iter().any(|p| p.spot == Some(i)) {
+                    places.push(Place { name: format!("spot_{i}"), at: spots[i], spot: Some(i) });
+                }
+            } else if let Some(n) = token.strip_prefix("passage_").and_then(|n| n.parse::<usize>().ok()) {
+                if n > PASSAGES && n <= passages.len() && !places.iter().any(|p| p.name == *token) {
+                    places.push(Place { name: format!("passage_{n}"), at: passages[n - 1].at, spot: None });
+                }
+            }
+        }
+        let marks: BTreeMap<String, (f32, f32)> = self.strategist.as_ref().map(|s| s.marks.lock().unwrap().clone()).unwrap_or_default();
+        for (name, (x, z)) in &marks {
+            if !places.iter().any(|p| p.name == *name) {
+                places.push(Place { name: name.clone(), at: Vec3 { x: *x, y: 0.0, z: *z }, spot: None });
+            }
         }
         let parties = self.enemy_parties(&snapshot.enemies);
 
@@ -438,6 +465,7 @@ impl Brain {
                     }
                     None => "where the enemy is presumed to start; not yet seen".into(),
                 },
+                None if marks.contains_key(&place.name) => "a place the player marked".into(),
                 None => "a narrow passage between the two sides".into(),
             };
             entry["what"] = json!(what);
@@ -630,12 +658,6 @@ impl Brain {
             actors.insert(format!("group_{}", group.name), entry);
         }
 
-        let instructions = self
-            .strategist
-            .as_ref()
-            .map(|s| s.instructions.lock().unwrap().clone())
-            .filter(|i| !i.trim().is_empty())
-            .unwrap_or_else(|| include_str!("default.md").to_string());
         let wind = (self.world.hello.map.wind_min + self.world.hello.map.wind_max) / 2.0;
         let rules = format!(
             "{}This map's wind averages about {wind:.0}: {}.",
