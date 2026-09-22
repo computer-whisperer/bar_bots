@@ -99,7 +99,7 @@ impl Brain {
             reasons.push("an extractor was destroyed".into());
         }
         // A person spoke: news once, when the line arrives (the report carries the words).
-        if wake.chat && tick.events.iter().any(|e| matches!(e, bot_protocol::Event::Chat { .. })) {
+        if wake.chat && self.heard_chat_at == tick.frame {
             reasons.push("someone in the game said something (see the chat lines)".into());
         }
         let pool_met = !wake.pool_reaches.is_empty()

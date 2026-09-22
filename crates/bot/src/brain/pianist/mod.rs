@@ -92,6 +92,8 @@ pub struct Pianist {
     /// A builder's next task, already ordered behind the one in progress (H-HANDS-QUEUE): it becomes the task when
     /// the frame in progress is finished, or when the engine starts it.
     pub(super) queued: HashMap<UnitId, Task>,
+    /// The player's lists of steps per builder (by actor name), done by the bot without asking (H-HANDS-SCRIPT).
+    pub(super) scripts: HashMap<String, VecDeque<String>>,
     /// When each builder, lab or group (by name) was last asked.
     last_asked: HashMap<String, i32>,
     /// Units a lab has been told to build and not yet started, oldest first.
@@ -222,6 +224,7 @@ impl Pianist {
             places: Vec::new(),
             parties: Vec::new(),
             recent: VecDeque::new(),
+            scripts: HashMap::new(),
             done: Vec::new(),
             needs_player_run: 0,
             last_player_wake: i32::MIN / 2,
@@ -297,6 +300,20 @@ impl Brain {
             return;
         }
         self.pianist.as_mut().expect("pianist mode").last_ask_frame = tick.frame;
+        if let Some(shared) = &self.strategist {
+            let lists = std::mem::take(&mut *shared.queues.lock().unwrap());
+            let pianist = self.pianist.as_mut().expect("pianist mode");
+            for (name, list) in lists {
+                match list {
+                    Some(steps) => {
+                        pianist.scripts.insert(name, steps.into());
+                    }
+                    None => {
+                        pianist.scripts.remove(&name);
+                    }
+                }
+            }
+        }
         let picture = self.picture(tick, kit);
         let menus = self.menus(tick, kit, &picture);
         if menus.is_empty() {
@@ -372,7 +389,9 @@ impl Brain {
             return;
         }
         pianist.announced = true;
-        commands.push(Command::Say { text: format!("{{name}}'s hands: Jev {} ({} ms to the first answer)", response.model, response.latency.as_millis()) });
+        let tail = format!("'s hands: Jev {} ({} ms to the first answer)", response.model, response.latency.as_millis());
+        self.said.push(tail.clone());
+        commands.push(Command::Say { text: format!("{{name}}{tail}") });
     }
 
     /// Realtime: plays the answer to the request in flight when it has come, and drops a request whose answer is too

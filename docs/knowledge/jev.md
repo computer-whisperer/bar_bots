@@ -233,3 +233,16 @@ any) and the generator options carry the count of generators standing, since the
 0.08 at 0:24, extractor 0.38 against solar 0.31 at 0:34).
 **Would be wrong if.** The plant still came a minute late with the new words.
 **Used by.** `menu.rs` `build_draw_words`, the generator words (H-HANDS-MENU).
+
+### K-hands-sequences-are-not-followed
+**Claim.** The hands do not follow a sequence written in words: "an extractor at spot_45, then an extractor at spot_50,
+then three solar collectors, then the vehicle plant" got four extractors and three solars and the plant at 1:40
+(comet-1) and 1:45 (comet-2), with the plant affordable from 0:34 and the option's words saying the store covered
+it; "one plant" got three (comet-2). The count of generators standing beside the option (added after comet-1) did
+not change it. Each ask is judged on its own, and an extractor or a solar always reads well. The player's list is
+now executed by the bot (`queue`, H-HANDS-SCRIPT) and the words are kept for what comes after.
+**Status.** observed (2026-09-23), two games; the list is unmeasured.
+**Evidence.** `run/matches/1790051208-comet-1-easy` and `1790051789-comet-2-medium`, `jev-0.jsonl`: the commander's
+asks 0:24 to 1:45 (comet-2 at 0:43: extractor 0.44, solar 0.31, plant 0.14 with three solars standing).
+**Would be wrong if.** A worded sequence were followed under a different phrasing, or the list were not.
+**Used by.** the `queue` tool (`mcp.rs`, `menu.rs` `scripted_step`), the player's prompt.

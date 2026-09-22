@@ -9,6 +9,7 @@ use jev::Question;
 use serde_json::{Value, json};
 
 use super::super::roster::Kit;
+use super::Pianist;
 use super::super::{Brain, FRAMES_PER_SECOND};
 use super::picture::{Picture, distance_words};
 use super::{REVIEW_FRAMES, Task};
@@ -96,6 +97,8 @@ pub(crate) struct Menu {
     pub options: BTreeMap<String, Pick>,
     /// A builder's free spots, nearest by its own walking first.
     pub spots: Vec<usize>,
+    /// A step from the player's list (H-HANDS-SCRIPT): the option to play without asking, and its place, if any.
+    pub scripted: Option<(String, Option<String>)>,
 }
 
 impl Brain {
@@ -148,6 +151,21 @@ impl Brain {
             };
             let threatened = under_fire.contains(&unit.id) || picture.parties.iter().any(|p| p.at.dist2d(unit.pos) < STARTED_ALARM);
             let queue_ahead = started.as_ref().is_some_and(|(_, share)| *share >= QUEUE_AT) && !threatened && !pianist.queued.contains_key(&unit.id);
+            let can = |def: UnitDefId| self.world.def(unit.def).is_some_and(|d| d.build_options.contains(&def));
+            // H-HANDS-SCRIPT: a builder with a list from the player's `queue` tool is not asked; the bot orders the
+            // next step when the builder is free, or when the build in progress is 60% done (queued behind it), and
+            // skips a step it cannot do. An enemy on the builder puts it back on the menu until that is over.
+            if !threatened && pianist.scripts.get(&name).is_some_and(|steps| !steps.is_empty()) {
+                let ready = match &task {
+                    None => unit.idle,
+                    Some(_) => queue_ahead,
+                };
+                if ready && let Some(menu) = self.scripted_step(unit, &name, &mut pianist, picture, own, frame, queue_ahead, task.is_some(), kit) {
+                    pianist.last_asked.insert(name.clone(), frame);
+                    menus.push(menu);
+                }
+                continue;
+            }
             let (free, due) = match &task {
                 None => (unit.idle || frame - last >= LAB_REVIEW_FRAMES, true),
                 Some(_) if started.is_some() && !threatened => (false, queue_ahead && frame - last >= LAB_REVIEW_FRAMES),
@@ -174,21 +192,9 @@ impl Brain {
             } else {
                 offer("wait", Pick::Wait, "Do nothing for now (only when nothing on this list is worth doing).".into());
             }
-            let can = |def: UnitDefId| self.world.def(unit.def).is_some_and(|d| d.build_options.contains(&def));
-            // Spots other builders are on or have queued (queue-ahead-smoke: two constructors queued spot_14 at once).
-            let taken: Vec<usize> = pianist.tasks.iter().chain(pianist.queued.iter()).filter_map(|(id, t)| if let (true, Task::Build { spot: Some(i), .. }) = (*id != unit.id, t) { Some(*i) } else { None }).collect();
             let mut spots: Vec<(usize, f32)> = Vec::new();
             if can(kit.extractor) {
-                spots = picture
-                    .places
-                    .iter()
-                    .filter_map(|p| p.spot.map(|i| (i, p.at)))
-                    .filter(|(i, _)| !taken.contains(i) && !pianist.refused_spots.get(i).is_some_and(|until| *until > frame))
-                    .filter(|(_, at)| !own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(*at) < 100.0))
-                    .filter(|(i, _)| picture.state["places"][format!("spot_{i}")]["what"].as_str().is_some_and(|w| w.starts_with("free")))
-                    .map(|(i, _)| (i, self.seconds_to_spot(unit.def, i, unit.pos)))
-                    .collect();
-                spots.sort_by(|a, b| a.1.total_cmp(&b.1));
+                spots = self.free_spots(unit, &pianist, picture, own, frame, kit);
                 spots.truncate(NEAR_SPOTS);
                 if !spots.is_empty() {
                     // One option, the spot in `where`: six spot options split the vote and lost to any single
@@ -306,6 +312,7 @@ impl Brain {
                 queue_ahead,
                 options,
                 spots: spots.iter().map(|(i, _)| *i).collect(),
+                scripted: None,
             });
         }
 
@@ -368,7 +375,7 @@ impl Brain {
                 if allowed.is_some() && buildables.len() < def.build_options.len() { " The player allows only the units offered here." } else { "" }
             ));
             pianist.last_asked.insert(name.clone(), frame);
-            menus.push(Menu { actor: Actor::Lab(unit.id), questions: vec![(format!("{name}.next"), Question::Choice { instructions, criteria })], name, busy: queued > 0, queue_ahead: false, options, spots: Vec::new() });
+            menus.push(Menu { actor: Actor::Lab(unit.id), questions: vec![(format!("{name}.next"), Question::Choice { instructions, criteria })], name, busy: queued > 0, queue_ahead: false, options, spots: Vec::new(), scripted: None });
         }
 
         // Groups.
@@ -447,7 +454,7 @@ impl Brain {
                 questions.push((format!("{name}.whom"), Question::Choice { instructions: json!(format!("If {name} attacks an enemy party, which one?")), criteria }));
             }
             pianist.last_asked.insert(name.clone(), frame);
-            menus.push(Menu { actor: Actor::Group(group.name.clone()), name, busy, queue_ahead: false, questions, options, spots: Vec::new() });
+            menus.push(Menu { actor: Actor::Group(group.name.clone()), name, busy, queue_ahead: false, questions, options, spots: Vec::new(), scripted: None });
         }
 
         // Global.
@@ -459,7 +466,7 @@ impl Brain {
             if self.strategist.is_some() {
                 questions.push(("global.needs_player".to_string(), Question::noul("Given everything, does the situation need the player's attention now: something the `instructions` do not cover, or a plan that has stopped fitting the game?")));
             }
-            menus.push(Menu { actor: Actor::Global, name: "global".into(), busy: false, queue_ahead: false, questions, options: BTreeMap::new(), spots: Vec::new() });
+            menus.push(Menu { actor: Actor::Global, name: "global".into(), busy: false, queue_ahead: false, questions, options: BTreeMap::new(), spots: Vec::new(), scripted: None });
         }
         self.pianist = Some(pianist);
         menus
@@ -469,6 +476,102 @@ impl Brain {
 impl Brain {
     /// What building `def` with this builder draws in energy a second against our income (human-3: the commander's
     /// lab drew 80 a second against 30 coming in, and the store was empty for the next minute and a half).
+    /// The free spots this builder could take, nearest by its own walking first: not held, not another builder's
+    /// task or queued spot (queue-ahead-smoke: two constructors queued spot_14 at once), not refused lately, and
+    /// free in the picture's words.
+    fn free_spots(&self, unit: &OwnUnit, pianist: &Pianist, picture: &Picture, own: &[OwnUnit], frame: i32, kit: &Kit) -> Vec<(usize, f32)> {
+        let taken: Vec<usize> = pianist
+            .tasks
+            .iter()
+            .chain(pianist.queued.iter())
+            .filter_map(|(id, t)| if let (true, Task::Build { spot: Some(i), .. }) = (*id != unit.id, t) { Some(*i) } else { None })
+            .collect();
+        let mut spots: Vec<(usize, f32)> = picture
+            .places
+            .iter()
+            .filter_map(|p| p.spot.map(|i| (i, p.at)))
+            .filter(|(i, _)| !taken.contains(i) && !pianist.refused_spots.get(i).is_some_and(|until| *until > frame))
+            .filter(|(_, at)| !own.iter().any(|u| kit.is_extractor(u.def) && u.pos.dist2d(*at) < 100.0))
+            .filter(|(i, _)| picture.state["places"][format!("spot_{i}")]["what"].as_str().is_some_and(|w| w.starts_with("free")))
+            .map(|(i, _)| (i, self.seconds_to_spot(unit.def, i, unit.pos)))
+            .collect();
+        spots.sort_by(|a, b| a.1.total_cmp(&b.1));
+        spots
+    }
+
+    /// The next step of a builder's list as a menu of one option, played without asking (H-HANDS-SCRIPT). Steps
+    /// that cannot be done are dropped and said; `assist` before any factory exists waits.
+    #[allow(clippy::too_many_arguments)]
+    fn scripted_step(&self, unit: &OwnUnit, name: &str, pianist: &mut Pianist, picture: &Picture, own: &[OwnUnit], frame: i32, queue_ahead: bool, busy: bool, kit: &Kit) -> Option<Menu> {
+        let can = |def: UnitDefId| self.world.def(unit.def).is_some_and(|d| d.build_options.contains(&def));
+        loop {
+            let step = pianist.scripts.get_mut(name)?.pop_front()?;
+            let mut words = step.split_whitespace();
+            let kind = words.next().unwrap_or_default();
+            let place = words.next().map(str::to_string);
+            let building = |def: UnitDefId| if can(def) { Ok((Pick::Building(def), Vec::new(), None)) } else { Err("this builder cannot build it".to_string()) };
+            let at_place = |def: UnitDefId| match &place {
+                _ if !can(def) => Err("this builder cannot build it".to_string()),
+                Some(p) if picture.places.iter().any(|q| q.name == *p) => Ok((Pick::BuildingAt(def), Vec::new(), Some(p.clone()))),
+                Some(p) => Err(format!("{p} is not a place in the picture")),
+                None => Err("it needs a place".to_string()),
+            };
+            let resolved: Result<(Pick, Vec<usize>, Option<String>), String> = match kind {
+                "extractor" if !can(kit.extractor) => Err("this builder cannot build it".to_string()),
+                "extractor" => {
+                    let spots = self.free_spots(unit, pianist, picture, own, frame, kit);
+                    match &place {
+                        Some(p) => match p.strip_prefix("spot_").and_then(|n| n.parse::<usize>().ok()) {
+                            Some(i) if spots.iter().any(|(j, _)| *j == i) => Ok((Pick::Extractor, vec![i], Some(p.clone()))),
+                            Some(_) => Err(format!("{p} is not free")),
+                            None => Err(format!("{p} is not a spot")),
+                        },
+                        None if spots.is_empty() => Err("no free spot in reach".to_string()),
+                        None => Ok((Pick::Extractor, spots.iter().map(|(i, _)| *i).collect(), None)),
+                    }
+                }
+                "solar" => building(kit.solar),
+                "wind" => building(kit.wind),
+                "lab" => building(kit.lab),
+                "vehicle_plant" => building(kit.plant),
+                "converter" => building(kit.converter),
+                "advanced_lab" => building(kit.advanced_lab),
+                "construction_turret" => building(kit.nano),
+                "turret" => at_place(kit.turret),
+                "radar" => at_place(kit.radar),
+                "assist" => match own.iter().filter(|u| kit.is_factory(u.def)).min_by(|a, b| a.pos.dist2d(unit.pos).total_cmp(&b.pos.dist2d(unit.pos))) {
+                    Some(factory) => Ok((Pick::AssistLab(factory.id), Vec::new(), None)),
+                    None => {
+                        // Nothing to help yet: the step waits at the front of the list.
+                        pianist.scripts.get_mut(name)?.push_front(step);
+                        return None;
+                    }
+                },
+                other => Err(format!("'{other}' is not a step the list knows")),
+            };
+            match resolved {
+                Ok((pick, spots, where_)) => {
+                    let key = kind.to_string();
+                    return Some(Menu {
+                        actor: Actor::Builder(unit.id),
+                        name: name.to_string(),
+                        busy,
+                        queue_ahead,
+                        questions: Vec::new(),
+                        options: BTreeMap::from([(key.clone(), pick)]),
+                        spots,
+                        scripted: Some((key, where_)),
+                    });
+                }
+                Err(why) => {
+                    let text = format!("skipped the step '{step}' of its list: {why}");
+                    pianist.done.push(format!("{} {name}: {text}", super::picture::clock(frame)));
+                    pianist.note(frame, format!("{name} {text}"));
+                }
+            }
+        }
+    }
+
     fn build_draw_words(&self, builder: &OwnUnit, def: UnitDefId, tick: &Tick) -> String {
         let (Some(b), Some(d)) = (self.world.def(builder.def), self.world.def(def)) else { return String::new() };
         if d.build_time <= 0.0 || d.energy_cost <= 0.0 {

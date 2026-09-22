@@ -136,6 +136,9 @@ fn tool_list(mode: Mode) -> Value {
             { "name": "instruct",
               "description": format!("Your standing instructions to your hands: the whole packet, replacing the last one. Jev reads it every second beside the picture and picks each actor's next action from a menu, so write it as standing orders in plain words: the build order per builder as a sequence, what the lab makes and when that changes, where each group stands, when it engages, scouts and attacks, what to do about raids. Name places as the picture does (home, enemy_base, spot_N, passage_N, and any place you marked with `mark`; a spot or passage you name here is always on your hands' menu, however far) and groups as group_A, group_B. No arithmetic for the hands to do: say \"when we have about ten soldiers\", not a formula. At most {INSTRUCTIONS_LIMIT} characters."),
               "inputSchema": { "type": "object", "additionalProperties": false, "required": ["text"], "properties": { "text": { "type": "string" } } } },
+            { "name": "queue",
+              "description": "A builder's build list, done exactly and in order by the bot itself without asking your hands: an object of builder name (commander, constructor_N) to a list of steps, or null to cancel its list. Steps: \"extractor spot_N\" (or \"extractor\" for the nearest free spot), \"solar\", \"wind\", \"lab\", \"vehicle_plant\", \"converter\", \"advanced_lab\", \"construction_turret\", \"turret <place>\", \"radar <place>\", \"assist\" (help the nearest factory, standing or being built: the last step of an opening). Each step is ordered when the one before is 60% built, so nothing idles; a step that cannot be done (the spot taken, a place unknown, a building this builder cannot make) is skipped and said in the hands' report. While a list runs the builder is off your hands' menu unless an enemy is on it; your instructions take over when the list is done. This is how an opening is made to happen as written: the hands do not follow a sequence (comet-1, comet-2: 'three solars, then the plant' got extractors and the plant at 1:45).",
+              "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "string" } }, { "type": "null" } ] }, "description": "Builder name to steps, or null." } },
             { "name": "lane",
               "description": "Which footwork rules your hands' code applies to a group's soldiers between your hands' orders, per group name or for \"all\": \"raw\" (none: the group's orders reach the engine exactly as given), \"on\" (all of them, the default), or a list of the rules to keep. The rules: flee (a soldier steps out of the reach of a turret or a fight it was not sent against, or one it would die in), fan (spreads out under a commander's D-gun), focus (soldiers standing together shoot one target at a time), kite (a soldier that outranges its enemy steps back while reloading), march (an advancing group waits for its stragglers so it arrives together), follow (an engaging group is re-sent after its party as it moves). A setting stands until you change it; the group's picture entry shows it when it is not the default.",
               "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "string", "enum": ["raw", "on"] }, { "type": "array", "items": { "type": "string", "enum": ["flee", "fan", "focus", "kite", "march", "follow"] } } ] }, "description": "Group name (group_A) or \"all\" to its setting." } },
@@ -322,6 +325,45 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared, mode: Mode) -> Resu
             }
             *shared.instructions.lock().unwrap() = text.to_string();
             Ok(format!("instructions replaced ({} characters); your hands read them from their next look, once your turn ends", text.chars().count()))
+        }
+        "queue" => {
+            const STEPS: [&str; 11] = ["extractor", "solar", "wind", "lab", "vehicle_plant", "converter", "advanced_lab", "construction_turret", "turret", "radar", "assist"];
+            let lists = arguments.as_object().filter(|o| !o.is_empty()).ok_or("queue takes an object: builder name (commander or constructor_N) to a list of steps, or null to cancel")?;
+            let mut parsed: Vec<(String, Option<Vec<String>>)> = Vec::new();
+            for (name, value) in lists {
+                if name != "commander" && !name.starts_with("constructor_") {
+                    return Err(format!("{name}: lists are by builder name (commander or constructor_N)"));
+                }
+                let list = match value {
+                    Value::Null => None,
+                    Value::Array(items) => {
+                        let steps: Vec<String> = items.iter().map(|v| v.as_str().map(|s| s.trim().to_string()).ok_or_else(|| format!("{name}: steps are strings"))).collect::<Result<_, _>>()?;
+                        for step in &steps {
+                            let mut words = step.split_whitespace();
+                            let kind = words.next().unwrap_or_default();
+                            if !STEPS.contains(&kind) {
+                                return Err(format!("{name}: '{step}' is not a step; the steps are {}", STEPS.join(", ")));
+                            }
+                            if matches!(kind, "turret" | "radar") && words.next().is_none() {
+                                return Err(format!("{name}: '{step}' needs a place (turret spot_3, radar home)"));
+                            }
+                        }
+                        Some(steps)
+                    }
+                    _ => return Err(format!("{name}: a list of steps, or null")),
+                };
+                parsed.push((name.clone(), list));
+            }
+            let mut queues = shared.queues.lock().unwrap();
+            let mut said: Vec<String> = Vec::new();
+            for (name, list) in parsed {
+                said.push(match &list {
+                    Some(steps) => format!("{name}: {} steps, done in order from its next look", steps.len()),
+                    None => format!("{name}: list cancelled"),
+                });
+                queues.insert(name, list);
+            }
+            Ok(said.join("; "))
         }
         "lane" => {
             let settings = arguments.as_object().filter(|o| !o.is_empty()).ok_or("lane takes an object: group name (or \"all\") to \"raw\", \"on\" or a list of the rules to keep")?;
@@ -596,7 +638,7 @@ mod tests {
     fn the_player_has_its_lever_and_none_of_the_commanders() {
         let names = |mode: Mode| tool_list(mode).as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
         let player = names(Mode::Player);
-        assert_eq!(player, ["overview", "map", "situation", "instruct", "lane", "mark", "produce", "say", "orders", "wait", "note"]);
+        assert_eq!(player, ["overview", "map", "situation", "instruct", "queue", "lane", "mark", "produce", "say", "orders", "wait", "note"]);
         let commander = names(Mode::Commander);
         assert!(commander.contains(&"squad".to_string()) && !commander.contains(&"instruct".to_string()));
         for tool in batchable(Mode::Player) {
@@ -607,6 +649,12 @@ mod tests {
         assert!(call_tool("instruct", &json!({ "text": "commander: build the lab first." }), &shared, Mode::Player).is_ok());
         assert_eq!(*shared.instructions.lock().unwrap(), "commander: build the lab first.");
         assert!(call_tool("instruct", &json!({ "text": "x".repeat(INSTRUCTIONS_LIMIT + 1) }), &shared, Mode::Player).is_err());
+        assert!(call_tool("queue", &json!({ "commander": ["extractor spot_45", "solar", "vehicle_plant", "assist"], "constructor_7": null }), &shared, Mode::Player).is_ok());
+        assert_eq!(shared.queues.lock().unwrap().get("commander").cloned().flatten().map(|s| s.len()), Some(4));
+        assert!(shared.queues.lock().unwrap().contains_key("constructor_7"));
+        assert!(call_tool("queue", &json!({ "commander": ["turret"] }), &shared, Mode::Player).is_err());
+        assert!(call_tool("queue", &json!({ "group_A": ["solar"] }), &shared, Mode::Player).is_err());
+        assert!(call_tool("queue", &json!({ "commander": ["windmill"] }), &shared, Mode::Player).is_err());
     }
 
     #[test]

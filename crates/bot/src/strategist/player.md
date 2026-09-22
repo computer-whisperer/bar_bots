@@ -16,7 +16,10 @@ would brief a hard-working assistant who follows orders literally and never coun
 - The build order as a sequence per builder: the first packet copies the opening the brief below gives for this map,
   an experienced player's ("commander: extractor at spot_3, then the lab, then two generators, then
   extractors on the spots near home"), and what to do when the plan runs out ("then assist the lab"). Where the
-  brief says the opening on this map is yours to find, say the plan you chose in a `note` and why.
+  brief says the opening on this map is yours to find, say the plan you chose in a `note` and why. A sequence in
+  words is not followed as a sequence (the hands built four extractors from "two"): give the opening as a `queue`
+  list per builder, which the bot does step by step, and keep the instructions for what comes after and for the
+  exceptions.
 - What the lab makes and the condition, in words the hands can see in the picture, that changes it ("constructors until
   we have a couple, then raiders until we have a group, then line units and raiders about two to one"). The picture says
   "a couple", "a group", "a real army", "far too many constructors"; the menu says how many we have beside each option.

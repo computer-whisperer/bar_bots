@@ -255,7 +255,7 @@ pub fn player_report(seen: &mut Seen, briefing: &Briefing, field: &Field, fights
     extractor_lines(seen, field, full, &mut lines);
     if full {
         let buildable: Vec<String> = field.buildable.iter().map(|(n, m)| format!("{n} {m}m")).collect();
-        lines.push(format!("the lab can build: {}", buildable.join(", ")));
+        lines.push(format!("the factories can build: {}", buildable.join(", ")));
     }
     // Each actor on one line, as the hands see it: the words the instructions have to speak to.
     let mut actors: Vec<String> = Vec::new();

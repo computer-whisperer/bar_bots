@@ -252,17 +252,14 @@ impl Brain {
                 turret_within_300: turrets.iter().any(|t| t.dist2d(x.pos) < 300.0),
             })
             .collect();
-        let buildable = self
-            .world
-            .def(kit.lab)
-            .map(|lab| {
-                lab.build_options
-                    .iter()
-                    .filter_map(|id| self.world.def(*id))
-                    .map(|d| (d.name.clone(), d.metal_cost as u32))
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Every tier-1 factory's options, the plant's after the lab's (comet-1: the list was the bot lab's alone, and
+        // every `produce` naming a Blitz or a Mason was refused all game).
+        let mut buildable: Vec<(String, u32)> = [kit.lab, kit.plant]
+            .into_iter()
+            .filter_map(|factory| self.world.def(factory))
+            .flat_map(|factory| factory.build_options.iter().filter_map(|id| self.world.def(*id)).map(|d| (d.name.clone(), d.metal_cost as u32)))
+            .collect();
+        buildable.dedup_by(|a, b| a.0 == b.0);
         let enemy_extractors: Vec<Vec3> = self
             .enemy_buildings
             .values()

@@ -523,6 +523,9 @@ pub struct Shared {
     pub notes: Mutex<Vec<String>>,
     /// The player's standing instructions to the pianist (`instruct` tool), the whole packet, replaced each time.
     pub instructions: Mutex<String>,
+    /// Builders' lists from the `queue` tool, by actor name: `Some` replaces the list, `None` cancels it; the brain drains
+    /// this at each ask (H-HANDS-SCRIPT).
+    pub queues: Mutex<BTreeMap<String, Option<Vec<String>>>>,
     /// What the pianist publishes for the player (`brain/pianist`), read into its turn report.
     pub hands: Mutex<Hands>,
     /// The player's footwork settings by group name (`group_A`) or `all` (`lane` tool, H-HANDS-LANE).

@@ -113,6 +113,8 @@ pub struct Brain {
     /// Chat lines of ours not yet seen back from the engine, which echoes every line as a chat event from our own
     /// host player (human-1: the player was woken by its own "gl hf").
     said: Vec<String>,
+    /// The frame of the last chat line that was not our own echo (the wake reads it; comet-2: the banner's echo woke the player).
+    heard_chat_at: i32,
     /// Buildings `forget_razed_buildings` dropped this tick, for the team board.
     razed: Vec<UnitId>,
     /// Every enemy soldier seen and not known dead, with when it was last seen: what we know of their army, a floor.
@@ -216,6 +218,7 @@ impl Brain {
             shelling: Vec::new(),
             shelling_warned: i32::MIN / 2,
             said: Vec::new(),
+            heard_chat_at: -1,
             razed: Vec::new(),
             enemy_soldiers: HashMap::new(),
             enemy_commander_seen: None,
@@ -253,12 +256,15 @@ impl Brain {
         let Some(shared) = &self.strategist else { return };
         for event in &tick.events {
             if let Event::Chat { player, text } = event {
-                if let Some(i) = self.said.iter().position(|s| s == text || text.ends_with(s.as_str())) {
+                // The game cuts a chat line at about 120 characters, so a long line of ours is known by its first
+                // words after the name the game filled in.
+                if let Some(i) = self.said.iter().position(|s| s == text || text.contains(s.get(..24).unwrap_or(s.as_str()))) {
                     self.said.remove(i);
                     continue;
                 }
                 eprintln!("[ai {}] f={} chat from player {player}: {text}", self.world.hello.ai_id, tick.frame);
                 shared.chat_in.lock().unwrap().push((tick.frame, *player, text.clone()));
+                self.heard_chat_at = tick.frame;
             }
         }
         for text in std::mem::take(&mut *shared.chat_out.lock().unwrap()) {

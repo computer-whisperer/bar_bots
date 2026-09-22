@@ -156,6 +156,15 @@ K-maps-comet-barb-opens-bots, the tempo model]
   groups of 8 and of 48 stalled at home for 35 to 67 s trying to walk out. Put the solars on named spots away from
   the plants (a constructor's job) and the plants apart. Energy sat at 0 at 11:57 with five plants: about eight
   solars behind each plant. This opponent opened with a plant on easy here, against its bot labs in the older games.
+- comet-2 (medium, LOST at 8.6 min): the same opening was written in words and the hands did the same again: four
+  extractors and three solars, the plant at 1:45, then three plants and five constructors from "one plant, one
+  constructor" (every `produce` naming a Blitz or a Mason was refused that game: the tool knew the bot lab's units
+  only; fixed). The first Blitz came at 4:52; its Rascals and Blitzes ate thirteen extractors from 4:10 against no
+  army, and the commander chased a scout car it cannot catch. So: the opening goes in a `queue` list per builder,
+  which the bot does step by step (commander: extractor spot_45, extractor spot_50, solar, solar, solar,
+  vehicle_plant, solar, solar, assist), `produce` caps the constructors (`armcv:1`), the instructions say the plant is
+  the only factory and the commander never chases; and a few Blitzes stay home as the guard from the first one,
+  since medium raids from 4:00 with scout cars and Blitzes. Their plant came first on medium too.
 
 **What your hands did alone (pianist-smoke-1 to -6, pianist-easy-1, pianist-audit-1: four wins, four losses and a
 timeout against easy from the default packet, `docs/experiments.md`).** [docs/knowledge/jev.md]

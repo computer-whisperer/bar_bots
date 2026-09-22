@@ -33,18 +33,25 @@ impl Brain {
         let own = &tick.snapshot.own_units;
         let name = menu.name.clone();
         let question = if matches!(menu.actor, Actor::Lab(_)) { format!("{name}.next") } else { format!("{name}.do") };
-        let Some(Answer::Choice { choice, probabilities, confidence }) = answers.get(&question) else { return };
+        // A step from the player's list plays itself (H-HANDS-SCRIPT); anything else is the answer's choice.
+        let scripted = menu.scripted.clone();
+        let (choice, probabilities, confidence): (String, BTreeMap<String, f64>, f64) = match (&scripted, answers.get(&question)) {
+            (Some((key, _)), _) => (key.clone(), BTreeMap::new(), 1.0),
+            (None, Some(Answer::Choice { choice, probabilities, confidence })) => (choice.clone(), probabilities.clone(), *confidence),
+            _ => return,
+        };
         let mut chosen = choice.clone();
         let p = |option: &str| probabilities.get(option).copied().unwrap_or(0.0);
         // H-HANDS-SWITCH: a busy actor changes course only for a clear winner.
         let mut kept = false;
-        if menu.busy && chosen != "continue" && p(&chosen) - p("continue") < SWITCH_MARGIN {
+        if scripted.is_none() && menu.busy && chosen != "continue" && p(&chosen) - p("continue") < SWITCH_MARGIN {
             chosen = "continue".into();
             kept = true;
         }
         let answered = |q: &str| answers.get(&format!("{name}.{q}")).and_then(|a| if let Answer::Choice { choice, .. } = a { Some(choice.clone()) } else { None });
-        let where_ = answered("where");
-        let where_extractor = answered("where_extractor");
+        let listed = scripted.as_ref().and_then(|(_, place)| place.clone());
+        let where_ = listed.clone().or_else(|| answered("where"));
+        let where_extractor = listed.or_else(|| answered("where_extractor"));
         let where_scout = answered("where_scout");
         let whom = answers.get(&format!("{name}.whom")).and_then(|a| if let Answer::Choice { choice, .. } = a { Some(choice.clone()) } else { None });
         let how_many = answers.get(&format!("{name}.how_many")).and_then(|a| if let Answer::Choice { choice, .. } = a { Some(choice.clone()) } else { None });
@@ -171,7 +178,8 @@ impl Brain {
             pianist.stats.switches += 1;
         }
         if let Some(did) = &did {
-            pianist.done.push(format!("{} {name}: {did}", super::picture::clock(frame)));
+            let from = if scripted.is_some() { " (from its list)" } else { "" };
+            pianist.done.push(format!("{} {name}: {did}{from}", super::picture::clock(frame)));
         }
         let kind: &'static str = match menu.actor {
             Actor::Builder(_) => "builder",
@@ -180,8 +188,8 @@ impl Brain {
             Actor::Global => "global",
         };
         let inputs = json!({ "actor": name, "options": menu.options.keys().collect::<Vec<_>>(), "busy": menu.busy });
-        let outputs = json!({ "choice": choice, "played": chosen, "probability": p(choice), "confidence": confidence, "where": where_, "where_extractor": where_extractor, "where_scout": where_scout, "whom": whom, "how_many": how_many, "did": did });
-        self.pianist.as_mut().expect("pianist mode").played.push(json!({ "actor": inputs["actor"], "kind": kind, "busy": menu.busy, "options": inputs["options"], "choice": choice, "played": chosen, "kept": kept, "probability": p(choice), "confidence": confidence, "did": did }));
+        let outputs = json!({ "choice": choice, "played": chosen, "probability": p(&choice), "confidence": confidence, "scripted": scripted.is_some(), "where": where_, "where_extractor": where_extractor, "where_scout": where_scout, "whom": whom, "how_many": how_many, "did": did });
+        self.pianist.as_mut().expect("pianist mode").played.push(json!({ "actor": inputs["actor"], "kind": kind, "busy": menu.busy, "options": inputs["options"], "choice": choice, "played": chosen, "kept": kept, "probability": p(&choice), "confidence": confidence, "did": did }));
         self.journal.note_from("jev", frame, kind, inputs, outputs);
     }
 
