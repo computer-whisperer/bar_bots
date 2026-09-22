@@ -315,8 +315,14 @@ impl Brain {
         for event in &tick.events {
             match *event {
                 Event::UnitCreated { unit, builder: Some(builder) } => {
-                    if let Some(Task::Build { started, .. }) = pianist.tasks.get_mut(&builder) {
+                    // The frame stands where the engine put it, up to a building's width from the point ordered
+                    // (pianist-player-6: two windmills 200 from their ordered point were not seen as started, and
+                    // the next "generator" answer ordered a third; both decayed). The task's site is the frame.
+                    if let Some(Task::Build { started, near, .. }) = pianist.tasks.get_mut(&builder) {
                         *started = true;
+                        if let Some(frame_unit) = own.iter().find(|u| u.id == unit) {
+                            *near = frame_unit.pos;
+                        }
                     }
                     if let Some(queue) = pianist.lab_queue.get_mut(&builder) {
                         let made = own.iter().find(|u| u.id == unit).map(|u| u.def);

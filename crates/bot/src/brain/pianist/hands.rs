@@ -61,6 +61,17 @@ impl Brain {
                     task = Some(Task::Build { def, near: site.near, spot, ordered: frame, started: false });
                     Some(format!("build a {} at {}", self.name(def), self.place_words(&picture.places, site.near)))
                 };
+                // H-HANDS-STARTED: the kind of building already started, answered again, is the same build going
+                // on, not a second frame (pianist-player-6: "generator" three asks running, three frames, two decayed).
+                let started_def = match self.pianist.as_ref().and_then(|p| p.tasks.get(&id)) {
+                    Some(Task::Build { def, started: true, .. }) => Some(*def),
+                    _ => None,
+                };
+                let pick = match pick {
+                    Pick::Building(def) | Pick::BuildingAt(def) if started_def == Some(def) => Pick::Continue,
+                    Pick::Extractor if started_def.is_some_and(|d| kit.is_extractor(d)) => Pick::Continue,
+                    other => other,
+                };
                 match pick {
                     Pick::Continue | Pick::Wait => {}
                     Pick::Extractor => {

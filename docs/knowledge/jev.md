@@ -121,3 +121,18 @@ places appear in the picture, so spot_36 was never on the menu and the ball kept
 and at 13:21 "I wish I could name an unexplored map cell as a destination"; the jev log's places carry no spot_36.
 **Would be wrong if.** spot_36 had been unreachable on foot (it is listed as walkable in the map tool).
 **Used by.** H-HANDS-NAMED-PLACES.
+
+### K-hands-frame-placed-off-the-ordered-point
+**Claim.** The engine places a building's frame where the site search settles, up to about a building's width from
+the point ordered (200 elmos for a windmill beside a metal spot), so a started-build test that looks for the frame
+within 200 of the ordered point misses it; the builder is then asked again, Jev answers the packet's word
+("generator") over `continue`, and the hands order a second frame at the same point, which the engine places beside
+the first. Each such answer abandons the last frame.
+**Status.** demonstrated (2026-09-22)
+**Evidence.** pianist-player-6: build orders to the commander at (3855, 2135) at 0:40, 0:50 and 1:00 created frames
+at (4056, 2136), (4056, 2072) and (3992, 2136); the first two decayed at 1:20 and 1:29; the jev log has the
+commander "building a armwin at spot_10" and answering `generator` at 0:50 and 1:00 with `continue` on offer. The
+user, watching: "we are still leaving wind turbines 80% built and dying in the very early game".
+**Would be wrong if.** The decayed frames had been abandoned for a threat (no party was within 800) or the engine
+had refused the first site (it created a frame each time).
+**Used by.** H-HANDS-STARTED.
