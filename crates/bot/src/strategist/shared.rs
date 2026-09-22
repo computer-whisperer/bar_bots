@@ -409,6 +409,65 @@ impl Default for Wake {
     }
 }
 
+/// Which footwork rules apply to a pianist group (H-HANDS-LANE): the control lane's four (`micro.rs`), the march
+/// that keeps an advancing group together, and the re-sending of an engaging group after its party. All on by
+/// default; `raw` is none, and the group's orders reach the engine as the hands gave them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Footwork {
+    pub flee: bool,
+    pub fan: bool,
+    pub focus: bool,
+    pub kite: bool,
+    pub march: bool,
+    pub follow: bool,
+}
+
+impl Default for Footwork {
+    fn default() -> Footwork {
+        Footwork { flee: true, fan: true, focus: true, kite: true, march: true, follow: true }
+    }
+}
+
+impl Footwork {
+    pub const RULES: [&'static str; 6] = ["flee", "fan", "focus", "kite", "march", "follow"];
+
+    pub fn raw() -> Footwork {
+        Footwork { flee: false, fan: false, focus: false, kite: false, march: false, follow: false }
+    }
+
+    /// The rules kept, by name.
+    pub fn kept(&self) -> Vec<&'static str> {
+        let flags = [self.flee, self.fan, self.focus, self.kite, self.march, self.follow];
+        Footwork::RULES.iter().zip(flags).filter(|(_, on)| *on).map(|(name, _)| *name).collect()
+    }
+
+    /// From the rules to keep, by name; an unknown name is the error.
+    pub fn keeping(names: &[String]) -> Result<Footwork, String> {
+        let mut footwork = Footwork::raw();
+        for name in names {
+            match name.as_str() {
+                "flee" => footwork.flee = true,
+                "fan" => footwork.fan = true,
+                "focus" => footwork.focus = true,
+                "kite" => footwork.kite = true,
+                "march" => footwork.march = true,
+                "follow" => footwork.follow = true,
+                other => return Err(format!("{other} is not a footwork rule; the rules are {}", Footwork::RULES.join(", "))),
+            }
+        }
+        Ok(footwork)
+    }
+
+    /// One line for the picture: what stands when it is not the default.
+    pub fn words(&self) -> Option<String> {
+        if *self == Footwork::default() {
+            return None;
+        }
+        let kept = self.kept();
+        Some(if kept.is_empty() { "raw: no footwork rules; its orders go to the engine as given".to_string() } else { format!("footwork rules {} only", kept.join(", ")) })
+    }
+}
+
 /// The pianist's side of the player's report (`docs/design/2026-09-21-pianist.md`, "The player"): the picture Jev
 /// was last shown (without the instructions and rules), what the hands did since the player's last turn, the groups
 /// that began an engagement in the last call, and Jev's global judgements.
@@ -459,6 +518,8 @@ pub struct Shared {
     pub instructions: Mutex<String>,
     /// What the pianist publishes for the player (`brain/pianist`), read into its turn report.
     pub hands: Mutex<Hands>,
+    /// The player's footwork settings by group name (`group_A`) or `all` (`lane` tool, H-HANDS-LANE).
+    pub lane: Mutex<BTreeMap<String, Footwork>>,
     pub wake: Mutex<Wake>,
     /// True when turns are taken in lockstep with the game (the field commander).
     pub lockstep: std::sync::atomic::AtomicBool,

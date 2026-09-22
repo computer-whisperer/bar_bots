@@ -28,7 +28,8 @@ const STALL_FRAMES: i32 = 45 * FRAMES_PER_SECOND;
 
 #[derive(Clone, Debug)]
 pub(crate) enum GroupTask {
-    Hold { since: i32 },
+    /// `committed`: the hold an advance arrives in, still committed to everything there (H-HANDS-GROUPS).
+    Hold { since: i32, committed: bool },
     Move { to: Vec3, place: String, fight: bool, since: i32 },
     Engage { party: Vec<UnitId>, at: Vec3, since: i32, last_seen: i32 },
 }
@@ -117,7 +118,7 @@ impl Brain {
                 Some((_, group)) => group.members.push(unit.id),
                 None => {
                     let name = pianist.new_group_name();
-                    pianist.groups.push(Group::new(name, vec![unit.id], GroupTask::Hold { since: frame }, frame));
+                    pianist.groups.push(Group::new(name, vec![unit.id], GroupTask::Hold { since: frame, committed: false }, frame));
                 }
             }
         }
@@ -140,7 +141,8 @@ impl Brain {
                 merged = true;
             }
         }
-        // Standing orders.
+        // Standing orders, under each group's footwork rules (H-HANDS-LANE).
+        let footwork: Vec<crate::strategist::shared::Footwork> = pianist.groups.iter().map(|g| self.footwork_of(&g.name)).collect();
         let mut marches: Vec<(usize, Vec3)> = Vec::new();
         let mut stalled: Vec<String> = Vec::new();
         for (index, group) in pianist.groups.iter_mut().enumerate() {
@@ -154,27 +156,29 @@ impl Brain {
                         (group.best_to_go, group.progressed) = (to_go, frame);
                     }
                     if to_go < ARRIVED {
-                        group.task = GroupTask::Hold { since: frame };
+                        group.task = GroupTask::Hold { since: frame, committed: *fight };
                         group.held.clear();
                     } else if *fight {
                         if frame - group.progressed >= STALL_FRAMES && !group.stall_warned {
                             group.stall_warned = true;
                             stalled.push(format!("group_{} was told to advance to {place} and has not got nearer for {} s, {to_go:.0} short of it", group.name, (frame - group.progressed) / FRAMES_PER_SECOND));
                         }
-                        marches.push((index, *to));
+                        if footwork[index].march {
+                            marches.push((index, *to));
+                        }
                     }
                 }
                 GroupTask::Engage { party, at, last_seen, .. } => {
                     let seen: Vec<&bot_protocol::EnemyUnit> = enemies.iter().filter(|e| party.contains(&e.id)).collect();
                     if let Some(now) = centre_of_enemies(&seen) {
                         *last_seen = frame;
-                        if now.dist2d(*at) > FOLLOW_DISTANCE && frame - group.last_order >= FOLLOW_FRAMES {
+                        if footwork[index].follow && now.dist2d(*at) > FOLLOW_DISTANCE && frame - group.last_order >= FOLLOW_FRAMES {
                             *at = now;
                             group.last_order = frame;
                             commands.extend(units.iter().map(|u| Command::Fight { unit: u.id, to: now, queue: false }));
                         }
                     } else if frame - *last_seen > LOST_FRAMES {
-                        group.task = GroupTask::Hold { since: frame };
+                        group.task = GroupTask::Hold { since: frame, committed: false };
                     }
                 }
             }

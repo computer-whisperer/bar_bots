@@ -11,6 +11,8 @@ Per batch (mean per game, by --until, default 10 game minutes):
   wounded       damage taken by soldiers that lived to the end of the window, against by those that died
   late ticks    the worst `late` seen, and the share of samples with one
   commander     elmos the commander walked in the window, trips over 400 elmos, the longest (routing design)
+  milling       the control lane's claims that ended, the path they walked over their net displacement, reversals
+                (over ninety degrees) per claim: the milling instrument (H-HANDS-LANE)
 With --arms H-ID the batch is split into the arm with the heuristic on and the arm with it off (`--ab-disable`).
 
 Reaches come from the simulator's unit table (crates/combatsim/data/units.json) by unit name.
@@ -57,6 +59,7 @@ def read(path, until_frame):
     worst_late = 0
     late_samples = 0
     samples = 0
+    milling = [0, 0.0, 0.0, 0]  # claims ended, path, net, reversals
     header = None
     # Which heuristics the game ran without, from the banner the bot says at its first orders.
     disabled = None
@@ -121,6 +124,8 @@ def read(path, until_frame):
                     break
             late = r.get("late", 0)
             worst_late = max(worst_late, late)
+            for k, v in enumerate(r.get("lane", [])):
+                milling[k] += v
             late_samples += late > 0
             for unit, dmg in r.get("dmg", []):
                 if unit in own_soldier:
@@ -155,6 +160,7 @@ def read(path, until_frame):
         "worst_late": worst_late, "late_share": late_samples / max(samples, 1),
         "disabled": disabled or "",
         "com_walked": com_walked, "com_trips": sum(1 for x in com_trips if x > 400), "com_longest": max(com_trips, default=0.0),
+        "claims": milling[0], "claim_path": milling[1], "claim_net": milling[2], "reversals": milling[3],
     }
 
 
@@ -173,6 +179,9 @@ def summarise(label, games):
     print(f"  wounded      {mean('wounded_lived'):6.0f} damage on soldiers that lived, {mean('wounded_died'):6.0f} on those that died")
     print(f"  late ticks   worst {max(g['worst_late'] for g in games)} frames, {100 * mean('late_share'):.1f} % of samples")
     print(f"  commander    {mean('com_walked'):6.0f} elmos walked, {mean('com_trips'):4.1f} trips over 400, longest {mean('com_longest'):5.0f}")
+    claims = mean("claims")
+    if claims > 0:
+        print(f"  milling      {claims:6.0f} claims, path/net {mean('claim_path') / max(mean('claim_net'), 1.0):.2f}, {mean('reversals') / claims:.2f} reversals per claim")
 
 
 def main():

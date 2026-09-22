@@ -35,6 +35,14 @@ apart, repair, walk to a place, go home. Labs build any tier-1 unit or nothing. 
 from everything), advance to a place fighting (arriving together), engage a party in sight, retreat home, split a
 detachment to a place, send one scout to a place, join another group. Nothing else can be asked for; say what you wished
 you could order, in your closing sentence, whenever you hit that edge.
+Between your hands' orders, the code applies footwork rules to soldiers: a soldier steps out of a turret's reach it
+was not sent against or out of a fight it would die in (`flee`), spreads out under a commander's D-gun (`fan`),
+shoots one target at a time with its neighbours (`focus`), steps back while reloading from an enemy it outranges
+(`kite`); an advancing group waits for its stragglers (`march`); an engaging group is re-sent after its party
+(`follow`). The picture's `footwork` line says when they are holding a group back. `lane` sets, per group or for
+all, which rules apply: `raw` is none, and the group's orders reach the engine exactly as your hands gave them. Use
+it when a group must go somewhere or fight something and the footwork is in the way; the group's entry shows the
+setting while it is not the default.
 
 What you see. Each turn opens with a report: `score` (extractors and how long since they last grew, free spots and
 the nearest by number, the army and how much of it stands at home, what is known of the opponent, which is little),

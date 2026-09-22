@@ -31,10 +31,31 @@ pub struct Intent {
     pub staging: Option<Vec3>,
 }
 
+/// What the control lane's claims did to the units they held (the milling instrument, `micro.rs`): claims ended,
+/// the path those units walked while held, their net displacement, and reversals of more than ninety degrees.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Milling {
+    pub claims: u32,
+    pub path: f32,
+    pub net: f32,
+    pub reversals: u32,
+}
+
+impl std::ops::AddAssign for Milling {
+    fn add_assign(&mut self, other: Milling) {
+        self.claims += other.claims;
+        self.path += other.path;
+        self.net += other.net;
+        self.reversals += other.reversals;
+    }
+}
+
 #[derive(Default)]
 pub struct Journal {
     /// Heuristic firings (docs/heuristics.md) since the last drain.
     pub rules: BTreeMap<&'static str, u32>,
+    /// The lane's milling counters since the last drain.
+    pub milling: Milling,
     pub notes: Vec<Note>,
     pub intent: Intent,
 }

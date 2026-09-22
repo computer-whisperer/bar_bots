@@ -5,12 +5,14 @@
 //!
 //! H-MICRO-LANE switches the whole lane off; each behaviour has its own ID under it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bot_protocol::{Command, EnemyUnit, OwnUnit, Tick, UnitDefId, UnitId, Vec3};
 
+use super::journal::Milling;
 use super::threat::ThreatGrid;
 use super::{Brain, FRAMES_PER_SECOND};
+use crate::strategist::shared::Footwork;
 
 /// Only soldiers with an enemy this close are looked at.
 const HORIZON: f32 = 700.0;
@@ -133,6 +135,16 @@ fn queued(order: &Command) -> Command {
     }
 }
 
+/// What a unit did while the lane held it (the milling instrument): where the claim began, where it was last
+/// seen, the direction of its last step, the path walked and the reversals of more than ninety degrees.
+struct Motion {
+    start: Vec3,
+    last: Vec3,
+    last_step: Option<(f32, f32)>,
+    path: f32,
+    reversals: u32,
+}
+
 /// A unit the lane has taken over: which behaviour, where it was last sent and when.
 struct Claim {
     rule: Rule,
@@ -148,7 +160,11 @@ pub struct Lane {
     /// Each soldier's last order from the brain, and its frame: the lane's terminal behaviour.
     standing: HashMap<UnitId, (Command, i32)>,
     commitment: HashMap<UnitId, Commitment>,
+    /// Which footwork rules apply to each pianist group's soldiers (H-HANDS-LANE); a unit not listed gets them all.
+    footwork: HashMap<UnitId, Footwork>,
     claims: HashMap<UnitId, Claim>,
+    /// The motion of every unit under a claim, for the milling counters.
+    motion: HashMap<UnitId, Motion>,
     /// Armed mobile enemies as last seen: type, place, frame.
     seen: HashMap<UnitId, (UnitDefId, Vec3, i32)>,
     /// Per minute, for the log: claims made, orders issued.
@@ -225,21 +241,71 @@ impl Brain {
         // The pianist's groups (H-HANDS-GROUPS): one advancing (`fight_to`) is committed to everything, turrets and the
         // commander included, as a wave is: priced against no turret, a ball of eighty stood at the edge of the enemy
         // base's laser towers inside a Guardian's reach for five minutes while Jev said "continue" every ten seconds
-        // (pianist-player-2). One holding or engaging stands against mobile units and steps out of turret reach; one
-        // walking without fighting flees everything.
+        // (pianist-player-2). The hold it arrives in keeps that commitment (pianist-player-4: the ball that fought
+        // into the base stood there stepping out of the towers' reach, 35 of 35 held back). A hold Jev chose stands
+        // against mobile units and steps out of turret reach; an engaging group fights the commander when it is the
+        // raid's size for it (pianist-player-4: 28 of 34 Maces stepped back from the lone enemy commander); one
+        // walking without fighting flees everything. Each group's footwork rules come from the player (H-HANDS-LANE).
+        let mut footwork: HashMap<UnitId, Footwork> = HashMap::new();
         if let Some(pianist) = &self.pianist {
             for group in &pianist.groups {
+                let metal: f32 = group.members.iter().filter_map(|id| self.known_units.get(id)).filter_map(|(def, _)| self.world.def(*def)).map(|d| d.metal_cost).sum();
                 let commitment_of = match &group.task {
-                    super::pianist::GroupTask::Hold { .. } | super::pianist::GroupTask::Engage { .. } => Commitment::Priced { turrets: Vec::new(), commander: false },
-                    super::pianist::GroupTask::Move { fight: true, .. } => Commitment::All,
+                    super::pianist::GroupTask::Hold { committed: true, .. } | super::pianist::GroupTask::Move { fight: true, .. } => Commitment::All,
+                    super::pianist::GroupTask::Hold { .. } => Commitment::Priced { turrets: Vec::new(), commander: false },
+                    super::pianist::GroupTask::Engage { .. } => Commitment::Priced { turrets: Vec::new(), commander: metal >= super::raid::COMMANDER_PARTY_METAL },
                     super::pianist::GroupTask::Move { fight: false, .. } => Commitment::None,
                 };
+                let rules = self.footwork_of(&group.name);
                 for id in &group.members {
                     commitment.insert(*id, commitment_of.clone());
+                    footwork.insert(*id, rules);
                 }
             }
         }
         self.lane.commitment = commitment;
+        self.lane.footwork = footwork;
+    }
+
+    /// The player's footwork setting for a pianist group (H-HANDS-LANE): the group's own, else `all`, else every rule.
+    pub(super) fn footwork_of(&self, group: &str) -> Footwork {
+        let Some(shared) = &self.strategist else { return Footwork::default() };
+        let lane = shared.lane.lock().unwrap();
+        lane.get(&format!("group_{group}")).or_else(|| lane.get("all")).copied().unwrap_or_default()
+    }
+
+    /// The milling counters: every unit under a claim has its steps summed; a unit whose claim has ended (released,
+    /// re-ordered, or dead) hands its path, net displacement and reversals to the journal.
+    fn track_milling(&mut self, own: &[OwnUnit]) {
+        let claimed: HashSet<UnitId> = self.lane.claims.keys().copied().collect();
+        let mut ended = Milling::default();
+        self.lane.motion.retain(|id, m| {
+            if claimed.contains(id) {
+                return true;
+            }
+            ended.claims += 1;
+            ended.path += m.path;
+            ended.net += m.start.dist2d(m.last);
+            ended.reversals += m.reversals;
+            false
+        });
+        for unit in own.iter().filter(|u| claimed.contains(&u.id)) {
+            let m = self.lane.motion.entry(unit.id).or_insert(Motion { start: unit.pos, last: unit.pos, last_step: None, path: 0.0, reversals: 0 });
+            let step = (unit.pos.x - m.last.x, unit.pos.z - m.last.z);
+            let length = step.0.hypot(step.1);
+            if length < 1.0 {
+                continue;
+            }
+            if let Some(last) = m.last_step
+                && last.0 * step.0 + last.1 * step.1 < 0.0
+            {
+                m.reversals += 1;
+            }
+            m.last_step = Some(step);
+            m.path += length;
+            m.last = unit.pos;
+        }
+        self.journal.milling += ended;
     }
 
     /// Every tick: the threat grid, then each soldier near an enemy through the behaviours, in order: flee, fan,
@@ -253,18 +319,26 @@ impl Brain {
         let snapshot = &tick.snapshot;
         self.lane.standing.retain(|id, _| snapshot.own_units.iter().any(|u| u.id == *id));
         self.lane.claims.retain(|id, _| snapshot.own_units.iter().any(|u| u.id == *id));
+        self.track_milling(&snapshot.own_units);
         let sources = self.threat_sources(snapshot.enemies.as_slice(), frame);
         self.rebuild_grid(&sources);
         let mut commands = Vec::new();
         let debug = std::env::var_os("WITHIN_REASON_MICRO_DEBUG").is_some();
 
         let soldiers: Vec<&OwnUnit> = snapshot.own_units.iter().filter(|u| !u.being_built && self.is_army(u, &kit)).collect();
+        // Which rules each soldier is under (H-HANDS-LANE): a raw unit passes straight through to its order.
+        let footwork = self.lane.footwork.clone();
+        let rules_of = |id: UnitId| footwork.get(&id).copied().unwrap_or_default();
         let mut owned: HashMap<UnitId, Rule> = HashMap::new();
         let mut free: Vec<&OwnUnit> = Vec::new();
         for unit in &soldiers {
             let near = sources.iter().any(|s| s.pos.dist2d(unit.pos) < HORIZON + s.reach);
-            if !near {
+            if !near || rules_of(unit.id) == Footwork::raw() {
                 self.release(unit.id, frame, &mut commands, debug);
+                continue;
+            }
+            if !rules_of(unit.id).flee {
+                free.push(unit);
                 continue;
             }
             // Our fire round the unit, this one's included: what a unit fight there is worth staying in.
@@ -276,14 +350,16 @@ impl Brain {
                 None => free.push(unit),
             }
         }
-        let fanned = self.fan(&free, &soldiers, &sources, frame, &mut commands, debug);
+        let fannable: Vec<&OwnUnit> = free.iter().copied().filter(|u| rules_of(u.id).fan).collect();
+        let fanned = self.fan(&fannable, &soldiers, &sources, frame, &mut commands, debug);
         owned.extend(fanned.iter().map(|id| (*id, Rule::Fan)));
         free.retain(|u| !fanned.contains(&u.id));
-        let focused = self.focus(&free, snapshot.enemies.as_slice(), frame, &mut commands, debug);
+        let focusable: Vec<&OwnUnit> = free.iter().copied().filter(|u| rules_of(u.id).focus).collect();
+        let focused = self.focus(&focusable, snapshot.enemies.as_slice(), frame, &mut commands, debug);
         owned.extend(focused.iter().map(|id| (*id, Rule::Focus)));
         free.retain(|u| !focused.contains(&u.id));
         for unit in &free {
-            if self.kite(unit, snapshot.enemies.as_slice(), frame, &mut commands, debug) {
+            if rules_of(unit.id).kite && self.kite(unit, snapshot.enemies.as_slice(), frame, &mut commands, debug) {
                 owned.insert(unit.id, Rule::Kite);
             } else if self.lane.claims.get(&unit.id).is_some_and(|c| frame - c.frame < CLAIM_FRAMES) {
                 // A claim stands at least this long.

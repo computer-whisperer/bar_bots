@@ -12,7 +12,7 @@ use std::path::Path;
 use bot_protocol::{Command, Event, Hello, Resource, Tick, UnitDefId, UnitId, Vec3};
 use serde_json::{Value, json};
 
-use crate::brain::journal::{Intent, Journal};
+use crate::brain::journal::{Intent, Journal, Milling};
 
 pub const FORMAT_VERSION: u32 = 1;
 /// A state sample once a game second: the viewer interpolates between samples, and a 40-minute game stays
@@ -36,6 +36,8 @@ pub struct Recorder {
     next_sample: i32,
     /// Since the last sample: heuristic firings, damage taken per unit, slowest `decide`.
     rules: BTreeMap<&'static str, u32>,
+    /// The control lane's milling counters since the last sample.
+    milling: Milling,
     damage: BTreeMap<UnitId, f32>,
     slowest_decide_ms: f32,
     /// The most frames a tick of the interval arrived late by (`Tick::late`).
@@ -64,6 +66,7 @@ impl Recorder {
                 known: HashMap::new(),
                 next_sample: 0,
                 rules: BTreeMap::new(),
+                milling: Milling::default(),
                 damage: BTreeMap::new(),
                 slowest_decide_ms: 0.0,
                 latest_tick: 0,
@@ -99,6 +102,7 @@ impl Recorder {
         for (rule, n) in journal.rules {
             *self.rules.entry(rule).or_default() += n;
         }
+        self.milling += journal.milling;
         for note in journal.notes {
             self.line(&json!({ "t": "d", "f": note.frame, "source": note.source, "kind": note.kind, "inputs": note.inputs, "outputs": note.outputs }));
         }
@@ -234,7 +238,12 @@ impl Recorder {
             let comma = if i == 0 { "" } else { "," };
             let _ = write!(self.buffer, "{comma}[{},{damage:.0}]", unit.0);
         }
-        let _ = writeln!(self.buffer, "],\"ms\":{:.2},\"late\":{}}}", std::mem::take(&mut self.slowest_decide_ms), std::mem::take(&mut self.latest_tick));
+        let _ = write!(self.buffer, "],\"ms\":{:.2},\"late\":{}", std::mem::take(&mut self.slowest_decide_ms), std::mem::take(&mut self.latest_tick));
+        let milling = std::mem::take(&mut self.milling);
+        if milling.claims > 0 {
+            let _ = write!(self.buffer, ",\"lane\":[{},{:.0},{:.0},{}]", milling.claims, milling.path, milling.net, milling.reversals);
+        }
+        self.buffer.push_str("}\n");
         if !self.rules.is_empty() {
             let rules = std::mem::take(&mut self.rules);
             self.line(&json!({ "t": "d", "f": tick.frame, "source": "heuristic", "kind": "rules", "inputs": null, "outputs": rules }));

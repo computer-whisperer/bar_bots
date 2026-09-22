@@ -81,3 +81,31 @@ are) the advance walks in; whether it should is the odds question the menu words
 the truth file puts a Guardian 1,002 from it and the nearest laser tower at 1,584.
 **Would be wrong if.** The ball had walked in under the same commitment, or the flee steps had another source.
 **Used by.** H-HANDS-GROUPS (`micro.rs` `note_commitments`).
+
+### K-hands-hold-in-the-base-stepped-out
+**Claim.** A pianist group that arrived at its `fight_to` goal was set to Hold, and a hold was priced against no
+turret, so the ball that had fought its way into the enemy base stood at `enemy_base` stepping out of the towers'
+reach; likewise an engaging group was never committed to the commander, so a ball outweighing the lone enemy
+commander many times stepped back from it. Both are the commitment mapping, not Jev and not the player.
+**Status.** demonstrated (2026-09-21; the fix's effect is pianist-player-5's to show)
+**Evidence.** pianist-player-4: the picture's footwork line read "35 of its 35 soldiers are being held back by
+their own footwork" on a group "holding" at enemy_base at 10:33-11:33, and "28 of its 34" on the same group
+"attacking party_1 (1 armcom) at spot_19" at 12:09-12:30; the player named the first as the game-2 shape and
+worked round it with a sweep of named spots.
+**Would be wrong if.** The held-back counts came from the lethal-fight test rather than the unpriced-threat test
+(the ball was at full strength and outgunned nothing there: the towers were the only threats).
+**Used by.** H-HANDS-GROUPS (`micro.rs` `note_commitments`).
+
+### K-hands-lane-untested-under-the-pianist
+**Claim.** The control lane's rules were measured on the heuristic bot's Pawn raids (H-MICRO-LANE: micro-ab2, 3-7-2
+against 0-12; H-MICRO-FAN: matt-fan3) and never apart from each other for focus and kite, and never at all under the
+pianist, where the groups are Mace balls with different commitments. The lane models a unit as a point that moves at
+full speed in any direction at once, and the protocol carries no turn rate or acceleration, so a unit re-stepped every
+six frames turns rather than walks (the user, watching: "rapidly changing direction causes pawns to mill about rather
+than decisively moving towards or away from a threat").
+**Status.** conjecture (2026-09-21); the milling counters (H-HANDS-LANE) are the instrument, a raw-against-laned
+batch the test.
+**Evidence.** The heuristics ledger's status column for the four lane rules; the user's observation.
+**Would be wrong if.** A raw ball traded worse than a laned one in a batch, or the milling counters showed path
+close to net displacement under the flee.
+**Used by.** H-HANDS-LANE.

@@ -178,7 +178,7 @@ impl Brain {
                 if group.task.busy() {
                     commands.extend(ids.iter().map(|id| Command::Stop { unit: *id }));
                 }
-                group.set_task(GroupTask::Hold { since: frame }, frame);
+                group.set_task(GroupTask::Hold { since: frame, committed: false }, frame);
                 did = Some("hold".into());
             }
             Pick::MoveTo { fight } => {

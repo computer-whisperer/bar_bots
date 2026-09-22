@@ -585,7 +585,7 @@ impl Brain {
             let health: f32 = units.iter().map(|u| u.health / u.max_health).sum::<f32>() / units.len().max(1) as f32;
             let ago = |since: i32| format!("{} s", (frame - since) / FRAMES_PER_SECOND);
             let doing = match &group.task {
-                GroupTask::Hold { since } => format!("holding for {}", ago(*since)),
+                GroupTask::Hold { since, committed } => format!("holding for {}{}", ago(*since), if *committed { ", fighting everything here, turrets included, since it arrived by advancing" } else { "" }),
                 GroupTask::Move { to, place, fight, since } => format!("{} to {place}, {:.0} to go, for {}", if *fight { "advancing" } else { "walking" }, centre.dist2d(*to), ago(*since)),
                 GroupTask::Engage { party, at, since, .. } => {
                     let name = parties.iter().find(|p| p.ids.iter().any(|id| party.contains(id))).map_or("a party now out of sight".to_string(), |p| p.name.clone());
@@ -598,6 +598,9 @@ impl Brain {
                 "health": format!("{} on average", health_words(health)),
                 "doing": doing,
             });
+            if let Some(words) = self.footwork_of(&group.name).words() {
+                entry["lane"] = json!(words);
+            }
             if let Some(seconds) = group.stalled_seconds(frame).filter(|s| *s >= 20) {
                 entry["progress"] = json!(format!("has not got nearer its goal for {seconds} s: stalled"));
             }

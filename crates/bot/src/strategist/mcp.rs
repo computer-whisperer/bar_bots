@@ -135,7 +135,10 @@ fn tool_list(mode: Mode) -> Value {
             { "name": "instruct",
               "description": format!("Your standing instructions to your hands: the whole packet, replacing the last one. Jev reads it every second beside the picture and picks each actor's next action from a menu, so write it as standing orders in plain words: the build order per builder as a sequence, what the lab makes and when that changes, where each group stands, when it engages, scouts and attacks, what to do about raids. Name places as the picture does (home, enemy_base, spot_N, passage_N) and groups as group_A, group_B. No arithmetic for the hands to do: say \"when we have about ten soldiers\", not a formula. At most {INSTRUCTIONS_LIMIT} characters."),
               "inputSchema": { "type": "object", "additionalProperties": false, "required": ["text"], "properties": { "text": { "type": "string" } } } },
-            orders(&["instruct", "note", "wait"], "your instructions, a note and when to be woken"),
+            { "name": "lane",
+              "description": "Which footwork rules your hands' code applies to a group's soldiers between your hands' orders, per group name or for \"all\": \"raw\" (none: the group's orders reach the engine exactly as given), \"on\" (all of them, the default), or a list of the rules to keep. The rules: flee (a soldier steps out of the reach of a turret or a fight it was not sent against, or one it would die in), fan (spreads out under a commander's D-gun), focus (soldiers standing together shoot one target at a time), kite (a soldier that outranges its enemy steps back while reloading), march (an advancing group waits for its stragglers so it arrives together), follow (an engaging group is re-sent after its party as it moves). A setting stands until you change it; the group's picture entry shows it when it is not the default.",
+              "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "string", "enum": ["raw", "on"] }, { "type": "array", "items": { "type": "string", "enum": ["flee", "fan", "focus", "kite", "march", "follow"] } } ] }, "description": "Group name (group_A) or \"all\" to its setting." } },
+            orders(&["instruct", "lane", "note", "wait"], "your instructions, footwork settings, a note and when to be woken"),
             wait("A group of ours starts fighting an enemy party.", "Woken when this many soldiers of each named unit type are alive, e.g. {\"armham\": 6}. {} clears it."),
             note,
         ]),
@@ -215,7 +218,7 @@ fn tool_list(mode: Mode) -> Value {
 /// What `orders` may batch in a mode.
 fn batchable(mode: Mode) -> &'static [&'static str] {
     match mode {
-        Mode::Player => &["instruct", "note", "wait"],
+        Mode::Player => &["instruct", "lane", "note", "wait"],
         Mode::Strategist | Mode::Commander => &["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"],
     }
 }
@@ -308,6 +311,36 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared, mode: Mode) -> Resu
             }
             *shared.instructions.lock().unwrap() = text.to_string();
             Ok(format!("instructions replaced ({} characters); your hands read them from their next look, once your turn ends", text.chars().count()))
+        }
+        "lane" => {
+            let settings = arguments.as_object().filter(|o| !o.is_empty()).ok_or("lane takes an object: group name (or \"all\") to \"raw\", \"on\" or a list of the rules to keep")?;
+            let mut parsed: Vec<(String, super::shared::Footwork)> = Vec::new();
+            for (name, value) in settings {
+                if name != "all" && !name.starts_with("group_") {
+                    return Err(format!("{name}: settings are by group name (group_A) or \"all\""));
+                }
+                let footwork = match value {
+                    Value::String(s) if s == "raw" => super::shared::Footwork::raw(),
+                    Value::String(s) if s == "on" => super::shared::Footwork::default(),
+                    Value::Array(items) => {
+                        let names: Vec<String> = items.iter().map(|v| v.as_str().map(str::to_string).ok_or_else(|| format!("{name}: rule names are strings"))).collect::<Result<_, _>>()?;
+                        super::shared::Footwork::keeping(&names)?
+                    }
+                    _ => return Err(format!("{name}: \"raw\", \"on\" or a list of rules to keep")),
+                };
+                parsed.push((name.clone(), footwork));
+            }
+            let mut lane = shared.lane.lock().unwrap();
+            let mut said: Vec<String> = Vec::new();
+            for (name, footwork) in parsed {
+                said.push(format!("{name}: {}", footwork.words().unwrap_or_else(|| "all footwork rules (the default)".to_string())));
+                if footwork == super::shared::Footwork::default() && name != "all" {
+                    lane.remove(&name);
+                } else {
+                    lane.insert(name, footwork);
+                }
+            }
+            Ok(format!("footwork set; {}", said.join("; ")))
         }
         "squad" => squad(arguments, shared),
         "set_production" => {
@@ -452,7 +485,7 @@ mod tests {
     fn the_player_has_its_lever_and_none_of_the_commanders() {
         let names = |mode: Mode| tool_list(mode).as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
         let player = names(Mode::Player);
-        assert_eq!(player, ["overview", "map", "situation", "instruct", "orders", "wait", "note"]);
+        assert_eq!(player, ["overview", "map", "situation", "instruct", "lane", "orders", "wait", "note"]);
         let commander = names(Mode::Commander);
         assert!(commander.contains(&"squad".to_string()) && !commander.contains(&"instruct".to_string()));
         for tool in batchable(Mode::Player) {
@@ -463,5 +496,21 @@ mod tests {
         assert!(call_tool("instruct", &json!({ "text": "commander: build the lab first." }), &shared, Mode::Player).is_ok());
         assert_eq!(*shared.instructions.lock().unwrap(), "commander: build the lab first.");
         assert!(call_tool("instruct", &json!({ "text": "x".repeat(INSTRUCTIONS_LIMIT + 1) }), &shared, Mode::Player).is_err());
+    }
+
+    #[test]
+    fn the_lane_tool_sets_footwork_by_group() {
+        use super::super::shared::Footwork;
+        let shared = Shared::default();
+        assert!(call_tool("lane", &json!({ "group_A": "raw", "all": ["fan", "focus"] }), &shared, Mode::Player).is_ok());
+        let lane = shared.lane.lock().unwrap().clone();
+        assert_eq!(lane["group_A"], Footwork::raw());
+        assert_eq!(lane["all"], Footwork { flee: false, fan: true, focus: true, kite: false, march: false, follow: false });
+        assert!(call_tool("lane", &json!({ "group_A": ["dance"] }), &shared, Mode::Player).is_err());
+        assert!(call_tool("lane", &json!({ "raiders": "raw" }), &shared, Mode::Player).is_err());
+        assert!(call_tool("lane", &json!({}), &shared, Mode::Player).is_err());
+        assert!(call_tool("lane", &json!({ "group_A": "on" }), &shared, Mode::Player).is_ok());
+        assert!(!shared.lane.lock().unwrap().contains_key("group_A"));
+        assert!(call_tool("lane", &json!({ "group_A": "raw" }), &shared, Mode::Commander).is_err());
     }
 }
