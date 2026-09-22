@@ -33,7 +33,8 @@ The menu's vocabulary (what an instruction can ask for): builders build an extra
 converter, the advanced lab, a construction turret, a light turret or a radar at a named place, help the lab, take wrecks
 apart, repair, walk to a place, go home. Labs build any tier-1 unit or nothing. Groups hold, walk to a place (running
 from everything), advance to a place fighting (arriving together), engage a party in sight, retreat home, split a
-detachment to a place, send one scout to a place, join another group. Nothing else can be asked for; say what you wished
+detachment to a place, send a detachment of two, four or eight against a party in sight (`send_against`: the rest
+carry on), send one scout to a place, join another group. Nothing else can be asked for; say what you wished
 you could order, in your closing sentence, whenever you hit that edge.
 Between your hands' orders, the code applies footwork rules to soldiers: a soldier steps out of a turret's reach it
 was not sent against or out of a fight it would die in (`flee`), spreads out under a commander's D-gun (`fan`),
@@ -93,9 +94,13 @@ looked. Scouting is an instruction to a group ("send one scout to enemy_base whe
 minutes"); the enemy base in the picture reads "not found" until a scout has stood there, and the hands will not advance
 on a base they cannot see.
 
-Holding ground and attacking. The opponent raids extractors with small fast groups from about minute 3, outermost first,
-and later moves its army as one block. Good defence is decided before the raid arrives: line units standing where raiders
-must pass, a light turret at an extractor no soldier covers. A group holding at home protects nothing but home; a group
+Holding ground and attacking. Defence is yours: nothing in the code answers a raider at a structure on its own, and the
+hands answer only as your packet tells them. Left to a bare "engage", they send the whole ball after one scout car and
+it never catches it, while a second one kills a lab at home (realtime-2). So the packet says who meets raiders and with
+how much: a raider at an extractor is met by a detachment of two or four from the nearest group (`send_against`), or
+by a group left standing where the raids pass; the ball never chases a lone raider. The opponent raids extractors with
+small fast groups from about minute 3, outermost first, and later moves its army as one block. Good defence is decided
+before the raid arrives: line units standing where raiders must pass, a light turret at an extractor no soldier covers. A group holding at home protects nothing but home; a group
 holding at a passage covers everything behind it. Fights are decided by the metal of soldiers on the spot, a turret
 counting about three times its metal: never walk into a turret line at parity, and arrive together (the `fight_to`
 action marches a group as one). When our army is clearly bigger than your honest estimate of theirs, go and kill them:

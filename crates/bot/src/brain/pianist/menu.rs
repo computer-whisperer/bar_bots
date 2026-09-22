@@ -52,6 +52,8 @@ pub(crate) enum Pick {
     MoveTo { fight: bool },
     Engage,
     Split,
+    /// `how_many` soldiers nearest the party in `whom` go and attack it as a new group; the rest carry on.
+    Detach,
     /// One soldier, a raider if there is one, walks to `where` and stands there.
     Scout,
     Join(String),
@@ -337,6 +339,11 @@ impl Brain {
             offer("retreat", Pick::Retreat, "Fall back to our base.".into());
             if units.len() >= 2 {
                 offer("split", Pick::Split, "Send a detachment, the number in `how_many` of the nearest soldiers, to advance to the place in `where`; the rest carry on as they were.".into());
+                if !picture.parties.is_empty() {
+                    // H-HANDS-DETACH: a raider at a structure is met by a few soldiers, not the ball (realtime-2: 11 of
+                    // 18 engagements were the whole ball after one Fav, Stump or Beaver, while a Fav killed a lab at home).
+                    offer("send_against", Pick::Detach, "Send a detachment, the number in `how_many` of the soldiers nearest to the enemy party named in `whom`, to attack it and follow it; the rest carry on as they were. The answer to a raider at one of our extractors while this group stays: a few soldiers catch a raider, the whole group chasing one does not.".into());
+                }
                 // One scout out at a time (smoke-6: a raider every ten seconds to the enemy base, five dead by 5:00).
                 if !scout_out {
                     offer("scout", Pick::Scout, "Send one soldier (a raider if the group has one) to look at the place in `where_scout` and stand there watching; the rest carry on. This is how the enemy base and its army get seen.".into());

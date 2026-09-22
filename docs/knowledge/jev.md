@@ -147,3 +147,18 @@ from it; the picture at 1:00 of game 13 reads spot_10 as "our armmex (extractor)
 **Would be wrong if.** The engine had refused the site (no refusal was logged, and no order was ever given).
 **Used by.** the picture's spot words: the extractor within the spot's radius takes it, the buildings beside it are
 said beside it.
+
+### K-hands-ball-chases-lone-raiders
+**Claim.** With `engage` the only answer that goes at an enemy party, the hands send the whole group after any raider
+at one of our extractors, and a group of ten to twenty-five never catches a lone Fav or Flash while a second raider
+kills what the group left; nothing local reacts to a raider at a structure.
+**Status.** demonstrated (2026-09-22, the user watching realtime-2: "a fair amount of poor control")
+**Evidence.** realtime-2 (`run/matches/1790042330-realtime-2`): 18 engage picks, 11 of them the whole ball (10 to
+25 units) after a single Fav, Stump or Beaver, one 2,362 elmos away; 10 units chased one Fav from 4:56 to 5:34
+through four re-picks; at 8:27 to 8:38 a Fav sat on our extractor at B3 killing a windmill and an extractor while
+the ball of 24 was 2,700 away after three Flashes; the game's fight ledger: a lab, 3 extractors and 4 windmills lost
+to Favs, 12 windmills and 3 constructors to raiders in all.
+**Would be wrong if.** The chases had been the player's instruction (the packets of realtime-2 said "engage raiders
+in sight", with no size).
+**Used by.** H-HANDS-DETACH (`send_against`); the player's prompt, "Defence is yours".
+

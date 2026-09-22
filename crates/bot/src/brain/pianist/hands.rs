@@ -236,6 +236,23 @@ impl Brain {
                     pianist.groups.push(Group::new(name, detached, GroupTask::Move { to, place: p.name.clone(), fight: true, since: frame }, frame));
                 }
             }
+            Pick::Detach => {
+                if let Some(party) = whom.as_ref().and_then(|n| picture.parties.iter().find(|p| p.name == *n)) {
+                    let n = match how_many.as_deref() {
+                        Some("2") => 2,
+                        Some("4") => 4,
+                        Some("8") => 8,
+                        _ => units.len() / 2,
+                    }
+                    .clamp(1, units.len().saturating_sub(1).max(1));
+                    let detached: Vec<UnitId> = nearest_of(&units, party.at, n).iter().map(|u| u.id).collect();
+                    pianist.groups[index].members.retain(|id| !detached.contains(id));
+                    commands.extend(detached.iter().map(|id| Command::Fight { unit: *id, to: party.at, queue: false }));
+                    let name = pianist.new_group_name();
+                    did = Some(format!("send {} soldiers as group_{name} against {} ({})", detached.len(), party.name, party.composition));
+                    pianist.groups.push(Group::new(name, detached, GroupTask::Engage { party: party.ids.clone(), at: party.at, since: frame, last_seen: frame }, frame));
+                }
+            }
             Pick::Scout => {
                 // A scout to where the group stands looks at nothing.
                 if let Some(p) = place(where_scout).filter(|p| centre.is_none_or(|c| c.dist2d(p.at) > 600.0)) {

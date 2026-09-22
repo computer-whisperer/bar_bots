@@ -19,6 +19,10 @@ Thug `corthud` 140/1100/45/380 line unit; Trasher `corcrash` anti-air only; Grav
   430). [K-units-duel-line-bots-beat-raiders, K-units-duel-range-vs-turrets]
 - Raiders are for what cannot shoot back: extractors, constructors, lone turrets under construction. A Pawn or two
   standing on an approach also stops a lone enemy raider; chasing raiders with the army does not. [K-units-dont-chase-raiders]
+- Defence is the player's: nothing in the code answers a raider at a structure on its own, and told only "engage", the
+  hands send the whole ball after one scout car and never catch it while another kills a lab at home (realtime-2, won
+  anyway on hard). A raider at an extractor is met by two or four from the nearest group (`send_against`) or by a group
+  left where the raids pass; the packet says which, before the ball leaves. [K-hands-ball-chases-lone-raiders]
 - Fights are decided by value on the spot: the side with more metal of soldiers there, a turret counting about three
   times its metal, loses less nine times in ten; beyond 2:1 almost always. Our units move at different speeds and a
   group sent across the map arrives strung out unless it is sent with `fight_to`, which marches it together.
