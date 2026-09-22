@@ -230,6 +230,13 @@ impl Brain {
         format!("{} ({word})", self.name(def))
     }
 
+    /// The player's production whitelist for a lab (H-HANDS-PRODUCE): the lab's own, else `all`, else none.
+    pub(super) fn allowed_units(&self, lab: &str) -> Option<Vec<String>> {
+        let shared = self.strategist.as_ref()?;
+        let allowed = shared.allowed.lock().unwrap();
+        allowed.get(lab).or_else(|| allowed.get("all")).cloned()
+    }
+
     /// The named place nearest `pos`, with its grid cell, or the grid cell alone.
     pub(super) fn place_words(&self, places: &[Place], pos: Vec3) -> String {
         let grid = self.world.grid(pos);
@@ -590,6 +597,10 @@ impl Brain {
                     format!("building {}", queue.iter().map(|(def, _)| self.short_words(*def, kit)).collect::<Vec<_>>().join(" then "))
                 });
                 entry["we_have"] = json!(format!("constructors {constructors} ({}); soldiers {} ({})", constructor_words(constructors, extractors), soldiers.len(), soldier_words(soldiers.len(), army_metal)));
+                if let Some(list) = self.allowed_units(&name) {
+                    let words: Vec<String> = list.iter().filter_map(|n| self.world.def_named(n)).map(|d| self.short_words(d, kit)).collect();
+                    entry["allowed"] = json!(if words.is_empty() { "the player allows nothing this lab can build: it builds anything".to_string() } else { format!("the player allows only: {}", words.join(", ")) });
+                }
                 entry["health"] = json!(health_words(unit.health / unit.max_health));
             }
             actors.insert(name, entry);

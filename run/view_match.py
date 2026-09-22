@@ -31,7 +31,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.split("?")[0] == "/match/index.json":
             files = sorted(f for f in os.listdir(self.match_dir) if os.path.isfile(os.path.join(self.match_dir, f)))
-            body = json.dumps({"dir": self.match_dir, "files": files}).encode()
+            # The engine's own replay (demos/*.sdfz), for the viewer's download link; the match dir is served whole.
+            demos = os.path.join(self.match_dir, "demos")
+            replays = sorted(f"demos/{f}" for f in os.listdir(demos) if f.endswith(".sdfz")) if os.path.isdir(demos) else []
+            body = json.dumps({"dir": self.match_dir, "files": files, "replays": replays}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

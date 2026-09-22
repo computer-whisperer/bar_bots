@@ -155,3 +155,6 @@ body[data-wide="1"] #call { display: grid; grid-template-columns: minmax(0, 1fr)
 #decisions .did { color: var(--ink); }
 #decisions .p { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 6px; }
 .filters select { margin-left: 8px; font: inherit; font-size: 11px; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; }
+
+/* The replay download link in the header. */
+#top .replay { margin-left: 1em; white-space: nowrap; }

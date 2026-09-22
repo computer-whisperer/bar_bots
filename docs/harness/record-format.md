@@ -132,3 +132,6 @@ every two seconds, `{"f": frame, "enemy": [[id, name, x, z, health %, being buil
 wherever it is. The viewer draws it as the faint "opponent (truth)" layer under what our units could see, and uses it
 for the opponent's curves; `run/analyze_match.py` derives the opponent's deaths from units leaving the list.
 
+
+The match server (`run/view_match.py`) lists the engine's replays (`demos/*.sdfz`) in `index.json` under `replays`;
+the viewer's header links the newest for download. Copy it into BAR's own demos folder to watch it in the game.

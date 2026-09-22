@@ -256,7 +256,13 @@ impl Brain {
             let mut criteria: BTreeMap<String, Value> = BTreeMap::new();
             options.insert("nothing".into(), Pick::Nothing);
             criteria.insert("nothing".into(), json!("Build nothing now and save the metal."));
-            for buildable in &def.build_options {
+            // H-HANDS-PRODUCE: the player's whitelist, when it names something this lab can build, is the whole menu.
+            let allowed = self.allowed_units(&name);
+            let buildables: Vec<UnitDefId> = match &allowed {
+                Some(list) if def.build_options.iter().any(|b| list.contains(&self.name(*b).to_string())) => def.build_options.iter().copied().filter(|b| list.contains(&self.name(*b).to_string())).collect(),
+                _ => def.build_options.clone(),
+            };
+            for buildable in &buildables {
                 let key = self.name(*buildable).to_string();
                 options.insert(key.clone(), Pick::Unit(*buildable));
                 // The count in words beside the option: Jev does not count what it has against a plan
@@ -271,8 +277,9 @@ impl Brain {
                 criteria.insert(key, json!(format!("Build a {}.{have}", self.unit_words(*buildable, kit))));
             }
             let instructions = json!(format!(
-                "Given `actors.{name}`, `ours`, `economy` and the player's `instructions`, which unit should {name} build next? We have {constructors} constructors ({}) and {} soldiers ({}).",
-                super::picture::constructor_words(constructors, extractors), soldiers.len(), super::picture::soldier_words(soldiers.len(), army_metal)
+                "Given `actors.{name}`, `ours`, `economy` and the player's `instructions`, which unit should {name} build next? We have {constructors} constructors ({}) and {} soldiers ({}).{}",
+                super::picture::constructor_words(constructors, extractors), soldiers.len(), super::picture::soldier_words(soldiers.len(), army_metal),
+                if allowed.is_some() && buildables.len() < def.build_options.len() { " The player allows only the units offered here." } else { "" }
             ));
             pianist.last_asked.insert(name.clone(), frame);
             menus.push(Menu { actor: Actor::Lab(unit.id), questions: vec![(format!("{name}.next"), Question::Choice { instructions, criteria })], name, busy: queued > 0, options, spots: Vec::new() });

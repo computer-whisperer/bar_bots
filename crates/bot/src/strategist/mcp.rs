@@ -141,7 +141,10 @@ fn tool_list(mode: Mode) -> Value {
             { "name": "mark",
               "description": "Name a place of your own for your hands: an object of name to [x, z] map coordinates or a grid cell (\"E7\": its centre), or null to forget it. A marked place joins the picture's places at once, so instructions can send groups and builders there (\"group_B: advance to south_gate\"), and its entry says whose ground it is and what enemy is near. Names are lower-case words with underscores; home, enemy_base, spot_N, passage_N and group_N are taken. Any spot or passage you name in the packet is on your hands' menu already, however far; mark is for places that are not spots.",
               "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }, { "type": "string" }, { "type": "null" } ] }, "description": "Place name to [x, z], a grid cell, or null." } },
-            orders(&["instruct", "lane", "mark", "note", "wait"], "your instructions, footwork settings, marked places, a note and when to be woken"),
+            { "name": "produce",
+              "description": "What each lab may build: an object of lab name (lab_N) or \"all\" to a list of unit names (as the report writes them: armpw, armham, armck), or null to lift the restriction. A lab with a list is offered only those units and nothing else, every time it is asked; your instructions still say which of them and when. Use it when the packet's words are not getting the mix you want. A list naming nothing the lab can build leaves that lab unrestricted; the lab's entry in the picture shows its list.",
+              "inputSchema": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "array", "items": { "type": "string" } }, { "type": "null" } ] }, "description": "Lab name or \"all\" to unit names, or null." } },
+            orders(&["instruct", "lane", "mark", "produce", "note", "wait"], "your instructions, footwork settings, marked places, what labs may build, a note and when to be woken"),
             wait("A group of ours starts fighting an enemy party.", "Woken when this many soldiers of each named unit type are alive, e.g. {\"armham\": 6}. {} clears it."),
             note,
         ]),
@@ -221,7 +224,7 @@ fn tool_list(mode: Mode) -> Value {
 /// What `orders` may batch in a mode.
 fn batchable(mode: Mode) -> &'static [&'static str] {
     match mode {
-        Mode::Player => &["instruct", "lane", "mark", "note", "wait"],
+        Mode::Player => &["instruct", "lane", "mark", "produce", "note", "wait"],
         Mode::Strategist | Mode::Commander => &["squad", "set_directives", "set_production", "request_turret", "expansion", "note", "wait"],
     }
 }
@@ -394,6 +397,43 @@ fn call_tool(name: &str, arguments: &Value, shared: &Shared, mode: Mode) -> Resu
             }
             Ok(format!("marked: {}; your hands see the place from their next look", said.join("; ")))
         }
+        "produce" => {
+            let lists = arguments.as_object().filter(|o| !o.is_empty()).ok_or("produce takes an object: lab name (lab_N) or \"all\" to a list of unit names, or null to lift it")?;
+            let known: Vec<String> = shared.field().buildable.iter().map(|(name, _)| name.clone()).collect();
+            let mut parsed: Vec<(String, Option<Vec<String>>)> = Vec::new();
+            for (name, value) in lists {
+                if name != "all" && !name.starts_with("lab_") {
+                    return Err(format!("{name}: lists are by lab name (lab_N) or \"all\""));
+                }
+                let list = match value {
+                    Value::Null => None,
+                    Value::Array(items) => {
+                        let units: Vec<String> = items.iter().map(|v| v.as_str().map(str::to_string).ok_or_else(|| format!("{name}: unit names are strings"))).collect::<Result<_, _>>()?;
+                        if let Some(unknown) = units.iter().find(|u| !known.is_empty() && !known.contains(u)) {
+                            return Err(format!("{unknown} is not something our labs build; they build: {}", known.join(", ")));
+                        }
+                        Some(units)
+                    }
+                    _ => return Err(format!("{name}: a list of unit names, or null")),
+                };
+                parsed.push((name.clone(), list));
+            }
+            let mut allowed = shared.allowed.lock().unwrap();
+            let mut said: Vec<String> = Vec::new();
+            for (name, list) in parsed {
+                match list {
+                    Some(units) => {
+                        said.push(format!("{name} may build only {}", if units.is_empty() { "nothing".to_string() } else { units.join(", ") }));
+                        allowed.insert(name, units);
+                    }
+                    None => {
+                        allowed.remove(&name);
+                        said.push(format!("{name} may build anything"));
+                    }
+                }
+            }
+            Ok(format!("{}; the labs see it from their next look", said.join("; ")))
+        }
         "squad" => squad(arguments, shared),
         "set_production" => {
             let weights = arguments["weights"].as_object().ok_or("weights must be an object")?;
@@ -537,7 +577,7 @@ mod tests {
     fn the_player_has_its_lever_and_none_of_the_commanders() {
         let names = |mode: Mode| tool_list(mode).as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
         let player = names(Mode::Player);
-        assert_eq!(player, ["overview", "map", "situation", "instruct", "lane", "mark", "orders", "wait", "note"]);
+        assert_eq!(player, ["overview", "map", "situation", "instruct", "lane", "mark", "produce", "orders", "wait", "note"]);
         let commander = names(Mode::Commander);
         assert!(commander.contains(&"squad".to_string()) && !commander.contains(&"instruct".to_string()));
         for tool in batchable(Mode::Player) {
@@ -580,5 +620,18 @@ mod tests {
         assert!(call_tool("mark", &json!({ "x": "Z9" }), &shared, Mode::Player).is_err());
         assert!(call_tool("mark", &json!({ "south_gate": null }), &shared, Mode::Player).is_ok());
         assert!(!shared.marks.lock().unwrap().contains_key("south_gate"));
+    }
+
+    #[test]
+    fn produce_whitelists_a_lab_or_all() {
+        let shared = Shared::default();
+        assert!(call_tool("produce", &json!({ "all": ["armpw", "armham"], "lab_7": [] }), &shared, Mode::Player).is_ok());
+        let allowed = shared.allowed.lock().unwrap().clone();
+        assert_eq!(allowed["all"], vec!["armpw".to_string(), "armham".to_string()]);
+        assert!(allowed["lab_7"].is_empty());
+        assert!(call_tool("produce", &json!({ "group_A": ["armpw"] }), &shared, Mode::Player).is_err());
+        assert!(call_tool("produce", &json!({ "all": "armpw" }), &shared, Mode::Player).is_err());
+        assert!(call_tool("produce", &json!({ "lab_7": null }), &shared, Mode::Player).is_ok());
+        assert!(!shared.allowed.lock().unwrap().contains_key("lab_7"));
     }
 }

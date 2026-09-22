@@ -522,6 +522,9 @@ pub struct Shared {
     pub lane: Mutex<BTreeMap<String, Footwork>>,
     /// Places the player named (`mark` tool): name to (x, z). They join the picture's places (H-HANDS-NAMED-PLACES).
     pub marks: Mutex<BTreeMap<String, (f32, f32)>>,
+    /// What the player lets each lab build (`produce` tool, H-HANDS-PRODUCE): lab name (`lab_N`) or `all` to unit
+    /// names; a lab not listed builds anything.
+    pub allowed: Mutex<BTreeMap<String, Vec<String>>>,
     pub wake: Mutex<Wake>,
     /// True when turns are taken in lockstep with the game (the field commander).
     pub lockstep: std::sync::atomic::AtomicBool,

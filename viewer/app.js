@@ -73,7 +73,9 @@
   /// Pulls every file of the match; returns the texts `open` takes, or null when nothing has changed.
   async function pullMatch(live) {
     const index = await fetchText(`${live.base}index.json`);
-    const files = index ? JSON.parse(index).files : [];
+    const listing = index ? JSON.parse(index) : { files: [], replays: [] };
+    const files = listing.files || [];
+    showReplay(live.base, listing.replays || []);
     if (!live.record) live.record = files.find((f) => /^record-.*\.jsonl$/.test(f));
     if (!live.record) return { files };
     let grew = await pull(live.base, live.record);
@@ -95,6 +97,16 @@
         engineLog: complete(names.engineLog), botLog: complete(names.botLog), truth: complete(names.truth),
       },
     };
+  }
+
+  /// The engine's replay of the match (demos/*.sdfz, written when the engine quits), as a download link in the header.
+  function showReplay(base, replays) {
+    const link = $("replay");
+    if (!replays.length) return;
+    const path = replays[replays.length - 1];
+    link.href = base + path.split("/").map(encodeURIComponent).join("/");
+    link.download = path.split("/").pop();
+    link.hidden = false;
   }
 
   async function boot() {

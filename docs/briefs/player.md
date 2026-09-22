@@ -121,3 +121,5 @@ timeout against easy from the default packet, `docs/experiments.md`).** [docs/kn
   (`mark`) were followed by the hands. Its lessons: against medium's raids, raiders of our own (Pawns) on the raids'
   passages, not turrets alone and not Maces; the enemy commander leaves its base once pressed and dies to whatever
   stands at home; a ball under unseen artillery advances onto it or leaves, never stands.
+- Since pianist-player-6 the player has `produce` (what each lab may build: the sure way to get raiders built
+  against raiders), `mark` (a place of its own) and `lane` (the footwork rules per group).
